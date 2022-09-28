@@ -80,6 +80,8 @@ let set_scope (k: ident) (v: value) (s: scope): unit =
 (** {2 Mutable bindings}                                        *)
 (****************************************************************)
 
+type fun_sig = (AST.ident list * AST.ident list * AST.l * AST.stmt list)
+
 (** Environment representing both global and local state of the system *)
 module Env : sig
     type t
@@ -111,8 +113,8 @@ module Env : sig
     val getVar              : AST.l -> t -> ident -> value
     val setVar              : AST.l -> t -> ident -> value -> unit
 
-    val getFun              : AST.l -> t -> ident -> (ident list * ident list * AST.l * stmt list)
-    val addFun              : AST.l -> t -> ident -> (ident list * ident list * AST.l * stmt list) -> unit
+    val getFun              : AST.l -> t -> ident -> fun_sig 
+    val addFun              : AST.l -> t -> ident -> fun_sig -> unit
 
     val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
     val addInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list) -> unit
@@ -127,7 +129,7 @@ end = struct
     type t = {
         mutable instructions : (encoding * (stmt list) option * bool * stmt list) Bindings.t;
         mutable decoders     : decode_case Bindings.t;
-        mutable functions    : (ident list * ident list * AST.l * stmt list) Bindings.t;
+        mutable functions    : fun_sig Bindings.t;
         mutable enums        : (value list) Bindings.t;
         mutable enumEqs      : IdentSet.t;
         mutable enumNeqs     : IdentSet.t;
@@ -258,13 +260,13 @@ end = struct
         | None    -> raise (EvalError (loc, "setVar " ^ pprint_ident x))
         )
 
-    let getFun (loc: l) (env: t) (x: ident): (ident list * ident list * AST.l * stmt list) =
+    let getFun (loc: l) (env: t) (x: ident): fun_sig =
         (match Bindings.find_opt x env.functions with
         | Some def -> def
         | None     -> raise (EvalError (loc, "getFun " ^ pprint_ident x))
         )
 
-    let addFun (loc: l) (env: t) (x: ident) (def: (ident list * ident list * AST.l * stmt list)): unit =
+    let addFun (loc: l) (env: t) (x: ident) (def: fun_sig): unit =
         if false then Printf.printf "Adding function %s\n" (pprint_ident x);
         if Bindings.mem x env.functions then begin
             if true then begin
