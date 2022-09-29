@@ -191,7 +191,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
     | Expr_Unop(op, e) ->
         error loc @@ "unary operation should have been removed" (* static error *)
     | Expr_Unknown(t) ->
-        pure (unknown_value loc t)
+        eval_unknown loc t
     | Expr_ImpDef(t, Some(s)) ->
         getImpdef loc s
     | Expr_ImpDef(t, None) ->
@@ -301,7 +301,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
   and eval_stmt (x: stmt): unit eff =
     match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-        traverse_ (fun v -> addLocalVar loc v (uninit_value loc ty)) vs
+        traverse_ (fun v -> eval_unknown loc ty >>= addLocalVar loc v) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
         let* i' = eval_expr loc i in
         addLocalVar loc v i'
@@ -460,7 +460,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
   (** Evaluate call to procedure *)
   and eval_proccall (loc: l) (f: ident) (tvs: value list) (vs: value list): unit eff =
     let* r = eval_call loc f tvs vs in
-    if is_unit r then error loc "value return from proc" else unit
+    if is_unit r then unit else error loc "value return from proc"
 
   (** Evaluate instruction decode case *)
   and eval_decode_case (loc: l) (x: decode_case) (op: value): unit eff =
@@ -534,7 +534,48 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
   (****************************************************************)
   
   (* Uninitialized global variables are UNKNOWN by default *)
-  let eval_uninitialized (loc: l) (x: ty): value = unknown_value loc x
+  and eval_unknown (loc: l) (x: ty): value eff =
+    match x with
+    | Type_Constructor(Ident "integer") -> pure (unknown_integer loc)
+    | Type_Constructor(Ident "real")    -> pure (unknown_real loc)
+    | Type_Constructor(Ident "string")  -> pure (unknown_string loc)
+    | Type_Constructor(tc) ->
+        let* es = getEnum tc in
+        (match es with
+        | Some e -> pure (unknown_enum loc e)
+        | None ->
+            let* fs = getRecord tc in
+            (match fs with
+            | Some f ->
+                let+ vs = traverse (fun (ty, f) -> let+ v = eval_unknown loc ty in (f,v)) f in
+                new_record vs
+            | None ->
+                let* ts = getTypedef tc in
+                (match ts with
+                | Some ty' -> eval_unknown loc ty'
+                | None -> error loc @@ "eval_unknown " ^ Utils.to_string (PP.pp_ty x)
+                )
+            )
+        )
+    | Type_Bits(n) ->
+        let+ w = eval_expr loc n in
+        unknown_bits loc w
+    | Type_App(Ident "__RAM", [a]) ->
+        let+ a' = eval_expr loc a in
+        unknown_ram loc a'
+    | Type_App(tc, es) ->
+        error loc @@ "eval_unknown App " ^ Utils.to_string (PP.pp_ty x)
+    | Type_OfExpr(e) ->
+        error loc @@ "eval_unknown typeof " ^ Utils.to_string (PP.pp_ty x)
+    | Type_Register(wd, _) -> 
+        pure (unknown_bits loc (from_intLit wd))
+    | Type_Array(Index_Enum(_),ety) 
+    | Type_Array(Index_Range(_,_),ety) ->
+        let+ v = eval_unknown loc ety in
+        new_array v
+    | Type_Tuple(tys) ->
+        let+ vs = traverse (eval_unknown loc) tys in
+        from_tuple vs
 
   (** Construct environment from global declarations *)
   let build_evaluation_environment (ds: declaration list): unit eff = begin
@@ -558,7 +599,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
       | Decl_Typedef (v, ty, loc) ->
           addTypedef v ty
       | Decl_Var(ty, v, loc) ->
-          let init = eval_uninitialized loc ty in
+          let* init = eval_unknown loc ty in
           addGlobalVar v init
       | Decl_Const(ty, v, i, loc) ->
           (* todo: constants need to be lazily evaluated or need to be

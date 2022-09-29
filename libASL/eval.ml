@@ -353,10 +353,21 @@ module Semantics = Abstract.Make(struct
   (* Records *)
   let get_field = Value.get_field
   let set_field = Value.set_field
+  let new_record = Value.mkrecord
 
   (* Array *)
   let get_array = Value.get_array
   let set_array = Value.set_array
+  let new_array = Value.empty_array
+
+  (* Unknown *)
+  let unknown_integer _ = Value.eval_unknown_integer ()
+  let unknown_string _ = Value.eval_unknown_string ()
+  let unknown_real _ = Value.eval_unknown_real ()
+  let unknown_bits l v = Value.eval_unknown_bits (Value.to_integer l v)
+  let unknown_ram l v = Value.eval_unknown_ram (Value.to_integer l v)
+  let unknown_enum _ es = match es with e::_ -> e | _ -> VUninitialized
+
 end) (struct
   type value = Value.value
   type 'a eff = Env.t -> 'a
@@ -372,10 +383,6 @@ end) (struct
         let (x') = f x e in
         let (xs') = traverse f xs e in
         (x'::xs')
-
-  (* TODO: Not correct *)
-  let uninit_value loc x = Value.VUninitialized
-  let unknown_value loc x = Value.VUninitialized
 
   (* State *)
   let reset e = ()
@@ -404,8 +411,10 @@ end) (struct
   let getEnum (x: ident) (env: Env.t) = Env.getEnum env x
 
   let addRecord (x: ident) (vs: (AST.ty * ident) list) (env: Env.t) = Env.addRecord env x vs
+  let getRecord (x: ident) (env: Env.t) = Env.getRecord env x
 
   let addTypedef (x: ident) (t: AST.ty) (env: Env.t) = Env.addTypedef env x t
+  let getTypedef (x: ident) (env: Env.t) = Env.getTypedef env x
 
   let addGlobalVar (x: ident) (v: value) (env: Env.t)    = Env.addGlobalVar env x v
   let getVar (loc: l) (x: ident) (env: Env.t)            = Env.getVar loc env x

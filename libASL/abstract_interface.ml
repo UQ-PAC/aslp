@@ -52,10 +52,20 @@ module type Value = sig
   (* Records *)
   val get_field : AST.l -> value -> AST.ident -> value
   val set_field : AST.l -> value -> AST.ident -> value -> value
+  val new_record : (AST.ident * value) list -> value
 
   (* Array *)
   val get_array : AST.l -> value -> value -> value
   val set_array : AST.l -> value -> value -> value -> value
+  val new_array : value -> value
+
+  (* Unknown *)
+  val unknown_integer : AST.l -> value
+  val unknown_real    : AST.l -> value
+  val unknown_string  : AST.l -> value
+  val unknown_bits    : AST.l -> value -> value
+  val unknown_ram     : AST.l -> value -> value
+  val unknown_enum    : AST.l -> value list -> value
 end
 
 module type Effect = sig
@@ -76,6 +86,7 @@ module type Effect = sig
   val setVar : AST.l -> AST.ident -> value -> unit eff
   val runPrim : string -> value list -> value list -> value option eff
   val isGlobalConstFilter : (AST.ident -> bool) eff
+
   val getGlobalConst      : AST.ident -> value eff
   val getVar              : AST.l -> AST.ident -> value eff
   val getImpdef           : AST.l -> string -> value eff
@@ -83,6 +94,9 @@ module type Effect = sig
   val getInstruction      : AST.l -> AST.ident -> inst_sig eff
   val getDecoder          : AST.ident -> AST.decode_case eff 
   val getEnum             : AST.ident -> value list option eff
+  val getRecord           : AST.ident -> (AST.ty * AST.ident) list option eff
+  val getTypedef          : AST.ident -> AST.ty option eff
+
   val addRecord      : AST.ident -> (AST.ty * AST.ident) list -> unit eff
   val addGlobalConst : AST.ident -> value -> unit eff
   val addGlobalVar   : AST.ident -> value -> unit eff
@@ -101,10 +115,6 @@ module type Effect = sig
   val throw     : AST.l -> Primops.exc -> 'a eff
   val catch     : 'a eff -> (AST.l -> Primops.exc -> 'a eff) -> 'a eff
   val error     : AST.l -> string -> 'a eff
-
-  val uninit_value  : AST.l -> AST.ty -> value
-  val unknown_value : AST.l -> AST.ty -> value
-
 end
 
 (****************************************************************
