@@ -112,7 +112,7 @@ module Env : sig
     val getVar              : AST.l -> t -> ident -> value
     val setVar              : AST.l -> t -> ident -> value -> unit
 
-    val getFun              : AST.l -> t -> ident -> fun_sig 
+    val getFun              : AST.l -> t -> ident -> fun_sig
     val addFun              : AST.l -> t -> ident -> fun_sig -> unit
 
     val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
@@ -345,7 +345,7 @@ module Semantics = Abstract.Make(struct
 
   (* Bitvector *)
   let concat         = Value.eval_concat
-  let extract_bits   = Value.extract_bits
+  let extract_bits   = Value.extract_bits'' (* extract_bits'' allows extracting from ints *)
   let width_bits l v = Value.VInt (Z.of_int (Primops.prim_length_bits (Value.to_bits l v)))
   let insert_bits    = Value.insert_bits
   let inmask l v1 v2 = Value.VBool (Value.eval_inmask l v1 v2)
@@ -379,7 +379,7 @@ end) (struct
   let rec traverse f xs e =
     match xs with
     | [] -> ([])
-    | (x::xs) -> 
+    | (x::xs) ->
         let (x') = f x e in
         let (xs') = traverse f xs e in
         (x'::xs')
@@ -387,8 +387,8 @@ end) (struct
   (* State *)
   let reset e = ()
   let scope = Env.nest
-  let call (b : unit eff) e = 
-    try 
+  let call (b : unit eff) e =
+    try
       Env.nestTop b e;
       Value.VTuple []
     with
@@ -396,7 +396,7 @@ end) (struct
     | Throw (l, ex) -> raise (Throw (l,ex))
 
   let runPrim f tes es e = Value.eval_prim f tes es
-  let isGlobalConstFilter env t = 
+  let isGlobalConstFilter env t =
     match Env.getGlobalConst env t with
     | _ -> true
     | exception _ -> false
@@ -436,10 +436,10 @@ end) (struct
   let rec iter b s e =
     let (s',c) = b s e in
     if Value.to_bool Unknown c then iter b s' e else s'
-  let return v = raise (Value.Return v)
-  let throw l e = raise (Value.Throw (l,e))
+  let return v _ = raise (Value.Return v)
+  let throw l e _ = raise (Value.Throw (l,e))
   let catch b f e = try b e with Value.Throw (l,x) -> f l x e
-  let error l s = raise (Value.EvalError (l,s))
+  let error l s e = raise (Value.EvalError (l,s))
 end)
 
 
@@ -447,7 +447,7 @@ end)
 (** {2 Compatibility Interface}                                 *)
 (****************************************************************)
 
-let eval_expr (loc: AST.l) (env: Env.t) (e: AST.expr): value = 
+let eval_expr (loc: AST.l) (env: Env.t) (e: AST.expr): value =
   Semantics.eval_expr loc e env
 
 let eval_stmt (env: Env.t) (xs: AST.stmt): unit =

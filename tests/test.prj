@@ -51,16 +51,17 @@
 :set impdef "Maximum Virtual Address Size"  = 56
 :set impdef "Reserved Intermediate Physical Address size value" = 52
 
+:set -trace:instr
+:set -trace:fun
+:set -trace:prim
+:set -trace:write
+
 __TakeColdReset();
 
 :elf tests/test_O2.elf
 _PC  = 0x400168[63:0];
 SP[] = 0x100000[63:0];
 
-:set -trace:instr
-:set -trace:fun
-:set -trace:prim
-:set -trace:write
 
 :run
 
