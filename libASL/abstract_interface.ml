@@ -2,11 +2,13 @@
  * Impl interface
  ****************************************************************)
 
+type fun_sig = (Asl_ast.ty option * ((Asl_ast.ty * Asl_ast.ident) list) * Asl_ast.ident list * Asl_ast.ident list * Asl_ast.l * Asl_ast.stmt list) 
+type inst_sig = Asl_ast.encoding * (Asl_ast.stmt list) option * bool * Asl_ast.stmt list
+
 module type Value = sig
   type 'a eff
   type value
-  type fun_sig = (Asl_ast.ty option * ((Asl_ast.ty * Asl_ast.ident) list) * Asl_ast.ident list * Asl_ast.ident list * Asl_ast.l * Asl_ast.stmt list)
-  type inst_sig = Asl_ast.encoding * (Asl_ast.stmt list) option * bool * Asl_ast.stmt list
+
 
   (* Monadic *)
   val pure : 'a -> 'a eff
@@ -36,7 +38,7 @@ module type Value = sig
   val reset : unit eff
 
   val nest : 'a eff -> 'a eff
-  val nestTop : 'a eff -> 'a eff
+  val inline : unit eff -> value eff
 
   val setVar : Asl_ast.l -> Asl_ast.ident -> value -> unit eff
   val runPrim : string -> value list -> value list -> value option eff
@@ -66,7 +68,7 @@ module type Value = sig
   val iter      : ('a -> ('a * value) eff) -> 'a -> 'a eff
   val return    : value -> 'a eff
   val throw     : Asl_ast.l -> Primops.exc -> 'a eff
-  val catch     : unit eff -> (Asl_ast.l -> Primops.exc -> 'a eff) -> 'a eff
+  val catch     : 'a eff -> (Asl_ast.l -> Primops.exc -> 'a eff) -> 'a eff
   val error     : Asl_ast.l -> string -> 'a eff
 
   (* Unit *)

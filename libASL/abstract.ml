@@ -4,7 +4,7 @@ open Asl_ast
 open Asl_utils
 open Primops
 
-module Make (I: Impl.Value) : Impl.Semantics = struct
+module Make (I: Abstract_interface.Value) = struct
   type 'a eff = 'a I.eff
   type value = I.value
 
@@ -439,11 +439,11 @@ module Make (I: Impl.Value) : Impl.Semantics = struct
           let* (rty, atys, targs, args, loc, b) = I.getFun loc f in
           assert (List.length targs = List.length tvs);
           assert (List.length args  = List.length vs);
-          I.nestTop (
+          I.inline (
             traverse2 (fun arg v -> I.addLocalVar loc arg v) targs tvs >>>
             traverse2 (fun arg v -> I.addLocalVar loc arg v) args vs >>>
             eval_stmts b
-          ) 
+          )
         end
     )
 
