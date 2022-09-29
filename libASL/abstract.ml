@@ -64,11 +64,11 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
   (** Evaluate bitslice of instruction opcode *)
   let eval_decode_slice (loc: l) (x: decode_slice) (op: value): value eff =
     (match x with
-    | DecoderSlice_Slice (lo, wd) -> 
+    | DecoderSlice_Slice (lo, wd) ->
         pure (extract_bits_int loc op lo wd)
-    | DecoderSlice_FieldName f -> 
+    | DecoderSlice_FieldName f ->
         getVar loc f
-    | DecoderSlice_Concat fs -> 
+    | DecoderSlice_Concat fs ->
         let+ vs = traverse (getVar loc) fs in
         concat loc vs
     )
@@ -157,7 +157,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
     | Expr_Var(v) ->
         getVar loc v
     | Expr_Parens(e) ->
-        eval_expr loc e 
+        eval_expr loc e
     | Expr_TApply(f, tes, es) ->
         (* First deal with &&, || and IMPLIES all of which only evaluate
          * their second argument if they need to
@@ -353,7 +353,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
         let* dec = getDecoder i in
         let* op  = eval_expr loc e in
         eval_decode_case loc dec op
-    | Stmt_If(c, t, els, e, loc) -> 
+    | Stmt_If(c, t, els, e, loc) ->
         let rec eval css d =
           match css with
           | [] -> eval_stmts d
@@ -421,7 +421,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
           let+ g = eval_expr loc c in ((),g)) ()
     | Stmt_Try(tb, ev, catchers, odefault, loc) ->
         catch (eval_stmts tb) (fun l ex -> scope (
-          let rec eval cs = 
+          let rec eval cs =
             match cs with
             | [] ->
                 (match odefault with
@@ -469,7 +469,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
         let* vs = traverse (fun s -> eval_decode_slice loc s op) ss in
         let rec eval alts =
           (match alts with
-          | (alt::alts') -> 
+          | (alt::alts') ->
               let* g = eval_decode_alt loc alt vs op in
               branch g unit (eval alts')
           | [] -> error loc "unmatched decode pattern"
@@ -532,7 +532,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
   (****************************************************************)
   (** {2 Creating environment from global declarations}           *)
   (****************************************************************)
-  
+
   (* Uninitialized global variables are UNKNOWN by default *)
   and eval_unknown (loc: l) (x: ty): value eff =
     match x with
@@ -567,9 +567,9 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
         error loc @@ "eval_unknown App " ^ Utils.to_string (PP.pp_ty x)
     | Type_OfExpr(e) ->
         error loc @@ "eval_unknown typeof " ^ Utils.to_string (PP.pp_ty x)
-    | Type_Register(wd, _) -> 
+    | Type_Register(wd, _) ->
         pure (unknown_bits loc (from_intLit wd))
-    | Type_Array(Index_Enum(_),ety) 
+    | Type_Array(Index_Enum(_),ety)
     | Type_Array(Index_Range(_,_),ety) ->
         let+ v = eval_unknown loc ety in
         new_array v
@@ -682,7 +682,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
            *)
           let* init = eval_expr loc i in
           addGlobalConst v init
-  
+
       (* The following declarations have no impact on execution *)
       | Decl_BuiltinType (_, _)           | Decl_Forward (_, _)
       | Decl_BuiltinFunction (_, _, _, _)

@@ -4,7 +4,7 @@
 
 module AST = Asl_ast
 
-type fun_sig = (AST.ty option * ((AST.ty * AST.ident) list) * AST.ident list * AST.ident list * AST.l * AST.stmt list) 
+type fun_sig = (AST.ty option * ((AST.ty * AST.ident) list) * AST.ident list * AST.ident list * AST.l * AST.stmt list)
 type inst_sig = AST.encoding * (AST.stmt list) option * bool * AST.stmt list
 
 module type Value = sig
@@ -92,7 +92,7 @@ module type Effect = sig
   val getImpdef           : AST.l -> string -> value eff
   val getFun              : AST.l -> AST.ident -> fun_sig eff
   val getInstruction      : AST.l -> AST.ident -> inst_sig eff
-  val getDecoder          : AST.ident -> AST.decode_case eff 
+  val getDecoder          : AST.ident -> AST.decode_case eff
   val getEnum             : AST.ident -> value list option eff
   val getRecord           : AST.ident -> (AST.ty * AST.ident) list option eff
   val getTypedef          : AST.ident -> AST.ty option eff
