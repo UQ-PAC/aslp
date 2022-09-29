@@ -38,7 +38,7 @@ type value =
 (** {2 Exceptions thrown by interpreter}                        *)
 (****************************************************************)
 
-exception Return    of value option
+exception Return    of value 
 exception EvalError of (AST.l * string)
 exception Throw     of (AST.l * exc)
 

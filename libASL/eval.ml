@@ -310,6 +310,55 @@ end
 
 module Semantics = Abstract.Make(struct
   type value = Value.value
+
+  (* Value Constructors *)
+  let from_bool b    = Value.VBool b
+  let from_int i     = Value.VInt (Z.of_int i)
+  let from_intLit    = Value.from_intLit
+  let from_hexLit    = Value.from_hexLit
+  let from_realLit   = Value.from_realLit
+  let from_bitsLit   = Value.from_bitsLit
+  let from_maskLit   = Value.from_maskLit
+  let from_stringLit = Value.from_stringLit
+  let from_enum e i  = Value.VEnum (e, i)
+  let from_exc loc e = Value.VExc (loc, e)
+  let from_tuple     = Value.to_tuple
+
+  (* Value Destructors *)
+  let to_string loc v = Value.to_string loc v
+  let to_exc loc v    = Value.to_exc loc v
+  let to_tuple        = Value.of_tuple
+
+  (* Unit *)
+  let vunit     = Value.VTuple []
+  let is_unit v = match v with Value.VTuple [] -> true | _ -> false
+
+  (* Bool *)
+  let not_bool l v     = Value.VBool (not (Value.to_bool l v))
+  let and_bool l v1 v2 = Value.VBool (Value.to_bool l v1 && Value.to_bool l v2)
+  let eq l v1 v2       = Value.VBool (Value.eval_eq l v1 v2)
+
+  (* Int *)
+  let add_int         = Value.eval_add_int
+  let sub_int         = Value.eval_sub_int
+  let leq_int l v1 v2 = Value.VBool (Value.eval_leq l v1 v2)
+
+  (* Bitvector *)
+  let concat         = Value.eval_concat
+  let extract_bits   = Value.extract_bits
+  let width_bits l v = Value.VInt (Z.of_int (Primops.prim_length_bits (Value.to_bits l v)))
+  let insert_bits    = Value.insert_bits
+  let inmask l v1 v2 = Value.VBool (Value.eval_inmask l v1 v2)
+
+  (* Records *)
+  let get_field = Value.get_field
+  let set_field = Value.set_field
+
+  (* Array *)
+  let get_array = Value.get_array
+  let set_array = Value.set_array
+end) (struct
+  type value = Value.value
   type 'a eff = Env.t -> 'a
 
   (* Monadic *)
@@ -324,34 +373,19 @@ module Semantics = Abstract.Make(struct
         let (xs') = traverse f xs e in
         (x'::xs')
 
-  (* Value Constructors *)
-  let from_bool b = Value.VBool b
-  let from_int i = Value.VInt (Z.of_int i)
-  let from_intLit = Value.from_intLit
-  let from_hexLit = Value.from_hexLit
-  let from_realLit = Value.from_realLit
-  let from_bitsLit = Value.from_bitsLit
-  let from_maskLit = Value.from_maskLit
-  let from_stringLit = Value.from_stringLit
-  let from_enum e i = Value.VEnum (e, i)
-
   (* TODO: Not correct *)
   let uninit_value loc x = Value.VUninitialized
   let unknown_value loc x = Value.VUninitialized
 
-  let to_string loc v = Value.to_string loc v
-  let to_exc loc v = Value.to_exc loc v
-  let from_exc loc e = Value.VExc (loc, e)
-
   (* State *)
   let reset e = ()
-  let nest = Env.nest
-  let inline (b : unit eff) e = 
+  let scope = Env.nest
+  let call (b : unit eff) e = 
     try 
       Env.nestTop b e;
       Value.VTuple []
     with
-    | Return (Some v) -> v
+    | Return v -> v
     | Throw (l, ex) -> raise (Throw (l,ex))
 
   let runPrim f tes es e = Value.eval_prim f tes es
@@ -393,43 +427,10 @@ module Semantics = Abstract.Make(struct
   let rec iter b s e =
     let (s',c) = b s e in
     if Value.to_bool Unknown c then iter b s' e else s'
-  let return v = raise (Value.Return (Some v))
+  let return v = raise (Value.Return v)
   let throw l e = raise (Value.Throw (l,e))
   let catch b f e = try b e with Value.Throw (l,x) -> f l x e
   let error l s = raise (Value.EvalError (l,s))
-
-  (* Unit *)
-  let vunit = Value.VTuple []
-  let is_unit v = match v with Value.VTuple [] -> true | _ -> false
-
-  (* Bool *)
-  let not_bool l v = Value.VBool (not (Value.to_bool l v))
-  let and_bool l v1 v2 = Value.VBool (Value.to_bool l v1 && Value.to_bool l v2)
-  let eq l v1 v2 = Value.VBool (Value.eval_eq l v1 v2)
-
-  (* Int *)
-  let add_int = Value.eval_add_int
-  let sub_int = Value.eval_sub_int
-  let leq_int l v1 v2 = Value.VBool (Value.eval_leq l v1 v2)
-
-  (* Bitvector *)
-  let concat = Value.eval_concat
-  let extract_bits = Value.extract_bits
-  let width_bits l v = Value.VInt (Z.of_int (Primops.prim_length_bits (Value.to_bits l v)))
-  let insert_bits = Value.insert_bits
-  let inmask l v1 v2 = Value.VBool (Value.eval_inmask l v1 v2)
-
-  (* Tuple *)
-  let of_tuple = Value.of_tuple
-  let to_tuple = Value.to_tuple
-
-  (* Records *)
-  let get_field = Value.get_field
-  let set_field = Value.set_field
-
-  (* Array *)
-  let get_array = Value.get_array
-  let set_array = Value.set_array
 end)
 
 
