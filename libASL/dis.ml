@@ -53,7 +53,7 @@ let () = Printexc.register_printer
     | DisInternalError (loc, s) ->
         Some ("DisInternalError: " ^ pp_loc loc ^ ": " ^ s)
     | Value.Throw (loc, e) ->
-        Some ("LibASL.Value.Throw(" ^ Primops.pp_exc e ^ ") at " ^ pp_loc loc)
+        Some ("LibASL.Value.Throw(" ^ Additional.pp_exc e ^ ") at " ^ pp_loc loc)
     | _ -> None)
 
 
@@ -108,10 +108,10 @@ module LocalEnv = struct
         trace           : dis_trace;
     }
 
-    let pp_value_bindings = Utils.pp_list (pp_bindings pp_value)
+    let pp_value_bindings = Additional.pp_list (pp_bindings pp_value)
 
     let pp_sym_bindings (bss: (ty * sym) Bindings.t list) =
-        Utils.pp_list (pp_bindings (fun (_,e) -> pp_sym e)) bss
+        Additional.pp_list (pp_bindings (fun (_,e) -> pp_sym e)) bss
 
     let init (env: Eval.Env.t) =
         let eval e = val_expr (Eval.eval_expr Unknown env e) in
@@ -236,7 +236,7 @@ module LocalEnv = struct
         let n = List.length env.locals - i - 1 in
         match Bindings.find_opt id (List.nth env.locals n) with
         | Some (t,_) ->
-          let locals = Utils.nth_modify (Bindings.add id (t,v)) n env.locals in
+          let locals = Additional.nth_modify (Bindings.add id (t,v)) n env.locals in
           { env with locals }
         | None -> internal_error loc @@ "failed to set resolved variable: " ^ pp_var x
 
@@ -304,7 +304,7 @@ module DisEnv = struct
         put lenv'
 
 
-    let getFun (loc: l) (x: ident): Eval.fun_sig option rws =
+    let getFun (loc: l) (x: ident): Abstract_interface.fun_sig option rws =
         reads (catch (fun env -> Eval.Env.getFun loc env x))
 
     let nextVarName (prefix: string): ident rws =
@@ -784,7 +784,7 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
     (match fn with
-    | Some (rty, atys, targs, args, loc, b) ->
+    | Some (rty, targs, args, loc, b) ->
         let fname = name_of_FIdent f in
 
         (* Nest enviroment *)
@@ -794,17 +794,16 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws
 
         (* Assign targs := tes *)
         let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e ->
-            declare_const loc type_integer arg e
+            declare_const loc Additional.type_integer arg e
             ) targs tes in
 
-        assert (List.length atys == List.length args);
-        assert (List.length atys == List.length es);
+        assert (List.length args == List.length es);
 
         (* Assign args := es *)
-        let@ () = DisEnv.sequence_ (Utils.map3 (fun (ty, _) arg e ->
+        let@ () = DisEnv.sequence_ (List.map2 (fun (ty, arg) e ->
             let@ ty' = dis_type loc ty in
             declare_const loc ty' arg e
-        ) atys args es) in
+        ) args es) in
 
         (* Create return variable (if necessary).
             This is in the inner scope to allow for type parameters. *)
@@ -862,7 +861,7 @@ and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
 and dis_lexpr loc x r: unit rws =
     DisEnv.scope loc
         "dis_lexpr" (pp_stmt (Stmt_Assign (x, sym_expr r, Unknown)))
-        Utils.pp_unit
+        Additional.pp_unit
         (dis_lexpr' loc x r)
 
 (** Remove potential effects from an lexpr *)
@@ -1014,13 +1013,13 @@ and dis_stmts (stmts: AST.stmt list): unit rws =
         | [] -> dis_stmt ret
         | _ -> raise (DisUnsupported (stmt_loc ret,
             "unexpected statements after return: " ^
-            Utils.pp_list pp_stmt rest)))
+            Additional.pp_list pp_stmt rest)))
     | (s::rest) ->
         dis_stmt s >> dis_stmts rest
 
 
 (** Disassemble statement *)
-and dis_stmt x = DisEnv.scope (stmt_loc x) "dis_stmt" (pp_stmt x) Utils.pp_unit (dis_stmt' x)
+and dis_stmt x = DisEnv.scope (stmt_loc x) "dis_stmt" (pp_stmt x) Additional.pp_unit (dis_stmt' x)
 and dis_stmt' (x: AST.stmt): unit rws =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
@@ -1118,7 +1117,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
                 else
                     DisEnv.unit
             in
-            declare_var loc type_integer var >>
+            declare_var loc Additional.type_integer var >>
             dis_for startval
         | _, _ ->
             raise (DisUnsupported (loc, "for loop bounds not statically known: " ^ pp_stmt x)))
@@ -1189,7 +1188,7 @@ let dis_decode_slice (loc: l) (x: decode_slice) (op: value): value rws =
 
 (* Duplicate of eval_decode_case modified to print rather than eval *)
 let rec dis_decode_case (loc: AST.l) (x: decode_case) (op: value): unit rws =
-    DisEnv.scope loc "dis_decode_case" (pp_decode_case x) Utils.pp_unit
+    DisEnv.scope loc "dis_decode_case" (Additional.pp_decode_case x) Additional.pp_unit
         (dis_decode_case' loc x op)
 and dis_decode_case' (loc: AST.l) (x: decode_case) (op: value): unit rws =
     (match x with
@@ -1211,7 +1210,7 @@ and dis_decode_case' (loc: AST.l) (x: decode_case) (op: value): unit rws =
 
 (* Duplicate of eval_decode_alt modified to print rather than eval *)
 and dis_decode_alt (loc: l) (x: decode_alt) (vs: value list) (op: value): bool rws =
-    DisEnv.scope loc "dis_decode_alt" (pp_decode_alt x) string_of_bool
+    DisEnv.scope loc "dis_decode_alt" (Additional.pp_decode_alt x) string_of_bool
         (dis_decode_alt' loc x vs op)
 and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool rws =
     if List.for_all2 (Eval.eval_decode_pattern loc) ps vs then

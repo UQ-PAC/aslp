@@ -71,7 +71,7 @@ let rec val_expr (v: Value.value): AST.expr =
 
 let rec val_initialised (v: value): bool =
   match v with
-  | VUninitialized _ -> false
+  | VUninitialized -> false
   | VRecord bs -> Bindings.for_all (fun _ -> val_initialised) bs
   | VTuple vs -> List.for_all val_initialised vs
   | VArray (vs, _) -> Primops.ImmutableArray.for_all (fun _ -> val_initialised) vs
@@ -124,7 +124,7 @@ let rec lexpr_to_expr (loc: l) (x: lexpr): expr =
 
 let filter_uninit (v: value option): value option =
   match v with
-  | Some (VUninitialized _) -> None
+  | Some (VUninitialized) -> None
   | _ -> v
 
 let sym_value_unsafe (x: sym): value =
@@ -215,7 +215,7 @@ let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
 let sym_val_or_uninit_unsafe (x: sym): value =
   match x with
   | Val v -> v
-  | Exp e -> VUninitialized (Type_OfExpr e)
+  | Exp e -> VUninitialized
 
 let expr_prim f tes es =
   Expr_TApply (f, tes, es)
@@ -443,6 +443,7 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
   | _ -> None)
 
 let rec val_type (v: value): ty =
+  let open Additional in
   let unsupported () = failwith @@ "val_type unsupported: " ^ pp_value v in
   match v with
   | VBool _ -> type_builtin "boolean"
@@ -457,7 +458,7 @@ let rec val_type (v: value): ty =
   | VRecord (_) -> unsupported ()
   | VArray (arr, def) -> unsupported ()
   | VRAM _ -> type_builtin "__RAM"
-  | VUninitialized ty -> ty
+  | VUninitialized -> unsupported ()
 
 let sym_type =
   function
@@ -503,7 +504,7 @@ let pp_access_chain =
   | Field id -> "Field " ^ pprint_ident id
   | Index v -> "Index " ^ pp_value v
 
-let pp_access_chain_list = Utils.pp_list pp_access_chain
+let pp_access_chain_list = Additional.pp_list pp_access_chain
 
 (* note: for all access_chain lists below, they are ordered with the first
    elements being the inner-most accessor.
