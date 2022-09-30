@@ -4,7 +4,7 @@
 
 module AST = Asl_ast
 
-type fun_sig = (AST.ty option * ((AST.ty * AST.ident) list) * AST.ident list * AST.ident list * AST.l * AST.stmt list)
+type fun_sig = (AST.ty option * AST.ident list * (AST.ty * AST.ident) list * AST.l * AST.stmt list)
 type inst_sig = AST.encoding * (AST.stmt list) option * bool * AST.stmt list
 
 module type Value = sig

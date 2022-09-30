@@ -441,12 +441,12 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
     | Some r -> pure r
     | None ->
         begin
-          let* (rty, atys, targs, args, loc, b) = getFun loc f in
+          let* (rty, targs, args, loc, b) = getFun loc f in
           assert (List.length targs = List.length tvs);
           assert (List.length args  = List.length vs);
           call (
             traverse2 (fun arg v -> addLocalVar loc arg v) targs tvs >>>
-            traverse2 (fun arg v -> addLocalVar loc arg v) args vs >>>
+            traverse2 (fun arg v -> addLocalVar loc arg v) (List.map snd args) vs >>>
             eval_stmts b
           )
         end
@@ -610,28 +610,23 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
       | Decl_FunDefn(rty, f, atys, body, loc) ->
           let* t = removeGlobalConsts (TC.fv_funtype (f, false, [], [], atys, rty)) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (Some rty, atys, tvs, args, loc, body)
+          addFun loc f (Some rty, tvs, atys, loc, body)
       | Decl_ProcDefn(f, atys, body, loc) ->
           let* t = removeGlobalConsts (Asl_utils.fv_args atys) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (None, atys, tvs, args, loc, body)
+          addFun loc f (None, tvs, atys, loc, body)
       | Decl_VarGetterDefn(ty, f, body, loc) ->
           let* t = removeGlobalConsts (Asl_utils.fv_type ty) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = [] in
-          addFun loc f (Some ty, [], tvs, args, loc, body)
+          addFun loc f (Some ty, tvs, [], loc, body)
       | Decl_ArrayGetterDefn(rty, f, atys, body, loc) ->
           let* t = removeGlobalConsts (TC.fv_funtype (f, true, [], [], atys, rty)) in
           let tvs = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (Some rty, atys, tvs, args, loc, body)
+          addFun loc f (Some rty, tvs, atys, loc, body)
       | Decl_VarSetterDefn(f, ty, v, body, loc) ->
           let* t = removeGlobalConsts (Asl_utils.fv_type ty) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = [v] in
-          addFun loc f (Some ty, [], tvs, args, loc, body)
+          addFun loc f (Some ty, tvs, [(ty,v)], loc, body)
       | Decl_ArraySetterDefn(f, atys, ty, v, body, loc) ->
           let ts = Asl_utils.IdentSet.union (Asl_utils.fv_sformals atys) (Asl_utils.fv_type ty) in
           let* t = removeGlobalConsts ts in
@@ -644,8 +639,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
           in
           (* Add value parameter for setter to end of arguments. *)
           let atys' = List.map tuple_of atys @ [(ty, v)] in
-          let args = List.map snd atys' in
-          addFun loc f (None, atys', tvs, args, loc, body)
+          addFun loc f (None, tvs, atys', loc, body)
       | Decl_InstructionDefn(nm, encs, opost, conditional, exec, loc) ->
           (* Instructions are looked up by their encoding name *)
           traverse_ (fun enc ->
@@ -657,8 +651,7 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
       | Decl_NewMapDefn(rty, f, atys, body, loc) ->
           let* t = removeGlobalConsts (TC.fv_funtype (f, false, [], [], atys, rty)) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (Some rty, atys, tvs, args, loc, body)
+          addFun loc f (Some rty, tvs, atys, loc, body)
       (*
       | Decl_MapClause(f, atys, cond, body, loc) ->
               let tvs   = Asl_utils.to_sorted_list (Asl_utils.fv_args atys) in
@@ -668,11 +661,10 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
       | Decl_NewEventDefn (f, atys, loc) ->
           let* t = removeGlobalConsts (Asl_utils.fv_args atys) in
           let tvs = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (None, atys, tvs, args, loc, [])
+          addFun loc f (None, tvs, atys, loc, [])
       | Decl_EventClause (f, body, loc) ->
-          let* (_, _, tvs, args, _, body0) = getFun loc f in
-          addFun loc f (None, [], tvs, args, loc, List.append body body0)
+          let* (_, tvs, args, _, body0) = getFun loc f in
+          addFun loc f (None, tvs, args, loc, List.append body body0)
       (* todo: when creating initial environment, should pass in a set of configuration
        * options that will override any default values given in definition
        *)
