@@ -9,7 +9,7 @@ open Asl_utils
 open Primops
 open Abstract_interface
 
-module Make (V: Value) (I: Effect with type value = V.value ) =  struct
+module Make (V: Value) (I: Effect with type value = V.t) =  struct
   open V
   open I
 
@@ -70,14 +70,14 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
         getVar loc f
     | DecoderSlice_Concat fs ->
         let+ vs = traverse (getVar loc) fs in
-        concat loc vs
+        concat_bits loc vs
     )
 
   (** Evaluate instruction decode pattern match *)
   let rec eval_decode_pattern (loc: l) (x: decode_pattern) (op: value): value =
     (match x with
-    | DecoderPattern_Bits     b -> eq     loc op (from_bitsLit b)
-    | DecoderPattern_Mask     m -> inmask loc op (from_maskLit m)
+    | DecoderPattern_Bits     b -> eq      loc op (from_bitsLit b)
+    | DecoderPattern_Mask     m -> in_mask loc op (from_maskLit m)
     | DecoderPattern_Wildcard _ -> vtrue
     | DecoderPattern_Not      p -> not_bool loc (eval_decode_pattern loc p op)
     )
@@ -88,10 +88,10 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
 
   and eval_pattern (loc: l) (v: value) (x: pattern): value eff =
     match x with
-    | Pat_LitInt(l)  -> pure (eq     loc v (from_intLit l))
-    | Pat_LitHex(l)  -> pure (eq     loc v (from_hexLit l))
-    | Pat_LitBits(l) -> pure (eq     loc v (from_bitsLit l))
-    | Pat_LitMask(l) -> pure (inmask loc v (from_maskLit l))
+    | Pat_LitInt(l)  -> pure (eq      loc v (from_intLit l))
+    | Pat_LitHex(l)  -> pure (eq      loc v (from_hexLit l))
+    | Pat_LitBits(l) -> pure (eq      loc v (from_bitsLit l))
+    | Pat_LitMask(l) -> pure (in_mask loc v (from_maskLit l))
     | Pat_Const(c)   -> getGlobalConst c >> eq loc v
     | Pat_Wildcard   -> pure vtrue
     | Pat_Tuple(ps) ->
@@ -143,14 +143,14 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
     | Expr_Fields(e, fs) ->
         let+ v  = eval_expr loc e in
         let vs = List.map (get_field loc v) fs in
-        concat loc vs
+        concat_bits loc vs
     | Expr_Slices(e, ss) ->
         let* v  = eval_expr loc e in
         let+ vs = traverse (fun s ->
           let+ (i, w) = eval_slice loc s in
           extract_bits loc v i w
         ) ss in
-        concat loc vs
+        concat_bits loc vs
     | Expr_In(e, p) ->
         let* v = eval_expr loc e in
         eval_pattern loc v p
@@ -509,8 +509,8 @@ module Make (V: Value) (I: Effect with type value = V.value ) =  struct
     (* todo: consider checking iset *)
     (* Printf.printf "Checking opcode match %s == %s\n" (Utils.to_string (PP.pp_opcode_value opcode)) (pp_value op); *)
     let ok = (match opcode with
-    | Opcode_Bits b -> eq     loc op (from_bitsLit b)
-    | Opcode_Mask m -> inmask loc op (from_maskLit m)
+    | Opcode_Bits b -> eq      loc op (from_bitsLit b)
+    | Opcode_Mask m -> in_mask loc op (from_maskLit m)
     ) in
     branch ok (* then *) begin
       traverse (function (IField_Field (f, lo, wd)) ->
