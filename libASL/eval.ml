@@ -309,7 +309,7 @@ end
 (****************************************************************)
 
 module Semantics = Abstract.Make(struct
-  type value = Value.value
+  type t = Value.value
 
   (* Value Constructors *)
   let from_bool b    = Value.VBool b
@@ -344,11 +344,11 @@ module Semantics = Abstract.Make(struct
   let leq_int l v1 v2 = Value.VBool (Value.eval_leq l v1 v2)
 
   (* Bitvector *)
-  let concat         = Value.eval_concat
-  let extract_bits   = Value.extract_bits'' (* extract_bits'' allows extracting from ints *)
-  let width_bits l v = Value.VInt (Z.of_int (Primops.prim_length_bits (Value.to_bits l v)))
-  let insert_bits    = Value.insert_bits
-  let inmask l v1 v2 = Value.VBool (Value.eval_inmask l v1 v2)
+  let concat_bits     = Value.eval_concat
+  let extract_bits    = Value.extract_bits'' (* extract_bits'' allows extracting from ints *)
+  let width_bits l v  = Value.VInt (Z.of_int (Primops.prim_length_bits (Value.to_bits l v)))
+  let insert_bits     = Value.insert_bits
+  let in_mask l v1 v2 = Value.VBool (Value.eval_inmask l v1 v2)
 
   (* Records *)
   let get_field = Value.get_field
