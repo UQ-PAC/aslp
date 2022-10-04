@@ -8,64 +8,64 @@ type fun_sig = (AST.ty option * AST.ident list * (AST.ty * AST.ident) list * AST
 type inst_sig = AST.encoding * (AST.stmt list) option * bool * AST.stmt list
 
 module type Value = sig
-  type value
+  type t
 
   (* Value Constructors *)
-  val from_bool      : bool -> value
-  val from_int       : int -> value
-  val from_intLit    : string -> value
-  val from_hexLit    : string -> value
-  val from_realLit   : string -> value
-  val from_bitsLit   : string -> value
-  val from_maskLit   : string -> value
-  val from_stringLit : string -> value
-  val from_enum      : AST.ident -> int -> value
-  val from_exc       : AST.l -> Primops.exc -> value
-  val from_tuple     : value list -> value
+  val from_bool      : bool -> t
+  val from_int       : int -> t
+  val from_intLit    : string -> t
+  val from_hexLit    : string -> t
+  val from_realLit   : string -> t
+  val from_bitsLit   : string -> t
+  val from_maskLit   : string -> t
+  val from_stringLit : string -> t
+  val from_enum      : AST.ident -> int -> t
+  val from_exc       : AST.l -> Primops.exc -> t
+  val from_tuple     : t list -> t
 
   (* Value Destructors *)
-  val to_tuple  : AST.l -> value -> value list
-  val to_string : AST.l -> value -> string
-  val to_exc    : AST.l -> value -> (AST.l * Primops.exc)
+  val to_tuple  : AST.l -> t -> t list
+  val to_string : AST.l -> t -> string
+  val to_exc    : AST.l -> t -> (AST.l * Primops.exc)
 
   (* Unit *)
-  val vunit   : value
-  val is_unit : value -> bool
+  val vunit   : t
+  val is_unit : t -> bool
 
   (* Bool *)
-  val not_bool  : AST.l -> value -> value
-  val and_bool  : AST.l -> value -> value -> value
-  val eq        : AST.l -> value -> value -> value
+  val not_bool  : AST.l -> t -> t
+  val and_bool  : AST.l -> t -> t -> t
+  val eq        : AST.l -> t -> t -> t
 
   (* Int *)
-  val add_int : AST.l -> value -> value -> value
-  val sub_int : AST.l -> value -> value -> value
-  val leq_int : AST.l -> value -> value -> value
+  val add_int : AST.l -> t -> t -> t
+  val sub_int : AST.l -> t -> t -> t
+  val leq_int : AST.l -> t -> t -> t
 
   (* Bitvector *)
-  val concat       : AST.l -> value list -> value
-  val extract_bits : AST.l -> value -> value -> value -> value
-  val width_bits   : AST.l -> value -> value
-  val insert_bits  : AST.l -> value -> value -> value -> value -> value
-  val inmask       : AST.l -> value -> value -> value
+  val concat_bits  : AST.l -> t list -> t
+  val extract_bits : AST.l -> t -> t -> t -> t
+  val width_bits   : AST.l -> t -> t
+  val insert_bits  : AST.l -> t -> t -> t -> t -> t
+  val in_mask      : AST.l -> t -> t -> t
 
   (* Records *)
-  val get_field : AST.l -> value -> AST.ident -> value
-  val set_field : AST.l -> value -> AST.ident -> value -> value
-  val new_record : (AST.ident * value) list -> value
+  val get_field : AST.l -> t -> AST.ident -> t
+  val set_field : AST.l -> t -> AST.ident -> t -> t
+  val new_record : (AST.ident * t) list -> t
 
   (* Array *)
-  val get_array : AST.l -> value -> value -> value
-  val set_array : AST.l -> value -> value -> value -> value
-  val new_array : value -> value
+  val get_array : AST.l -> t -> t -> t
+  val set_array : AST.l -> t -> t -> t -> t
+  val new_array : t -> t
 
   (* Unknown *)
-  val unknown_integer : AST.l -> value
-  val unknown_real    : AST.l -> value
-  val unknown_string  : AST.l -> value
-  val unknown_bits    : AST.l -> value -> value
-  val unknown_ram     : AST.l -> value -> value
-  val unknown_enum    : AST.l -> value list -> value
+  val unknown_integer : AST.l -> t
+  val unknown_real    : AST.l -> t
+  val unknown_string  : AST.l -> t
+  val unknown_bits    : AST.l -> t -> t
+  val unknown_ram     : AST.l -> t -> t
+  val unknown_enum    : AST.l -> t list -> t
 end
 
 module type Effect = sig
