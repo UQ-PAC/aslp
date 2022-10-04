@@ -69,6 +69,8 @@ let var_ident (Var (i,id)) =
   | _,Ident s -> Ident (s ^ "__" ^ string_of_int i)
   | _ -> internal_error Unknown "unexpected resolved variable to function identifier"
 
+let var_ident_no_suffix (Var(_,id)) = id
+
 (** Returns the variable's name without mangling, suitable for
     disassembling then resolving again.
 
@@ -77,7 +79,7 @@ let var_expr_no_suffix_in_local_scope (Var(_,id)) = Expr_Var id
 
 (** Returns an expression for the variable with a mangled name,
     suitable for emitting in a generated statement. *)
-let var_expr v = Expr_Var (var_ident v)
+let var_expr v = EVar (var_ident v)
 
 (** Returns an L-expression for the variable with a mangled name,
     suitable for emitting in a generated statement. *)
@@ -91,6 +93,9 @@ let var_lexpr v = LExpr_Var (var_ident v)
     *)
 let var_sym_expr v = Exp (var_expr v)
 
+type sym = Symbolic.value
+let pp_sym = Symbolic.pp_value
+
 module LocalEnv = struct
     type t = {
         (* local state, also containing globals at the outer-most level.
@@ -102,7 +107,7 @@ module LocalEnv = struct
              thus, uninitialized structures must be expanded into structures of uninitialized scalars.
            *)
         locals          : (ty * sym) Bindings.t list;
-        returnSymbols   : expr option list;
+        returnSymbols   : var list;
         numSymbols      : int;
         indent          : int;
         trace           : dis_trace;
@@ -111,38 +116,7 @@ module LocalEnv = struct
     let pp_value_bindings = Additional.pp_list (pp_bindings pp_value)
 
     let pp_sym_bindings (bss: (ty * sym) Bindings.t list) =
-        Additional.pp_list (pp_bindings (fun (_,e) -> pp_sym e)) bss
-
-    let init (env: Eval.Env.t) =
-        let eval e = val_expr (Eval.eval_expr Unknown env e) in
-        let tenv = Tcheck.env0 in
-        let get_global_type id =
-            (match Tcheck.GlobalEnv.getGlobalVar tenv id with
-            | Some (Type_Bits e) ->
-                (Type_Bits (eval e))
-            | Some (Type_App (i, es)) ->
-                (Type_App (i, List.map eval es))
-            | Some t -> (t)
-            | _ -> internal_error Unknown @@ "cannot find type for global: " ^ pprint_ident id)
-        in
-
-        let globals = Eval.Env.readGlobals env in
-        let consts = Eval.Env.readGlobalConsts env in
-
-        let merge_left k l r = Some l in
-        let globalsAndConsts = Bindings.union merge_left globals consts
-        in
-        let globals = Bindings.mapi
-            (fun id v -> (get_global_type id, Val v))
-            globalsAndConsts
-        in
-        {
-            locals = [Bindings.empty ; globals];
-            returnSymbols = [];
-            numSymbols = 0;
-            indent = 0;
-            trace = [];
-        }
+        Additional.pp_list (pp_bindings (fun (_,e) -> Symbolic.pp_value e)) bss
 
     let sequence_merge (first: t) (second: t): t =
         {
@@ -156,13 +130,12 @@ module LocalEnv = struct
         Printf.sprintf "locals = %s" (pp_sym_bindings withoutGlobals)
         (* Printf.sprintf "locals = %s" (pp_sym_bindings env.locals) *)
 
-    let getReturnSymbol (loc: l) (env: t): expr =
+    let getReturnSymbol (loc: l) (env: t): var =
         match env.returnSymbols with
         | [] -> internal_error loc "attempt to return from outside a function"
-        | None :: _ -> internal_error loc "attempt to return a value from inside a procedure"
-        | Some e :: rs -> e
+        | e :: rs -> e
 
-    let addReturnSymbol (e: expr option) (env: t): t =
+    let addReturnSymbol (e: var) (env: t): t =
         {env with returnSymbols = e :: env.returnSymbols}
 
     let removeReturnSymbol (env: t): t =
@@ -239,6 +212,10 @@ module LocalEnv = struct
           let locals = Additional.nth_modify (Bindings.add id (t,v)) n env.locals in
           { env with locals }
         | None -> internal_error loc @@ "failed to set resolved variable: " ^ pp_var x
+
+    let resolveSetVar (loc: l) (nm: ident) (x: sym) (env: t): t =
+      let var = resolveVar loc nm env in
+      setVar loc var x env
 
 end
 
@@ -463,47 +440,49 @@ let sym_val_or_uninit (t: ty) (x: sym): value rws =
 
 (** Symbolic implementation of an if statement that returns an expression
  *)
-let sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
-  let@ r = test in
-  (match r with
-  | Val (VBool (true))  -> tcase
-  | Val (VBool (false)) -> fcase
-  | Val _ -> failwith ("Split on non-boolean value")
-  | Exp e ->
+let sym_if (loc: l) (t: ty) (test: sym) (tcase: 'a rws) (fcase: 'b rws): sym rws =
+  (match test with
+  | (VBool (Left true))  -> tcase
+  | (VBool (Left false)) -> fcase
+  | (VBool (Right e)) ->
       let@ tmp = declare_fresh_named_var loc "If" t in
       (* Evaluate true branch statements. *)
-      let@ (tenv,tstmts) = DisEnv.locally_
-          (tcase >>= assign_var loc tmp) in
+      let@ (_,tenv,tstmts) = DisEnv.locally
+          (let@ x = tcase in let+ () = assign_var loc tmp x in x) in
       (* Propagate incremented counter to env'. *)
       let@ env' = DisEnv.gets (fun env -> LocalEnv.sequence_merge env tenv) in
       (* Execute false branch statements with env'. *)
       let@ (fenv,fstmts) = DisEnv.locally_
           (DisEnv.put env' >> fcase >>= assign_var loc tmp) in
       let@ () = DisEnv.join_locals tenv fenv in
-      let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
-      Exp (var_expr tmp))
+      let+ () = DisEnv.write [Stmt_If(Symbolic.lift_expr loc TC.type_bool e, tstmts, [], fstmts, loc)] in
+      (* Construct a value matching the value constructor of the true branch's result. *)
+      (* Symbolic.copy_type tval (var_expr tmp) *)
+      assert false
+  | _ -> failwith ("Split on non-boolean value")
+  )
 
 (** Symbolic implementation of an if statement with no return *)
 let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit rws =
   let@ r = test in
   (match r with
-  | Val (VBool (true))  -> tcase
-  | Val (VBool (false)) -> fcase
-  | Val _ -> failwith ("Split on non-boolean value")
-  | Exp e ->
+  | VBool (Left true) -> tcase
+  | VBool (Left false) -> fcase
+  | VBool (Right e) ->
       let@ (tenv,tstmts) = DisEnv.locally_ tcase in
 
       let@ env' = DisEnv.gets (fun env -> LocalEnv.sequence_merge env tenv) in
       let@ (fenv,fstmts) = DisEnv.locally_ (DisEnv.put env' >> fcase) in
 
       let@ () = DisEnv.join_locals tenv fenv in
-      DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)])
+      DisEnv.write [Stmt_If(Symbolic.lift_expr loc TC.type_bool e, tstmts, [], fstmts, loc)]
+  | _ -> failwith ("Split on non-boolean value"))
 
 let sym_and (loc: l) (x: sym rws) (y: sym rws): sym rws =
-    sym_if loc type_bool x y (DisEnv.pure sym_false)
+    sym_if loc TC.type_bool x y (DisEnv.pure Symbolic.vfalse)
 
 let sym_or (loc: l) (x: sym rws) (y: sym rws): sym rws =
-    sym_if loc type_bool x (DisEnv.pure sym_true) y
+    sym_if loc TC.type_bool x (DisEnv.pure Symbolic.vtrue) y
 
 (** Symbolic implementation of List.for_all2 *)
 let rec sym_for_all2 p l1 l2 =
@@ -1289,3 +1268,331 @@ let retrieveDisassembly (env: Eval.Env.t) (opcode: string): stmt list =
     let DecoderCase_Case (_,_,loc) = decoder in
     (* List.iter (fun (ident, _) -> Eval.Env.setVar Unknown env ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals env).bs); *)
     dis_decode_entry env decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))))
+
+let init (env: Eval.Env.t): LocalEnv.t =
+    let eval e = val_expr (Eval.eval_expr Unknown env e) in
+    let tenv = Tcheck.env0 in
+    let get_global_type id =
+        (match Tcheck.GlobalEnv.getGlobalVar tenv id with
+        | Some (Type_Bits e) ->
+            (Type_Bits (eval e))
+        | Some (Type_App (i, es)) ->
+            (Type_App (i, List.map eval es))
+        | Some t -> (t)
+        | _ -> internal_error Unknown @@ "cannot find type for global: " ^ pprint_ident id)
+    in
+
+    let globals = Eval.Env.readGlobals env in
+    let consts = Eval.Env.readGlobalConsts env in
+
+    let merge_left k l r = Some l in
+    let globalsAndConsts = Bindings.union merge_left globals consts
+    in
+    let globals = Bindings.mapi
+        (fun id v -> (get_global_type id, Val v))
+        globalsAndConsts
+    in
+    {
+        locals = [Bindings.empty ; globals];
+        returnSymbols = [];
+        numSymbols = 0;
+        indent = 0;
+        trace = [];
+    }
+
+let sym_pure_prim (f: string) (tvs: sym list) (vs: sym list): value option =
+    let open Primops in
+    let f' : type a. a Symbolic.sym = Either.Right (ECall (FIdent (f,0), tvs, vs)) in
+    let b' : Z.t Symbolic.sym -> vbits = fun n -> Right {n=n; v=ECall (FIdent (f,0), tvs, vs)} in
+    ( match (f, tvs, vs) with
+    | ("eq_enum",           [      ], [VInt (Left x); VInt (Left y)    ])     -> Some (VBool   (Left(x = y)))
+    | ("eq_enum",           [      ], [VInt _       ; VInt _           ])     -> Some (VBool   (f'))
+    | ("eq_enum",           [      ], [VBool (Left x); VBool (Left y)    ])     -> Some (VBool   (Left(x = y)))
+    | ("eq_enum",           [      ], [VBool _       ; VBool _           ])     -> Some (VBool   (f'))
+    | ("ne_enum",           [      ], [VInt (Left x); VInt (Left y)    ])     -> Some (VBool   (Left(x <> y)))
+    | ("ne_enum",           [      ], [VInt _       ; VInt _           ])     -> Some (VBool   (f'))
+    | ("ne_enum",           [      ], [VBool (Left x); VBool (Left y)    ])     -> Some (VBool   (Left(x <> y)))
+    | ("ne_enum",           [      ], [VBool _       ; VBool _           ])     -> Some (VBool   (f'))
+    | ("eq_bool",           [      ], [VBool (Left x); VBool (Left y)    ])     -> Some (VBool   (Left(prim_eq_bool    x y)))
+    | ("eq_bool",           [      ], [VBool _       ; VBool _           ])     -> Some (VBool   (f'))
+    | ("ne_bool",           [      ], [VBool (Left x); VBool (Left y)    ])     -> Some (VBool   (Left(prim_ne_bool    x y)))
+    | ("ne_bool",           [      ], [VBool _       ; VBool _           ])     -> Some (VBool   (f'))
+    | ("equiv_bool",        [      ], [VBool (Left x); VBool (Left y)    ])     -> Some (VBool   (Left(prim_equiv_bool x y)))
+    | ("equiv_bool",        [      ], [VBool _       ; VBool _           ])     -> Some (VBool   (f'))
+    | ("not_bool",          [      ], [VBool (Left x)             ])     -> Some (VBool   (Left(prim_not_bool x)))
+    | ("not_bool",          [      ], [VBool _                    ])     -> Some (VBool   (f'))
+    | ("eq_int",            [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VBool   (Left(prim_eq_int     x y)))
+    | ("eq_int",            [      ], [VInt  _       ; VInt  _           ])     -> Some (VBool   (f'))
+    | ("ne_int",            [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VBool   (Left(prim_ne_int     x y)))
+    | ("ne_int",            [      ], [VInt  _       ; VInt  _           ])     -> Some (VBool   (f'))
+    | ("le_int",            [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VBool   (Left(prim_le_int     x y)))
+    | ("le_int",            [      ], [VInt  _       ; VInt  _           ])     -> Some (VBool   (f'))
+    | ("lt_int",            [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VBool   (Left(prim_lt_int     x y)))
+    | ("lt_int",            [      ], [VInt  _       ; VInt  _           ])     -> Some (VBool   (f'))
+    | ("ge_int",            [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VBool   (Left(prim_ge_int     x y)))
+    | ("ge_int",            [      ], [VInt  _       ; VInt  _           ])     -> Some (VBool   (f'))
+    | ("gt_int",            [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VBool   (Left(prim_gt_int     x y)))
+    | ("gt_int",            [      ], [VInt  _       ; VInt  _           ])     -> Some (VBool   (f'))
+    | ("is_pow2_int",       [      ], [VInt  (Left x)             ])     -> Some (VBool   (Left(prim_is_pow2_int x)))
+    | ("is_pow2_int",       [      ], [VInt  _                    ])     -> Some (VBool   (f'))
+    | ("neg_int",           [      ], [VInt  (Left x)             ])     -> Some (VInt    (Left(prim_neg_int    x)))
+    | ("neg_int",           [      ], [VInt  _                    ])     -> Some (VInt    (f'))
+    | ("add_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_add_int    x y)))
+    | ("add_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("sub_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_sub_int    x y)))
+    | ("sub_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("shl_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_shl_int    x y)))
+    | ("shl_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("shr_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_shr_int    x y)))
+    | ("shr_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("mul_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_mul_int    x y)))
+    | ("mul_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("zdiv_int",          [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_zdiv_int   x y)))
+    | ("zdiv_int",          [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("zrem_int",          [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_zrem_int   x y)))
+    | ("zrem_int",          [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("fdiv_int",          [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_fdiv_int   x y)))
+    | ("fdiv_int",          [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("frem_int",          [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_frem_int   x y)))
+    | ("frem_int",          [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("mod_pow2_int",      [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_mod_pow2_int x y)))
+    | ("mod_pow2_int",      [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("align_int",         [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_align_int    x y)))
+    | ("align_int",         [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("pow2_int",          [      ], [VInt  (Left x)             ])     -> Some (VInt    (Left(prim_pow2_int     x)))
+    | ("pow2_int",          [      ], [VInt  _                    ])     -> Some (VInt    (f'))
+    | ("pow_int_int",       [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_pow_int_int  x y)))
+    | ("pow_int_int",       [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
+    | ("cvt_int_real",      [      ], [VInt (Left x)              ])     -> Some (VReal   (Left(prim_cvt_int_real x)))
+    | ("cvt_int_real",      [      ], [VInt _                     ])     -> Some (VReal   (f'))
+    | ("eq_real",           [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VBool   (Left(prim_eq_real x y)))
+    | ("eq_real",           [      ], [VReal _       ; VReal _           ])     -> Some (VBool   (f'))
+    | ("ne_real",           [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VBool   (Left(prim_ne_real x y)))
+    | ("ne_real",           [      ], [VReal _       ; VReal _           ])     -> Some (VBool   (f'))
+    | ("le_real",           [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VBool   (Left(prim_le_real x y)))
+    | ("le_real",           [      ], [VReal _       ; VReal _           ])     -> Some (VBool   (f'))
+    | ("lt_real",           [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VBool   (Left(prim_lt_real x y)))
+    | ("lt_real",           [      ], [VReal _       ; VReal _           ])     -> Some (VBool   (f'))
+    | ("ge_real",           [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VBool   (Left(prim_ge_real x y)))
+    | ("ge_real",           [      ], [VReal _       ; VReal _           ])     -> Some (VBool   (f'))
+    | ("gt_real",           [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VBool   (Left(prim_gt_real x y)))
+    | ("gt_real",           [      ], [VReal _       ; VReal _           ])     -> Some (VBool   (f'))
+    | ("add_real",          [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VReal   (Left(prim_add_real x y)))
+    | ("add_real",          [      ], [VReal _       ; VReal _           ])     -> Some (VReal   (f'))
+    | ("neg_real",          [      ], [VReal (Left x)             ])     -> Some (VReal   (Left(prim_neg_real x)))
+    | ("neg_real",          [      ], [VReal _                    ])     -> Some (VReal   (f'))
+    | ("sub_real",          [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VReal   (Left(prim_sub_real x y)))
+    | ("sub_real",          [      ], [VReal _       ; VReal _           ])     -> Some (VReal   (f'))
+    | ("mul_real",          [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VReal   (Left(prim_mul_real x y)))
+    | ("mul_real",          [      ], [VReal _       ; VReal _           ])     -> Some (VReal   (f'))
+    | ("divide_real",       [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VReal   (Left(prim_div_real x y)))
+    | ("divide_real",       [      ], [VReal _       ; VReal _           ])     -> Some (VReal   (f'))
+    | ("pow2_real",         [      ], [VInt  (Left x)             ])     -> Some (VReal   (Left(prim_pow2_real x)))
+    | ("pow2_real",         [      ], [VInt  _                    ])     -> Some (VReal   (f'))
+    | ("round_tozero_real", [      ], [VReal (Left x)             ])     -> Some (VInt    (Left(prim_round_tozero_real x)))
+    | ("round_tozero_real", [      ], [VReal _                    ])     -> Some (VInt    (f'))
+    | ("round_down_real",   [      ], [VReal (Left x)             ])     -> Some (VInt    (Left(prim_round_down_real x)))
+    | ("round_down_real",   [      ], [VReal _                    ])     -> Some (VInt    (f'))
+    | ("round_up_real",     [      ], [VReal (Left x)             ])     -> Some (VInt    (Left(prim_round_up_real x)))
+    | ("round_up_real",     [      ], [VReal _                    ])     -> Some (VInt    (f'))
+    | ("sqrt_real",         [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VReal   (Left(prim_sqrt_real x)))
+    | ("sqrt_real",         [      ], [VReal _       ; VReal _           ])     -> Some (VReal   (f'))
+    | ("cvt_int_bits",      [_     ], [VInt  (Left x); VInt  (Left n)    ])     -> Some (VBits   (Left(prim_cvt_int_bits n x)))
+    | ("cvt_int_bits",      [VInt n], [VInt  _       ; VInt  _           ])     -> Some (VBits   (b' n))
+    | ("cvt_bits_sint",     [VInt n], [VBits (Left x)             ])     -> Some (VInt    (Left(prim_cvt_bits_sint x)))
+    | ("cvt_bits_sint",     [VInt n], [VBits _                    ])     -> Some (VInt    (f'))
+    | ("cvt_bits_uint",     [VInt n], [VBits (Left x)             ])     -> Some (VInt    (Left(prim_cvt_bits_uint x)))
+    | ("cvt_bits_uint",     [VInt n], [VBits _                    ])     -> Some (VInt    (f'))
+    | ("in_mask",           [VInt n], [VBits (Left x); VMask (Left y)    ])     -> Some (VBool  (Left(prim_in_mask x y)))
+    | ("in_mask",           [VInt n], [VBits _       ; VMask _           ])     -> Some (VBool  (f'))
+    | ("notin_mask",        [VInt n], [VBits (Left x); VMask (Left y)    ])     -> Some (VBool  (Left(prim_notin_mask x y)))
+    | ("notin_mask",        [VInt n], [VBits _       ; VMask _           ])     -> Some (VBool  (f'))
+    | ("eq_bits",           [VInt n], [VBits (Left x); VBits (Left y)    ])     -> Some (VBool  (Left(prim_eq_bits x y)))
+    | ("eq_bits",           [VInt n], [VBits _       ; VBits _           ])     -> Some (VBool  (f'))
+    | ("ne_bits",           [VInt n], [VBits (Left x); VBits (Left y)    ])     -> Some (VBool  (Left(prim_ne_bits x y)))
+    | ("ne_bits",           [VInt n], [VBits _       ; VBits _           ])     -> Some (VBool  (f'))
+    | ("add_bits",          [VInt n], [VBits (Left x); VBits (Left y)    ])     -> Some (VBits  (Left(prim_add_bits x y)))
+    | ("add_bits",          [VInt n], [VBits _       ; VBits _           ])     -> Some (VBits  (b' n))
+    | ("sub_bits",          [VInt n], [VBits (Left x); VBits (Left y)    ])     -> Some (VBits  (Left(prim_sub_bits x y)))
+    | ("sub_bits",          [VInt n], [VBits _       ; VBits _           ])     -> Some (VBits  (b' n))
+    | ("mul_bits",          [VInt n], [VBits (Left x); VBits (Left y)    ])     -> Some (VBits  (Left(prim_mul_bits x y)))
+    | ("mul_bits",          [VInt n], [VBits _       ; VBits _           ])     -> Some (VBits  (b' n))
+    | ("and_bits",          [VInt n], [VBits (Left x); VBits (Left y)    ])     -> Some (VBits  (Left(prim_and_bits x y)))
+    | ("and_bits",          [VInt n], [VBits _       ; VBits _           ])     -> Some (VBits  (b' n))
+    | ("or_bits",           [VInt n], [VBits (Left x); VBits (Left y)    ])     -> Some (VBits  (Left(prim_or_bits x y)))
+    | ("or_bits",           [VInt n], [VBits _       ; VBits _           ])     -> Some (VBits  (b' n))
+    | ("eor_bits",          [VInt n], [VBits (Left x); VBits (Left y)    ])     -> Some (VBits  (Left(prim_eor_bits x y)))
+    | ("eor_bits",          [VInt n], [VBits _       ; VBits _           ])     -> Some (VBits  (b' n))
+    | ("not_bits",          [VInt n], [VBits (Left x)             ])     -> Some (VBits   (Left(prim_not_bits x)))
+    | ("not_bits",          [VInt n], [VBits _                    ])     -> Some (VBits   (b' n))
+    | ("zeros_bits",        [VInt (Left n)], [                    ])     -> Some (VBits   (Left(prim_zeros_bits n)))
+    | ("ones_bits",         [VInt (Left n)], [                    ])     -> Some (VBits   (Left(prim_ones_bits n)))
+    | ("replicate_bits",    [_; _  ], [VBits (Left x); VInt (Left y)     ])     -> Some (VBits   (Left(prim_replicate_bits x y)))
+    | ("replicate_bits",    [VInt m; VInt n], [VBits _       ; VInt _            ])     -> Some (VBits   (b' (sym_mul_int m n)))
+    | ("append_bits",       [VInt m; VInt n], [VBits (Left x); VBits (Left y)]) -> Some (VBits   (Left(prim_append_bits x y)))
+    | ("append_bits",       [VInt m; VInt n], [VBits _       ; VBits _       ]) -> Some (VBits   (b' (sym_add_int m n)))
+    | ("eq_str",            [      ], [VString (Left x); VString (Left y)])     -> Some (VBool   (Left(prim_eq_str x y)))
+    | ("eq_str",            [      ], [VString _       ; VString _       ])     -> Some (VBool   (f'))
+    | ("ne_str",            [      ], [VString (Left x); VString (Left y)])     -> Some (VBool   (Left(prim_ne_str x y)))
+    | ("ne_str",            [      ], [VString _       ; VString _       ])     -> Some (VBool   (f'))
+    | ("append_str_str",    [      ], [VString (Left x); VString (Left y)])     -> Some (VString (Left(prim_append_str x y)))
+    | ("append_str_str",    [      ], [VString _       ; VString _       ])     -> Some (VString (f'))
+    | ("cvt_int_hexstr",    [      ], [VInt (Left x)              ])     -> Some (VString (Left(prim_cvt_int_hexstr x)))
+    | ("cvt_int_hexstr",    [      ], [VInt _                     ])     -> Some (VString (f'))
+    | ("cvt_int_decstr",    [      ], [VInt (Left x)              ])     -> Some (VString (Left(prim_cvt_int_decstr x)))
+    | ("cvt_int_decstr",    [      ], [VInt _                     ])     -> Some (VString (f'))
+    | ("cvt_bool_str",      [      ], [VBool (Left x)             ])     -> Some (VString (Left(prim_cvt_bool_str x)))
+    | ("cvt_bool_str",      [      ], [VBool _                    ])     -> Some (VString (f'))
+    | ("cvt_bits_str",      [_     ], [VInt (Left n);    VBits (Left x)  ])     -> Some (VString (Left(prim_cvt_bits_str n x)))
+    | ("cvt_bits_str",      [_     ], [VInt _       ;    VBits _         ])     -> Some (VString (f'))
+    | ("cvt_real_str",      [      ], [VReal (Left x)             ])     -> Some (VString (Left(prim_cvt_real_str x)))
+    | ("cvt_real_str",      [      ], [VReal _                    ])     -> Some (VString (f'))
+    | ("is_cunpred_exc",    [      ], [VExc (_, ex)        ])     -> Some (VBool  (Left (prim_is_cunpred_exc ex)))
+    | ("is_exctaken_exc",   [      ], [VExc (_, ex)        ])     -> Some (VBool  (Left (prim_is_exctaken_exc ex)))
+    | ("is_impdef_exc",     [      ], [VExc (_, ex)        ])     -> Some (VBool  (Left (prim_is_impdef_exc ex)))
+    | ("is_see_exc",        [      ], [VExc (_, ex)        ])     -> Some (VBool  (Left (prim_is_see_exc ex)))
+    | ("is_undefined_exc",  [      ], [VExc (_, ex)        ])     -> Some (VBool  (Left (prim_is_undefined_exc ex)))
+    | ("is_unpred_exc",     [      ], [VExc (_, ex)        ])     -> Some (VBool  (Left (prim_is_unpred_exc ex)))
+    | _ -> None
+    )
+
+let sym_prim f tes es =
+    match sym_pure_prim f tes es with
+    | Some x -> DisEnv.pure (Some x)
+    | None -> unsupported Unknown "unsupported non-pure primitive"
+
+type fun_sig = Abstract_interface.fun_sig
+type inst_sig = Abstract_interface.inst_sig
+
+module Dis : Abstract_interface.Effect with type value = Symbolic.value = struct
+  type 'a eff = 'a rws
+  type value = sym
+
+  let dis_TYPE_UNKNOWN = Type_Constructor (Ident "unknown")
+
+  (* Monadic *)
+  let pure  : 'a -> 'a eff = DisEnv.pure
+  let (>>=) : 'a eff -> ('a -> 'b eff) -> 'b eff = DisEnv.bind
+  let (>>) : 'a eff -> ('a -> 'b) -> 'b eff = fun x f -> DisEnv.fmap f x
+  let traverse : ('a -> 'b eff) -> 'a list -> 'b list eff = DisEnv.traverse
+
+  let (let*) = (>>=)
+
+  (** sequence effects, returning second result  *)
+  let (>>>) x y = let* _ = x in y
+
+  (** sequence effects, returning first result  *)
+  let (<<<) x y = let* x' = x in (y >>> pure x')
+
+  (* State *)
+  let reset : unit eff = (DisEnv.read >> init) >>= DisEnv.put
+  let scope : 'a eff -> 'a eff =
+    fun x -> DisEnv.modify LocalEnv.addLevel >>> x <<< DisEnv.modify LocalEnv.popLevel
+  let call  : unit eff -> value eff =
+    fun body ->
+      let@ rv = declare_fresh_named_var Unknown "Return" (Type_Constructor (Ident "unknown")) in
+
+      DisEnv.modify (LocalEnv.addLevel) >>>
+      let@ () = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
+      let@ () = body in
+      let@ () = DisEnv.modify (LocalEnv.removeReturnSymbol) in
+
+      (* Disassemble return variable expression and propagate its symbolic value
+          into the containing scope. *)
+      let@ (_,result) = DisEnv.gets (LocalEnv.getVar Unknown rv) in
+      (* Pop enviroment. *)
+      let@ () = DisEnv.modify LocalEnv.popLevel in
+      DisEnv.pure result
+
+  let setVar : AST.l -> AST.ident -> value -> unit eff =
+    fun l nm x -> DisEnv.modify (LocalEnv.resolveSetVar l nm x)
+  let runPrim : string -> value list -> value list -> value option eff = sym_prim
+  let isGlobalConstFilter : (AST.ident -> bool) eff =
+    let+ lenv = DisEnv.get in
+    fun nm ->
+      LocalEnv.resolveVar Unknown nm lenv |> fun (Var(i,_)) -> i = 0
+
+  let getGlobalConst      : AST.ident -> value eff =
+    fun nm -> DisEnv.gets (LocalEnv.resolveGetVar Unknown nm) >> snd >> snd
+  let getVar              : AST.l -> AST.ident -> value eff =
+    fun l nm -> DisEnv.gets (LocalEnv.resolveGetVar l nm) >> snd >> snd
+  let getImpdef           : AST.l -> string -> value eff =
+    fun l nm ->
+      let+ env = DisEnv.read in
+      Symbolic.from_value (Eval.Env.getImpdef l env nm)
+  let getFun              : AST.l -> AST.ident -> fun_sig eff =
+    fun l nm ->
+      let+ env = DisEnv.read in (Eval.Env.getFun l env nm)
+  let getInstruction      : AST.l -> AST.ident -> inst_sig eff =
+    fun l nm ->
+      let+ env = DisEnv.read in (Eval.Env.getInstruction l env nm)
+  let getDecoder          : AST.ident -> AST.decode_case eff =
+    fun nm ->
+      let+ env = DisEnv.read in (Eval.Env.getDecoder env nm)
+  let getEnum             : AST.ident -> value list option eff =
+    fun nm ->
+      let+ env = DisEnv.read in
+      let enum = Eval.Env.getEnum env nm in
+      Option.map (List.map Symbolic.from_value) enum
+
+  let getRecord           : AST.ident -> (AST.ty * AST.ident) list option eff =
+    fun nm ->
+      let+ env = DisEnv.read in
+      Eval.Env.getRecord env nm
+  let getTypedef          : AST.ident -> AST.ty option eff =
+    fun nm ->
+      let+ env = DisEnv.read in
+      Eval.Env.getTypedef env nm
+
+  let addRecord      : AST.ident -> (AST.ty * AST.ident) list -> unit eff =
+    fun nm fields ->
+      let+ env = DisEnv.read in
+      Eval.Env.addRecord env nm fields
+  let addGlobalConst : AST.ident -> value -> unit eff =
+    fun nm x -> DisEnv.stateful (LocalEnv.addLocalConst Unknown nm x dis_TYPE_UNKNOWN) >>> pure ()
+  let addGlobalVar   : AST.ident -> value -> unit eff =
+    fun nm x -> DisEnv.stateful (LocalEnv.addLocalVar Unknown nm x dis_TYPE_UNKNOWN) >>> pure ()
+  let addEnum        : AST.ident -> value list -> unit eff =
+    fun nm fields ->
+      let+ env = DisEnv.read in
+      Eval.Env.addEnum env nm (List.map Symbolic.to_value fields)
+  let addTypedef     : AST.ident -> AST.ty -> unit eff =
+    fun nm ty ->
+      let+ env = DisEnv.read in
+      Eval.Env.addTypedef env nm ty
+  let addDecoder     : AST.ident -> AST.decode_case -> unit eff =
+    fun nm dec ->
+      let+ env = DisEnv.read in
+      Eval.Env.addDecoder env nm dec
+  let addInstruction : AST.l -> AST.ident -> inst_sig -> unit eff =
+    fun l nm inst ->
+      let+ env = DisEnv.read in
+      Eval.Env.addInstruction l env nm inst
+  let addFun         : AST.l -> AST.ident -> fun_sig -> unit eff =
+    fun l nm func ->
+      let+ env = DisEnv.read in
+      Eval.Env.addFun l env nm func
+
+  let addLocalVar    : AST.l -> AST.ident -> value -> unit eff =
+    fun l nm x -> DisEnv.stateful (LocalEnv.addLocalVar l nm x dis_TYPE_UNKNOWN) >>> pure ()
+  let addLocalConst  : AST.l -> AST.ident -> value -> unit eff =
+    fun l nm x -> DisEnv.stateful (LocalEnv.addLocalVar l nm x dis_TYPE_UNKNOWN) >>> pure ()
+
+  (* Control Flow *)
+  let branch    : value -> 'a eff -> 'a eff -> 'a eff = assert false
+  let rec iter      : ('a -> ('a * value) eff) -> 'a -> 'a eff =
+    fun go x ->
+      let* (x', continue) = go x in
+      branch continue (iter go x') (pure x')
+  let return    : value -> 'a eff =
+    fun v ->
+      let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol Unknown) in
+      let@ (_,e') = DisEnv.gets (LocalEnv.getVar Unknown rv) in
+      DisEnv.modify (LocalEnv.setVar Unknown rv e') >>>
+      (* dis_lexpr loc (expr_to_lexpr rv) e' *)
+      assert false
+  let throw     : AST.l -> Primops.exc -> 'a eff = assert false
+  let catch     : 'a eff -> (AST.l -> Primops.exc -> 'a eff) -> 'a eff = assert false
+  let error     : AST.l -> string -> 'a eff = assert false
+
+end

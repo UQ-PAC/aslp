@@ -119,6 +119,56 @@ let rec from_value (v: Value.value) : value =
   | Value.VUninitialized ->
       unsupported Unknown "uninitialized value has insufficient information to build symbolic"
 
+let rec to_value (v: value): Value.value =
+  match v with
+  | VBool (Left x) -> Value.VBool x
+  | VInt (Left x) -> Value.VInt x
+  | VReal (Left x) -> Value.VReal x
+  | VBits (Left x) -> Value.VBits x
+  | VMask (Left x) -> Value.VMask x
+  | VString (Left x) -> Value.VString x
+  | VRAM (Left x) -> Value.VRAM x
+  | VExc x -> Value.VExc x
+  | VTuple (vs) -> Value.VTuple (List.map to_value vs)
+  | VRecord (vs) -> Value.VRecord (Bindings.map to_value vs)
+  | VArray (vs,d) -> Value.VArray (ImmutableArray.map to_value vs, to_value d)
+  | _ -> unsupported Unknown "cannot coerce expression value to concrete value"
+
+
+let rec to_type (v: value): AST.ty =
+  match v with
+  | VBool _ -> Type_Constructor (Ident "boolean")
+  | VInt _ -> Type_Constructor (Ident "integer")
+  | VReal _ -> Type_Constructor (Ident "real")
+  | VBits (Left {n=n; v=v}) -> Type_Bits (Expr_LitInt (string_of_int n))
+  | VBits (Right {n=Left n; v=v}) -> Type_Bits (Expr_LitInt (Z.to_string n))
+  | VBits (Right {n=Right n; v=v}) -> Type_Bits (lift_expr Unknown TC.type_integer n)
+  | VMask _ -> Type_Constructor (Ident "__mask")
+  | VString _ -> Type_Constructor (Ident "string")
+  | VRAM _ -> Type_Constructor (Ident "__RAM")
+  | VExc _ -> TC.type_exn
+  | VTuple (vs) -> Type_Tuple (List.map to_type vs)
+  (* | VRecord (vs) -> Value.VRecord (Bindings.map to_value vs)
+  | VArray (vs,d) -> Value.VArray (ImmutableArray.map to_value vs, to_value d) *)
+  | _ -> unsupported Unknown "cannot coerce expression value to concrete value"
+
+let copy_type (v: value): expr -> value =
+  match v with
+  | VBool _ -> fun x -> VBool (Right x)
+  | VInt _ -> fun x -> VInt (Right x)
+  | VReal _ -> fun x -> VReal (Right x)
+  | VBits (Left {n=n; _}) -> fun x -> VBits (Right {n=Left (Z.of_int n); v=x})
+  | VBits (Right {n=n; _}) -> fun x -> VBits (Right {n=n; v=x})
+  | VMask _ -> fun x -> VMask (Right x)
+  | VString _ -> fun x -> VString (Right x)
+  | VRAM _ -> fun x -> VRAM (Right x)
+  (* | VExc _ -> fun x -> VExc (x) *)
+  | VTuple vs -> fun x -> assert false
+  | _ -> assert false
+
+let vfalse = VBool (Left false)
+let vtrue = VBool (Left true)
+
 (* Destructors *)
 
 let to_bool (loc: AST.l) (x: value): bool sym =
@@ -179,6 +229,15 @@ let sym_sub_int (x: Z.t sym) (y: Z.t sym): Z.t sym =
   | Left x', Left y' -> Left (Z.sub x' y')
   | y, Left x when x = Z.zero -> y
   | _ -> call "sub_int" [] [VInt x; VInt y]
+
+let sym_mul_int (x: Z.t sym) (y: Z.t sym): Z.t sym =
+  match x, y with
+  | Left x', Left y' -> Left (Z.mul x' y')
+  | _, Left x
+  | Left x, _ when Z.equal x Z.zero -> Left Z.zero
+  | x, Left n
+  | Left n, x when Z.equal n Z.one -> x
+  | _ -> call "mul_int" [] [VInt x; VInt y]
 
 let sym_leq_int (x: Z.t sym) (y: Z.t sym): bool sym =
   match x, y with
