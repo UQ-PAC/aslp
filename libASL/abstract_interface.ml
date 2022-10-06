@@ -109,8 +109,8 @@ module type Effect = sig
   val addLocalConst  : AST.l -> AST.ident -> value -> unit eff
 
   (* Control Flow *)
-  val branch    : value -> 'a eff -> 'a eff -> 'a eff
-  val iter      : ('a -> ('a * value) eff) -> 'a -> 'a eff
+  val branch    : value -> value eff Lazy.t -> value eff Lazy.t -> value eff
+  val iter      : (value -> (value * value) eff) -> value -> value eff
   val return    : value -> 'a eff
   val throw     : AST.l -> Primops.exc -> 'a eff
   val catch     : 'a eff -> (AST.l -> Primops.exc -> 'a eff) -> 'a eff

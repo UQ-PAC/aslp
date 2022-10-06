@@ -148,9 +148,12 @@ let rec to_type (v: value): AST.ty =
   | VRAM _ -> Type_Constructor (Ident "__RAM")
   | VExc _ -> TC.type_exn
   | VTuple (vs) -> Type_Tuple (List.map to_type vs)
+  | VArray (vs,d) -> Type_Array (Index_Enum (Ident "dummy"), to_type d)
+  | _ -> Type_Constructor (Ident "unknown")
   (* | VRecord (vs) -> Value.VRecord (Bindings.map to_value vs)
-  | VArray (vs,d) -> Value.VArray (ImmutableArray.map to_value vs, to_value d) *)
-  | _ -> unsupported Unknown "cannot coerce expression value to concrete value"
+) *)
+  (* | _ -> unsupported Unknown "cannot coerce expression value to concrete value" *)
+
 
 let copy_type (v: value): expr -> value =
   match v with
