@@ -504,7 +504,7 @@ let sym_if (loc: l) (test: sym) (tcase: 'a rws) (fcase: 'b rws): sym rws =
       let@ (fenv,fstmts) = DisEnv.locally_
           (DisEnv.put env' >> fcase >>= assign_var loc tmp) in
       let@ () = DisEnv.join_locals tenv fenv in
-      let@ () = DisEnv.write [Stmt_If(Symbolic.lift_expr loc TC.type_bool e, tstmts, [], fstmts, loc)] in
+      let@ () = DisEnv.write [Stmt_If(Symbolic.lift_expr loc  e, tstmts, [], fstmts, loc)] in
       (* Construct a value matching the value constructor of the true branch's result. *)
       (* Symbolic.copy_type tval (var_expr tmp) *)
       capture_var tmp

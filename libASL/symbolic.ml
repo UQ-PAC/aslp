@@ -19,6 +19,7 @@ and vbits = (bitvector, sbitvector) Either.t
 and expr =
   | ECall of (AST.ident * value list * value list)
   | EVar of AST.ident
+  | EAccess of (expr * access)
   | EUnknown
 and value =
   | VBool   of bool sym
@@ -28,11 +29,14 @@ and value =
   | VMask   of mask sym
   | VString of string sym
   | VRAM    of ram sym
-
   | VExc    of (AST.l * exc)
   | VTuple  of (value list)
   | VRecord of (value Bindings.t)
   | VArray  of (value ImmutableArray.t * value)
+and access =
+  | CArray of (Z.t sym)
+  | CTuple of (int)
+  | CField of (AST.ident)
 
 (* Pretty Printing *)
 
@@ -41,6 +45,9 @@ and pp_expr (x: expr): string =
   match x with
   | ECall (f,tes,es) -> Printf.sprintf "%s {%s} (%s)" (AST.pprint_ident f) (pp_args tes) (pp_args tes)
   | EVar (i) -> AST.pprint_ident i
+  | EAccess (e,CArray i) -> pp_expr e ^ "[" ^ pp_int i ^ "]"
+  | EAccess (e,CTuple i) -> pp_expr e ^ "(" ^ string_of_int i ^ ")"
+  | EAccess (e,CField f) -> pp_expr e ^ "." ^ AST.pprint_ident f
   | EUnknown -> "UNINITIALIZED"
 and pp_int (x: Z.t sym): string = Either.fold ~left:prim_cvt_int_decstr ~right:pp_expr x
 and pp_value (x: value): string =
@@ -83,22 +90,25 @@ let rec to_expr (loc: AST.l) (v: value): AST.expr =
   | VBits (Left n)    -> AST.Expr_LitBits(Z.format ("%0" ^ string_of_int n.n ^ "b") n.v)
   | VString (Left n)  -> AST.Expr_LitString n
   | VInt  n           -> lift_int  loc n
-  | VBool (Right n)   -> lift_expr loc TC.type_bool n
-  | VReal (Right n)   -> lift_expr loc TC.type_real n
-  | VBits (Right n)   -> lift_expr loc (Type_Bits (lift_int loc n.n)) n.v
-  | VString (Right n) -> lift_expr loc TC.type_string n
+  | VBool (Right n)   -> lift_expr loc  n
+  | VReal (Right n)   -> lift_expr loc  n
+  | VBits (Right n)   -> lift_expr loc  n.v
+  | VString (Right n) -> lift_expr loc  n
   | _ -> unsupported loc @@ "casting unhandled value type to expression: " ^ pp_value v
 and lift_int (loc: AST.l) (i: Z.t sym): AST.expr =
   match i with
   | Left i -> AST.Expr_LitInt(Z.to_string i)
-  | Right i -> lift_expr loc TC.type_integer i
-and lift_expr (loc: AST.l) (t: AST.ty) (e: expr): AST.expr =
+  | Right i -> lift_expr loc  i
+and lift_expr (loc: AST.l) (e: expr): AST.expr =
   match e with
   | ECall (FIdent("extract_bits",0), _, [v; lo; wd]) ->
       AST.Expr_Slices(to_expr loc v, [AST.Slice_LoWd(to_expr loc lo, to_expr loc wd)])
   | ECall (f,tes,es) -> AST.Expr_TApply (f, List.map (to_expr loc) tes, List.map (to_expr loc) es)
   | EVar v -> AST.Expr_Var v
-  | EUnknown -> AST.Expr_Unknown t
+  | EAccess (e,CArray i) -> AST.Expr_Array (lift_expr loc e,lift_int loc i)
+  | EAccess (e,CTuple _) -> unsupported loc @@ "need temporaries to extract from a tuple"
+  | EAccess (e,CField f) -> AST.Expr_Field (lift_expr loc e,f)
+  | EUnknown -> unsupported loc @@ "unknown expression"
 
 (* Conversion from basic values *)
 
@@ -134,7 +144,6 @@ let rec to_value (v: value): Value.value =
   | VArray (vs,d) -> Value.VArray (ImmutableArray.map to_value vs, to_value d)
   | _ -> unsupported Unknown "cannot coerce expression value to concrete value"
 
-
 let rec to_type (v: value): AST.ty =
   match v with
   | VBool _ -> Type_Constructor (Ident "boolean")
@@ -142,7 +151,7 @@ let rec to_type (v: value): AST.ty =
   | VReal _ -> Type_Constructor (Ident "real")
   | VBits (Left {n=n; v=v}) -> Type_Bits (Expr_LitInt (string_of_int n))
   | VBits (Right {n=Left n; v=v}) -> Type_Bits (Expr_LitInt (Z.to_string n))
-  | VBits (Right {n=Right n; v=v}) -> Type_Bits (lift_expr Unknown TC.type_integer n)
+  | VBits (Right {n=Right n; v=v}) -> Type_Bits (lift_expr Unknown n)
   | VMask _ -> Type_Constructor (Ident "__mask")
   | VString _ -> Type_Constructor (Ident "string")
   | VRAM _ -> Type_Constructor (Ident "__RAM")
@@ -154,7 +163,7 @@ let rec to_type (v: value): AST.ty =
 ) *)
   (* | _ -> unsupported Unknown "cannot coerce expression value to concrete value" *)
 
-
+  (*
 let copy_type (v: value): expr -> value =
   match v with
   | VBool _ -> fun x -> VBool (Right x)
@@ -168,9 +177,36 @@ let copy_type (v: value): expr -> value =
   (* | VExc _ -> fun x -> VExc (x) *)
   | VTuple vs -> fun x -> assert false
   | _ -> assert false
+*)
 
-let vfalse = VBool (Left false)
-let vtrue = VBool (Left true)
+let rec map_expr (f: expr -> expr) (v: value): value =
+  match v with
+  | VBool (Right e)         -> VBool (Right (f e))
+  | VInt  (Right e)         -> VInt  (Right (f e))
+  | VReal (Right e)         -> VReal (Right (f e))
+  | VBits (Right {n=n;v=e}) -> VBits (Right {n=n; v=f e})
+  | VString (Right e)       -> VString (Right (f e))
+  | VRAM (Right e)          -> VRAM (Right (f e))
+  | VTuple vs               -> VTuple (List.map (map_expr f) vs)
+  | VRecord bs              -> VRecord (Bindings.map (map_expr f) bs)
+  | VArray (a,d)            -> VArray (ImmutableArray.map (map_expr f) a, map_expr f d)
+  | _                       -> v
+
+let subst_expr (e: expr) (v: value): value =
+  map_expr (fun _ -> e) v
+
+let rec map_base_expr (f: access list -> expr -> expr) (r: access list) (v: value): value =
+  match v with
+  | VBool (Right e)         -> VBool (Right (f r e))
+  | VInt  (Right e)         -> VInt  (Right (f r e))
+  | VReal (Right e)         -> VReal (Right (f r e))
+  | VBits (Right {n=n;v=e}) -> VBits (Right {n=n; v=f r e})
+  | VString (Right e)       -> VString (Right (f r e))
+  | VRAM (Right e)          -> VRAM (Right (f r e))
+  | VTuple vs               -> VTuple (List.mapi (fun k -> map_base_expr f (r@[CTuple k])) vs)
+  | VRecord bs              -> VRecord (Bindings.mapi (fun k -> map_base_expr f (r@[CField k])) bs)
+  | VArray (a,d)            -> VArray (ImmutableArray.mapi (fun k -> map_base_expr f (r@[CArray (Left (Z.of_int k))])) a, map_base_expr f r d)
+  | _                       -> v
 
 (* Destructors *)
 
@@ -198,6 +234,9 @@ let call f tes es = Either.Right (ECall (FIdent (f,0), tes, es))
 let vcall w f tes es = Either.Right {n=w; v = ECall (FIdent (f,0), tes, es)}
 
 (* Boolean *)
+
+let vfalse = VBool (Left false)
+let vtrue = VBool (Left true)
 
 let sym_not_bool (x: bool sym): bool sym =
   match x with
@@ -378,24 +417,29 @@ let sym_new_record (fs: (AST.ident * value) list): value =
 
 (* Array *)
 
+let sym_new_array (d: value): value =
+  VArray (prim_empty_array, d)
+
+(** Return a value given the index is defined and held within the array,
+    otherwise builds an access expression based on the array's default value *)
 let sym_get_array (loc: AST.l) (a: value) (i: value): value =
   match a, i with
-  | VArray (x, d), VInt (Left i') -> prim_read_array x (Z.to_int i') d
-  | VArray (x, d), VInt (Right e) ->
-      unsupported loc @@ "symbolic array index. Got " ^ pp_value a ^ "[" ^ pp_value i ^"]"
+  | VArray (x, d), VInt e ->
+      (let de = map_expr (fun b -> EAccess (b, CArray e)) d in
+      match e with
+      | Left i -> prim_read_array x (Z.to_int i) de
+      | _ -> de)
   | VArray (x, d), _ -> symerror loc @@ "array index expected. Got " ^ pp_value i
   | _ -> symerror loc @@ "array expected. Got " ^ pp_value a
 
+(** In the event of a symbolic index update, assumes the array's default value d is 
+    a sound over-approximation of the introduced value v and the array's existing entries *)
 let sym_set_array (loc: AST.l) (a: value) (i: value) (v: value): value =
   match a, i with
   | VArray (x, d), VInt (Left i') -> VArray (prim_write_array x (Z.to_int i') v, d)
-  | VArray (x, d), VInt (Right e) ->
-      unsupported loc @@ "symbolic array index. Got " ^ pp_value a ^ "[" ^ pp_value i ^"]:=" ^ pp_value v
+  | VArray (x, d), VInt (Right e) -> sym_new_array d
   | VArray (x, d), _ -> symerror loc @@ "array index expected. Got " ^ pp_value i
   | _ -> symerror loc @@ "array expected. Got " ^ pp_value a
-
-let sym_new_array (d: value): value =
-  VArray (prim_empty_array, d)
 
 module SymbolicValue : Abstract_interface.Value = struct
   type t = value
