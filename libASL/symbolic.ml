@@ -451,6 +451,7 @@ let array_merge (f: int -> value -> value -> 'a Option.t) (la: value ImmutableAr
 
 module SymbolicValue : Abstract_interface.Value = struct
   type t = value
+  let pp_value = pp_value
 
   (* Value Constructors *)
   let mk_bool (x: bool): value                  = VBool (Left x)

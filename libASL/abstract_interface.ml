@@ -10,6 +10,8 @@ type inst_sig = AST.encoding * (AST.stmt list) option * bool * AST.stmt list
 module type Value = sig
   type t
 
+  val pp_value : t -> string
+
   (* Value Constructors *)
   val mk_bool   : bool -> t
   val mk_int    : int -> t
@@ -110,7 +112,7 @@ module type Effect = sig
   val setVar         : AST.l     -> AST.ident -> value        -> unit eff
 
   (* Control Flow *)
-  val branch    : value -> value eff Lazy.t -> value eff Lazy.t -> value eff
+  val branch    : value -> value eff -> value eff -> value eff
   val iter      : (value -> (value * value) eff) -> value -> value eff
   val call      : unit eff  -> value eff
   val catch     : unit eff -> (AST.l -> Primops.exc -> unit eff) -> unit eff

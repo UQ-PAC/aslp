@@ -124,9 +124,6 @@ module Env : sig
     val setImpdef           : t -> string -> value -> unit
     val getImpdef           : AST.l -> t -> string -> value
 
-    val readGlobalConsts    : t -> value Bindings.t
-    val readGlobals         : t -> value Bindings.t
-
 end = struct
     type t = {
         mutable instructions : (encoding * (stmt list) option * bool * stmt list) Bindings.t;
@@ -304,9 +301,6 @@ end = struct
         | None ->
                 raise (EvalError (loc, "Unknown value for IMPLEMENTATION_DEFINED \""^x^"\""))
         )
-
-    let readGlobalConsts    : t -> value Bindings.t = fun x -> x.constants.bs
-    let readGlobals         : t -> value Bindings.t = fun x -> x.globals.bs
 end
 
 
@@ -316,6 +310,8 @@ end
 
 module Semantics = Abstract.Make(struct
   type t = Value.value
+
+  let pp_value = pp_value
 
   (* Value Constructors *)
   let mk_bool b     = Value.VBool b
@@ -431,7 +427,7 @@ end) (struct
   let getImpdef (loc: l) (s: string) (env: Env.t) = Env.getImpdef loc env s
 
   (* Control Flow *)
-  let branch c t f e = if Value.to_bool Unknown ( c ) then Lazy.force t e else Lazy.force f e
+  let branch c t f e = if Value.to_bool Unknown ( c ) then t e else f e
   let rec iter b s e =
     let (s',c) = b s e in
     if Value.to_bool Unknown c then iter b s' e else s'

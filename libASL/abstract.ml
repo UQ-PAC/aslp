@@ -103,30 +103,28 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
   let vtrue = mk_bool true
   let vfalse = mk_bool false
 
-  let branch_ (c: value) (t: 'a eff Lazy.t) (f: 'a eff Lazy.t): unit eff =
-    let to_vunit x = Lazy.map_val (fun _ -> pure V.unit) t in
-    branch c (to_vunit t) (to_vunit f)
-    >>> pure ()
+  let branch_ (c: value) (t: unit eff) (f: unit eff): unit eff =
+    branch c (t >> fun _ -> V.unit) (f >> fun _ -> V.unit) >>> pure ()
 
-  let short_and (x: value eff) (y: value eff Lazy.t): value eff =
-    let* c = x in branch c y (Lazy.from_val @@ pure vfalse)
+  let short_and (x: value eff) (y: value eff): value eff =
+    let* c = x in branch c y (pure vfalse)
 
-  let short_or (x: value eff) (y: value eff Lazy.t): value eff =
-    let* c = x in branch c (Lazy.from_val @@ pure vtrue) y
+  let short_or (x: value eff) (y: value eff): value eff =
+    let* c = x in branch c (pure vtrue) y
 
-  let short_imp (x: value eff) (y: value eff Lazy.t): value eff =
-    let* c = x in branch c y (Lazy.from_val @@ pure vtrue)
+  let short_imp (x: value eff) (y: value eff): value eff =
+    let* c = x in branch c y (pure vtrue)
 
   let rec for_all2 p l1 l2 =
     match (l1, l2) with
     | ([], []) -> pure vtrue
-    | (a1::l1, a2::l2) -> short_and (p a1 a2) (lazy (for_all2 p l1 l2))
+    | (a1::l1, a2::l2) -> short_and (p a1 a2) (for_all2 p l1 l2)
     | (_, _) -> invalid_arg "for_all2"
 
   let rec exists p = function
     | [] -> pure vfalse
     | [a] -> p a
-    | a::l -> short_or (p a) (lazy (exists p l))
+    | a::l -> short_or (p a) (exists p l)
 
   let mk_formal_in (a,b) = Formal_In(a,b)
 
@@ -235,9 +233,9 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         | E_Elsif_Cond (cond, b)::xs' ->
             let* g = eval_expr loc cond in
             branch g (* then *)
-              (lazy (eval_expr loc b))
+              (eval_expr loc b)
             (* else *)
-              (lazy (eval_if xs' d))
+              (eval_if xs' d)
         in
         eval_if (E_Elsif_Cond(c, t)::els) e
     | Expr_Binop(a, op, b) ->
@@ -270,19 +268,19 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
          *)
         if name_of_FIdent f = "and_bool" then begin
           match (tes, es) with
-          | ([], [x; y]) -> short_and (eval_expr loc x) (lazy (eval_expr loc y))
+          | ([], [x; y]) -> short_and (eval_expr loc x) (eval_expr loc y)
           | _ ->
               error loc @@ "malformed and_bool expression "
                    ^ Utils.to_string (PP.pp_expr x)
         end else if name_of_FIdent f = "or_bool" then begin
           match (tes, es) with
-          | ([], [x; y]) -> short_or (eval_expr loc x) (lazy (eval_expr loc y))
+          | ([], [x; y]) -> short_or (eval_expr loc x) (eval_expr loc y)
           | _ ->
               error loc @@ "malformed or_bool expression "
                    ^ Utils.to_string (PP.pp_expr x)
         end else if name_of_FIdent f = "implies_bool" then begin
           match (tes, es) with
-          | ([], [x; y]) -> short_imp (eval_expr loc x) (lazy (eval_expr loc y))
+          | ([], [x; y]) -> short_imp (eval_expr loc x) (eval_expr loc y)
           | _ ->
               error loc @@ "malformed imp_bool expression "
                    ^ Utils.to_string (PP.pp_expr x)
@@ -429,9 +427,9 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | Stmt_Assert(e, loc) ->
         let* v = eval_expr loc e in
         branch_ v (* then *)
-          (Lazy.from_val @@ return V.unit)
+          unit
         (* else *)
-          (lazy (error loc "assertion failure")) (* runtime error *)
+          (error loc "assertion failure")
     | Stmt_Unpred(loc) ->
         throw loc Exc_Unpredictable
     | Stmt_ConstrainedUnpred(loc) ->
@@ -466,9 +464,9 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           | (S_Elsif_Cond(c, s) :: css') ->
               let* g = eval_expr loc c in
               branch_ g (* then *)
-                (lazy (eval_stmts s))
+                (eval_stmts s)
               (* else *)
-                (lazy (eval css' d))
+                (eval css' d)
         in
         scope (eval (S_Elsif_Cond(c, t) :: els) e)
     | Stmt_Case(e, alts, odefault, loc) ->
@@ -482,17 +480,17 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           | (Alt_Alt(ps, None, s) :: alts') ->
               let* g = exists (eval_pattern loc v) ps in
               branch_ g (* then *)
-                (lazy (eval_stmts s))
+                (eval_stmts s)
               (* else *)
-                (lazy (eval v alts'))
+                (eval v alts')
           | (Alt_Alt(ps, Some c, s) :: alts') ->
               let c1 = exists (eval_pattern loc v) ps in
-              let c2 = lazy (eval_expr loc c) in
+              let c2 = eval_expr loc c in
               let* g = short_and c1 c2 in
               branch_ g (* then *)
-                (lazy (eval_stmts s))
+                (eval_stmts s)
               (* else *)
-                (lazy (eval v alts'))
+                (eval v alts')
           )
         in
         let* v = eval_expr loc e in
@@ -506,14 +504,14 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           | Direction_Down -> leq_int loc stop' i
           ) in
           branch c (* then *)
-            (lazy (scope (addLocalVar loc v i >>> eval_stmts b) >>>
+            (scope (addLocalVar loc v i >>> eval_stmts b) >>>
             let i' = (match dir with
             | Direction_Up   -> add_int loc i (mk_int 1)
             | Direction_Down -> sub_int loc i (mk_int 1)
             ) in
-            pure (from_tuple [i'; vtrue])))
+            pure (from_tuple [i'; vtrue]))
           (* else *)
-            (lazy (pure (from_tuple [i; vfalse])))
+            (pure (from_tuple [i; vfalse]))
         in
         let iter_fun (f: value -> value eff) (x: value): (value * value) eff =
           let+ x' = f x in
@@ -526,7 +524,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | Stmt_While(c, b, loc) ->
         let f = (fun _ ->
           let* g = eval_expr loc c in
-          branch g (lazy (eval_stmts b >>> pure vtrue)) (lazy (pure vfalse)))
+          branch g (eval_stmts b >>> pure vtrue) (pure vfalse))
         in
         let iter_fun (f: 'a -> value eff) (x: 'a): ('a * value) eff =
           let+ x' = f x in (V.unit, x')
@@ -548,7 +546,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
                 | Some s -> eval_stmts s)
             | (Catcher_Guarded(c, b) :: cs') ->
                 let* c = eval_expr loc c in
-                branch_ c (lazy (eval_stmts b)) (lazy (eval cs'))
+                branch_ c (eval_stmts b) (eval cs')
           in
           addLocalVar loc ev (from_exc l ex) >>>
           eval catchers) )
@@ -608,8 +606,12 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
       return (from_tuple rs)
     ) in
     let upd r e = if is_unit r then unit else let* lexpr = expr_to_lexpr loc e in eval_lexpr loc lexpr r in
-    let* _ = traverse2 upd (to_tuple loc rs) es' in
-    unit
+    let out = to_tuple loc rs in
+    if List.length out > 0 then begin
+      assert (List.length out = List.length es');
+      let* _ = traverse2 upd out es' in unit
+    end
+    else unit
 
   (** Evaluate instruction decode case *)
   and eval_decode_case (loc: l) (x: decode_case) (op: value): unit eff =
@@ -620,7 +622,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           (match alts with
           | (alt::alts') ->
               let* g = eval_decode_alt loc alt vs op in
-              branch_ g (lazy unit) (lazy (eval alts'))
+              branch_ g unit (eval alts')
           | [] -> error loc "unmatched decode pattern"
           )
         in
@@ -629,28 +631,28 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
   (** Evaluate instruction decode case alternative *)
   and eval_decode_alt (loc: l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): value eff =
     let* g = for_all2 (fun a b -> pure (eval_decode_pattern loc a b)) ps vs in
-    branch g (* then *) (lazy (
+    branch g (* then *) begin
       match b with
-      | DecoderBody_UNPRED loc -> error loc "Exc_Unpredictable"
-      | DecoderBody_UNALLOC loc -> error loc "Exc_Undefined"
+      | DecoderBody_UNPRED loc -> throw loc Exc_Unpredictable
+      | DecoderBody_UNALLOC loc -> throw loc Exc_Undefined
       | DecoderBody_NOP loc -> pure (vtrue)
       | DecoderBody_Encoding (enc, l) ->
           let* (enc, opost, cond, exec) = getInstruction loc enc in
           let* g = eval_encoding enc op in
-          branch g (* then *) (lazy (
+          branch g (* then *) begin
             traverse eval_stmt (match opost with Some p -> p | None -> []) >>>
             (* todo: should evaluate ConditionHolds to decide whether to execute body *)
             traverse eval_stmt exec >>>
             pure vtrue
-          )) (* else *) (lazy (pure vfalse))
+          end (* else *) (pure vfalse)
       | DecoderBody_Decoder (fs, c, loc) ->
           (* let env = Env.empty in  *)
-          (traverse (function (IField_Field (f, lo, wd)) ->
+          traverse (function (IField_Field (f, lo, wd)) ->
             addLocalVar loc f (extract_bits_int loc op lo wd)
-          ) fs) >>>
+          ) fs >>>
           eval_decode_case loc c op >>>
           pure (vtrue)
-      )) (* else *) (Lazy.from_val @@ pure vfalse)
+    end (* else *) (pure vfalse)
 
   (** Evaluate instruction encoding *)
   and eval_encoding (x: encoding) (op: value): value eff =
@@ -661,22 +663,22 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | Opcode_Bits b -> eq      loc op (from_bitsLit b)
     | Opcode_Mask m -> in_mask loc op (from_maskLit m)
     ) in
-    branch ok (* then *) (lazy begin
+    branch ok (* then *) begin
       traverse (function (IField_Field (f, lo, wd)) ->
         let v = extract_bits_int loc op lo wd in
         addLocalVar loc f v
       ) fields >>>
       let* g = eval_expr loc guard in
-      branch g (* then *) (lazy begin
+      branch g (* then *) begin
         traverse (fun (i, b) ->
-          branch_ (eq loc (extract_bits_int loc op i 1) (from_bitsLit b))
-            (lazy (error loc "Exc_Unpredictable"))
-            (Lazy.from_val unit)
+          branch (eq loc (extract_bits_int loc op i 1) (from_bitsLit b))
+            (throw loc Exc_Unpredictable)
+            (pure V.unit)
         ) unpreds >>>
         traverse eval_stmt b >>>
         pure vtrue
-      end) (* else *)  (Lazy.from_val @@ pure vfalse)
-    end) (* else *) (Lazy.from_val @@ pure vfalse)
+      end (* else *)  (pure vfalse)
+    end (* else *) (pure vfalse)
 
   (****************************************************************)
   (** {2 Creating environment from global declarations}           *)
@@ -780,7 +782,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           let ts = Asl_utils.IdentSet.union (Asl_utils.fv_sformals atys) (Asl_utils.fv_type ty) in
           let* t = removeGlobalConsts ts in
           let tvs = Asl_utils.to_sorted_list t in
-          addFun loc f (None, tvs, atys, loc, body)
+          addFun loc f (None, tvs, atys@[Formal_In (ty,v)], loc, body)
       | Decl_InstructionDefn(nm, encs, opost, conditional, exec, loc) ->
           (* Instructions are looked up by their encoding name *)
           traverse_ (fun enc ->

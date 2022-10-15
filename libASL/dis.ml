@@ -754,6 +754,7 @@ end
 module Disem = Abstract.Make(
 struct
   type t = value
+  let pp_value = pp_value
 
   (* Value Constructors *)
   let mk_bool (x: bool): value                  = VBool (Left x)
@@ -920,16 +921,16 @@ end)(struct
     Some (Env.setVar loc env x v)
 
   (* Control Flow *)
-  let branch (c: value) (t: value eff lazy_t) (f: value eff lazy_t) = 
+  let branch (c: value) (t: value eff) (f: value eff) = 
     let loc = Unknown in 
     fun e ->
       match to_bool loc c with
-      | (Left true) -> Lazy.force t e
-      | (Left false) -> Lazy.force f e
+      | (Left true) -> t e
+      | (Left false) -> f e
       | (Right exp) -> 
           let te = Env.copy e in
           let fe = Env.copy e in
-          let r = (match Lazy.force t te, Lazy.force f fe with
+          let r = (match t te, f fe with
           | Some v1, Some v2 -> Some (Env.mergeValue loc te fe v1 v2)
           | Some v, None | None, Some v -> Some v
           | _ -> None) in
