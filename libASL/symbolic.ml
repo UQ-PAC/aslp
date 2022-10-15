@@ -329,7 +329,8 @@ let rec sym_extract_bits (x: vbits) (lo: Z.t sym) (wd: Z.t sym): vbits =
         let w1 = sym_sub_int wd w2 in
         sym_append_bits (sym_extract_bits x1 zero w1) (sym_extract_bits x2 lo w2)
   | _ ->
-      vcall wd "extract_bits" [] [VBits x; VInt lo; VInt wd]
+      if sym_eq_int (sym_width_bits x) wd = Left true then x
+      else vcall wd "extract_bits" [] [VBits x; VInt lo; VInt wd]
 
 let sym_concat_bits (xs: vbits list): vbits =
   match xs with
@@ -390,6 +391,16 @@ let rec to_type (loc: AST.l) (v: value): AST.ty =
   | VTuple (vs)    -> Type_Tuple (List.map (to_type loc) vs)
   | VArray (vs, d) -> Type_Array (Index_Enum (Ident "dummy"), to_type loc d)
   | VRecord _      -> Type_Constructor (Ident "unknown")
+
+let copy_scalar_type (e: expr) (v: value): value =
+  match v with
+  | VBool _         -> VBool (Right e)
+  | VInt  _         -> VInt  (Right e)
+  | VReal _         -> VReal (Right e)
+  | VBits v         -> VBits (Right {n=sym_width_bits v; v=e})
+  | VString _       -> VString (Right e)
+  | VRAM _          -> VRAM (Right e)
+  | _               -> invalid_arg @@ "not a scalar type: " ^ pp_value v
 
 (* Records *)
 

@@ -274,7 +274,7 @@ type stashed =
 let rec value_of_stashed (s: stashed): value =
   match s with
   | SVal v -> v
-  | SIdent (i,v) -> subst_expr (EVar i) v
+  | SIdent (i,v) -> copy_scalar_type (EVar i) v
   | STuple ts -> VTuple (List.map value_of_stashed ts)
   | SRecord fs -> VRecord (Bindings.map value_of_stashed fs)
   | SArray (a,d) -> VArray (Primops.ImmutableArray.map value_of_stashed a, d)
@@ -431,10 +431,10 @@ end = struct
     (* Shared within instruction *)
     mutable globals      : scope;
     mutable numSymbols   : int ref;
+    mutable decls        : AST.stmt list ref;
 
     (* Shared within function *)
     mutable locals       : scope list;
-    mutable decls        : AST.stmt list;
     mutable returnSyms   : stashed option ref;
 
     (* Shared within scope *)
@@ -515,7 +515,7 @@ end = struct
     globals      = empty_scope ();
     locals       = [empty_scope ()];
     residual     = Open [];
-    decls        = [];
+    decls        = ref [];
     returnSyms   = ref None;
     numSymbols   = ref 0;
   }
@@ -525,7 +525,7 @@ end = struct
     env.globals    <- empty_scope();
     env.locals     <- [ empty_scope () ];
     env.residual   <- Open [];
-    env.decls      <- [];
+    env.decls      <- ref [];
     env.numSymbols <- ref 0;
     env.returnSyms <- ref None
 
@@ -533,10 +533,13 @@ end = struct
   let push (p: prog) (env: t): unit =
     env.residual <- push env.residual p
 
-  let residual (loc: l) (env: t): stmt list =
+  let inner_residual (loc: l) (env: t): stmt list =
     match !(env.returnSyms) with
-    | Some r -> env.decls @ resid_to_stmts loc (assign_stashed loc r) env.residual
-    | None -> env.decls @ resid_to_stmts loc (fun _ -> []) env.residual
+    | Some r -> resid_to_stmts loc (assign_stashed loc r) env.residual
+    | None -> resid_to_stmts loc (fun _ -> []) env.residual
+
+  let residual (loc: l) (env: t): stmt list =
+    !(env.decls) @ inner_residual loc env
 
   (** Create an environment for a callee and return 
       their result along with a residual program *)
@@ -553,16 +556,16 @@ end = struct
       constants    = parent.constants;
       impdefs      = parent.impdefs;
       numSymbols   = parent.numSymbols;
+      decls        = parent.decls;
 
       (* changes *)
       locals       = [empty_scope ()];
       residual     = Open [];
-      decls        = [];
       returnSyms   = ref None;
     } in
     (* Run the child *)
     let r = k child in
-    push (residual Unknown child) parent;
+    push (inner_residual Unknown child) parent;
     match !(child.returnSyms) with
     | Some v -> 
         (r, value_of_stashed v)
@@ -592,7 +595,7 @@ end = struct
       residual     = Open [];
     } in
     let r = k child in
-    push (residual Unknown child) parent;
+    push (inner_residual Unknown child) parent;
     r
 
   let copy (env: t): t = {
@@ -620,7 +623,7 @@ end = struct
     let i = ! (env.numSymbols) in
     let n = Ident ("#"^string_of_int i) in
     env.numSymbols := i + 1;
-    env.decls <- env.decls @ [Stmt_VarDeclsNoInit(to_type loc v, [n], loc)];
+    env.decls := !(env.decls) @ [Stmt_VarDeclsNoInit(to_type loc v, [n], loc)];
     n
 
   (** Write a value to an lexpr, flattening the operation down to individual scalar writes if possible *)
