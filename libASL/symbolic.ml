@@ -159,6 +159,7 @@ let rec map_expr (f: expr -> expr) (v: value): value =
 let subst_expr (e: expr) (v: value): value =
   map_expr (fun _ -> e) v
 
+(* Modify the base expr of a value, collecting the access chain required to reach it *)
 let rec map_base_expr (f: access list -> expr -> expr) (r: access list) (v: value): value =
   match v with
   | VBool (Right e)         -> VBool (Right (f r e))
@@ -167,10 +168,20 @@ let rec map_base_expr (f: access list -> expr -> expr) (r: access list) (v: valu
   | VBits (Right {n=n;v=e}) -> VBits (Right {n=n; v=f r e})
   | VString (Right e)       -> VString (Right (f r e))
   | VRAM (Right e)          -> VRAM (Right (f r e))
-  | VTuple vs               -> VTuple (List.mapi (fun k -> map_base_expr f (r@[CTuple k])) vs)
-  | VRecord bs              -> VRecord (Bindings.mapi (fun k -> map_base_expr f (r@[CField k])) bs)
-  | VArray (a,d)            -> VArray (ImmutableArray.mapi (fun k -> map_base_expr f (r@[CArray (Left (Z.of_int k))])) a, map_base_expr f r d)
+  | VTuple vs               -> VTuple (List.mapi (fun k -> map_base_expr f (CTuple k::r)) vs)
+  | VRecord bs              -> VRecord (Bindings.mapi (fun k -> map_base_expr f (CField k::r)) bs)
+  | VArray (a,d)            -> VArray (ImmutableArray.mapi (fun k -> 
+      map_base_expr f (CArray (Left (Z.of_int k))::r)) a, map_base_expr f r d)
   | _                       -> v
+
+(** Build a chained access expression, given a list order by outer most access first *)
+let rec chained_access (r: access list) (e: expr): expr =
+  match r with
+  | x::xs -> chained_access xs (EAccess(e,x))
+  | _ -> e
+
+let subst_base (e: expr) (v: value): value =
+  map_base_expr (fun l _ -> chained_access l e) [] v
 
 (* Destructors *)
 
@@ -405,7 +416,7 @@ let sym_new_array (d: value): value =
 let sym_get_array (loc: AST.l) (a: value) (i: value): value =
   match a, i with
   | VArray (x, d), VInt e ->
-      (let de = map_expr (fun b -> EAccess (b, CArray e)) d in
+      (let de = map_base_expr (fun r b -> chained_access (CArray e::r) b) [] d in
       match e with
       | Left i -> prim_read_array x (Z.to_int i) de
       | _ -> de)
@@ -420,6 +431,23 @@ let sym_set_array (loc: AST.l) (a: value) (i: value) (v: value): value =
   | VArray (x, d), VInt (Right e) -> sym_new_array d
   | VArray (x, d), _ -> symerror loc @@ "array index expected. Got " ^ pp_value i
   | _ -> symerror loc @@ "array expected. Got " ^ pp_value a
+
+let record_merge (f: AST.ident -> 'a -> 'b -> 'c option) (l: 'a Bindings.t) (r: 'b Bindings.t): 'c Bindings.t =
+  Bindings.merge (fun k v1 v2 ->
+    match v1, v2 with
+    | Some v1, Some v2 -> f k v1 v2
+    | _ -> invalid_arg "merge of different record structures") l r
+
+let array_default (d: value) (i: int) =
+  map_base_expr (fun r b -> chained_access (CArray (Left (Z.of_int i))::r) b) [] d
+
+let array_merge (f: int -> value -> value -> 'a Option.t) (la: value ImmutableArray.t) (ld: value) (ra: value ImmutableArray.t) (rd: value): 'a ImmutableArray.t =
+  ImmutableArray.merge (fun k v1 v2 ->
+    match v1, v2 with
+    | Some v1, Some v2 -> f k v1 v2
+    | Some v1, _ -> f k v1 (array_default rd k)
+    | _, Some v2 -> f k (array_default ld k) v2
+    | _ -> None) la ra
 
 module SymbolicValue : Abstract_interface.Value = struct
   type t = value

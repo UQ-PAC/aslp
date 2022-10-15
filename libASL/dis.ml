@@ -13,8 +13,6 @@ open Asl_utils
 open Abstract_interface
 open Symbolic
 
-exception Throw of (AST.l * Primops.exc)
-
 let int_expr (i: int): AST.expr = AST.Expr_LitInt (string_of_int i)
 
 let bool_expr (b: bool): AST.expr = AST.Expr_Var(if b then Ident "TRUE" else Ident "FALSE")
@@ -217,16 +215,48 @@ end
 (* A residual program with early exit conditions *)
 type 'a resid =
   | Open   of stmt list
-  | Closed of (stmt list * 'a)
-  | Branch of (expr * 'a resid * 'a resid)
+  | Return of (stmt list * 'a)
+  | Throw  of (stmt list)
+  | Branch of (bool * stmt list * expr * 'a resid * 'a resid)
 
-(* Extend the residual program where it has not yet exited *)
-let rec push (res: 'a resid) (ps: stmt list): 'a resid =
+let contains_open res =
+  match res with 
+  | Open _ -> true 
+  | Branch (b,_,_,_,_) -> b
+  | _ -> false
+
+let map_open (f: stmt list -> 'a resid) (res: 'a resid): 'a resid =
+  let rec loop res =
+    match res with
+    | Open s -> 
+        let r = f s in (contains_open r,r)
+    | Branch (true,s,c,l,r) -> 
+        let (lf,ls) = loop l in let (rf,rs) = loop r in
+        (lf || rf, Branch (lf || rf,s,c,ls,rs))
+    | _ -> (false,res)
+  in
+  let (_,out) = loop res in out
+
+let push (res: 'a resid) (ps: stmt list): 'a resid =
+  map_open (fun s -> Open (s @ ps)) res
+
+let push_return (res: 'a resid) (a: 'a): 'a resid =
+  map_open (fun s -> Return (s, a)) res
+
+let push_throw (res: 'a resid): 'a resid =
+  map_open (fun s -> Throw s) res
+
+let push_branch (loc: l) (res: 'a resid) (c: expr) (l: 'a resid) (r: 'a resid) =
+  match l, r with
+  | Open l, Open r -> push res [AST.Stmt_If (lift_expr loc c,l,[],r,loc)]
+  | _ -> map_open (fun s -> Branch(contains_open l || contains_open r,s,c,l,r)) res
+
+let rec resid_to_stmts (loc: l) (r: 'a -> stmt list) (res: 'a resid): stmt list =
   match res with
-  | Open s -> Open (s @ ps)
-  | Branch (c,ls,rs) -> Branch (c,push ls ps,push rs ps)
-  | _ -> res
-
+  | Open s -> s
+  | Return (s,v) -> s @ (r v)
+  | Throw s -> s @ [AST.Stmt_Assert (bool_expr false,loc)]
+  | Branch (_,s,c,ls,rs) -> s @ [AST.Stmt_If (lift_expr loc c,resid_to_stmts loc r ls,[],resid_to_stmts loc r rs,loc)]
 
 (****************************************************************)
 (** {2 Stashed Value}                                           *)
@@ -238,29 +268,24 @@ type stashed =
   | SIdent of ident * value
   | STuple of stashed list 
   | SRecord of stashed Bindings.t 
-  | SArray of (stashed Primops.ImmutableArray.t * stashed)
+  | SArray of (stashed Primops.ImmutableArray.t * value)
 
 (** Extract a value from the stashed representation *)
 let rec value_of_stashed (s: stashed): value =
   match s with
   | SVal v -> v
-  | SIdent (i,v) -> v
+  | SIdent (i,v) -> subst_expr (EVar i) v
   | STuple ts -> VTuple (List.map value_of_stashed ts)
   | SRecord fs -> VRecord (Bindings.map value_of_stashed fs)
-  | SArray (a,d) -> VArray (Primops.ImmutableArray.map value_of_stashed a, value_of_stashed d)
+  | SArray (a,d) -> VArray (Primops.ImmutableArray.map value_of_stashed a, d)
 
 (** Build a unstashed value from some initial value *)
 let rec stashed_of_value (v: value): stashed =
   match v with
   | VTuple ts -> STuple (List.map stashed_of_value ts)
   | VRecord fs -> SRecord (Bindings.map stashed_of_value fs)
-  | VArray (a,d) -> SArray (Primops.ImmutableArray.map stashed_of_value a, stashed_of_value d)
+  | VArray (a,d) -> SArray (Primops.ImmutableArray.map stashed_of_value a, d)
   | v -> SVal v 
-
-let force_merge (f: 'a -> 'b -> 'c) k (a: 'a option) (b: 'b option): 'c option =
-  match a, b with
-  | Some a', Some b' -> Some (f a' b')
-  | _ -> invalid_arg "Maps don't have the same keys"
 
 let array_merge (f: 'a -> 'b -> 'c) (dl: 'k -> 'a) (dr: 'k -> 'b) k (a: 'a option) (b: 'b option): 'c option =
   match a, b with
@@ -272,14 +297,35 @@ let array_merge (f: 'a -> 'b -> 'c) (dl: 'k -> 'a) (dr: 'k -> 'b) k (a: 'a optio
 (** Create new stashed variables *)
 let rec merge_stashed_value (f: value -> ident) (s: stashed) (v: value): stashed =
   let loop s v = merge_stashed_value f s v in
+  let loop' _ s v = Some (merge_stashed_value f s v) in
   match s, v with
   | STuple ts, VTuple vs -> STuple (List.map2 loop ts vs)
-  | SRecord fs, VRecord vs -> SRecord (Bindings.merge (force_merge loop) fs vs)
+  | SRecord fs, VRecord vs -> SRecord (record_merge loop' fs vs)
   | SArray (a,ds), VArray (vs,v) -> 
-      SArray (Primops.ImmutableArray.merge (array_merge loop (fun _ -> ds) (fun i -> v)) a vs, ds)
+      assert (ds = v);
+      SArray (Primops.ImmutableArray.merge (array_merge loop (fun k -> SVal (array_default ds k)) (array_default v)) a vs, ds)
   | SIdent (i,v), _ -> SIdent (i,v)
   | SVal v', _ -> if v' = v then s else let i = f v' in SIdent (i, v)
   | _ -> invalid_arg "merge of different aggregate types"
+
+(* TODO: map fold rather than this mess *)
+let assign_stashed (loc: l) (s: stashed) (v: value): stmt list =
+  let out = ref [] in
+  let rec loop s v = match s, v with
+    | STuple ts, VTuple vs -> List.iter2 loop ts vs 
+    | SRecord fs, VRecord vs -> let _ = record_merge (fun _ a b -> Some (loop a b)) fs vs in ()
+    | SArray (a,ds), VArray (vs,v) -> 
+        assert (ds = v);
+        let _ = (Primops.ImmutableArray.merge (array_merge loop 
+          (fun k -> SVal (array_default ds k)) (array_default v)) a vs, ds)
+        in ()
+    | SIdent (i,_), _ -> 
+        out := AST.Stmt_Assign(LExpr_Var i, to_expr loc v, loc)::!out
+    | SVal _, _ -> ()
+    | _ -> failwith "assignStashed: unknown case"
+  in
+  loop s v;
+  !out
 
 (****************************************************************)
 (** {2 Scopes}                                                  *)
@@ -307,6 +353,11 @@ let get_scope_opt (k: ident) (s: scope): value option =
 let set_scope (k: ident) (v: value) (s: scope): unit =
     s.bs <- Bindings.add k v s.bs
 
+let rec find_scope (bss: scope list) (x: ident): scope option =
+  match bss with
+  | (bs :: bss') -> if mem_scope x bs then Some bs else find_scope bss' x
+  | [] -> None
+
 
 (****************************************************************)
 (** {2 Mutable bindings}                                        *)
@@ -319,15 +370,17 @@ module Env : sig
     type t
 
     val empty               : unit -> t
+    val reset               : t -> unit
+    val copy                : t -> t
 
-    val nestTop             : (t -> 'a) -> (t -> 'a * prog)
-    val nest                : (t -> 'a) -> (t -> 'a * prog)
+    val nestTop             : (t -> 'a) -> (t -> 'a * value)
+    val nest                : (t -> 'a) -> (t -> 'a)
 
     val addLocalVar         : AST.l -> t -> ident -> value -> unit
     val addLocalConst       : AST.l -> t -> ident -> value -> unit
 
     val addGlobalConst      : t -> ident -> value -> unit
-    val getGlobalConst      : t -> ident -> value
+    val getGlobalConst      : ident -> t -> value
 
     val addEnum             : t -> ident -> value list -> unit
     val getEnum             : t -> ident -> (value list) option
@@ -355,372 +408,342 @@ module Env : sig
     val getVar              : AST.l -> t -> ident -> value
     val setVar              : AST.l -> t -> ident -> value -> unit
 
+    val return              : AST.l -> value -> t -> unit
+    val throw               : AST.l -> Primops.exc -> t -> unit
 
-
-    val mergeVars           : AST.l -> t -> t -> t -> unit
-    val mergeValue          : AST.l -> t -> t -> t -> value -> value -> value
-    val push                : prog -> t -> unit
-    val residual            : t -> prog
-    val copy                : t -> t
-    (*val stashResult         : AST.l -> value -> t -> unit *)
+    val residual            : AST.l -> t -> stmt list
+    val mergeState          : AST.l -> expr -> t -> t -> t -> unit
+    val mergeValue          : AST.l -> t -> t -> value -> value -> value
 
 end = struct
-    type t = {
-        mutable instructions : (encoding * (stmt list) option * bool * stmt list) Bindings.t;
-        mutable decoders     : decode_case Bindings.t;
-        mutable functions    : fun_sig Bindings.t;
-        mutable enums        : (value list) Bindings.t;
-        mutable records      : ((AST.ty * ident) list) Bindings.t;
-        mutable typedefs     : AST.ty Bindings.t;
-        mutable impdefs      : value ImpDefs.t;
+  type t = {
+    (* Shared across instructions *)
+    mutable instructions : (encoding * (stmt list) option * bool * stmt list) Bindings.t;
+    mutable decoders     : decode_case Bindings.t;
+    mutable functions    : fun_sig Bindings.t;
+    mutable enums        : (value list) Bindings.t;
+    mutable records      : ((AST.ty * ident) list) Bindings.t;
+    mutable typedefs     : AST.ty Bindings.t;
+    mutable impdefs      : value ImpDefs.t;
+    mutable constants    : scope;
+    mutable globalnames  : scope;
 
-        mutable globals      : scope;
-        mutable constants    : scope;
-        mutable locals       : scope list;
-        mutable residual     : value resid;
-        mutable decls        : AST.stmt list;
-        mutable returnSyms   : stashed option;
-        numSymbols           : int ref;
+    (* Shared within instruction *)
+    mutable globals      : scope;
+    mutable numSymbols   : int ref;
+
+    (* Shared within function *)
+    mutable locals       : scope list;
+    mutable decls        : AST.stmt list;
+    mutable returnSyms   : stashed option ref;
+
+    (* Shared within scope *)
+    mutable residual     : value resid;
+  }
+
+  let addEnum (env: t) (x: ident) (vs: value list): unit =
+    env.enums    <- Bindings.add x vs env.enums
+
+  let getEnum (env: t) (x: ident): (value list) option =
+    Bindings.find_opt x env.enums
+
+  let addRecord (env: t) (x: ident) (fs: (AST.ty * ident) list): unit =
+    env.records <- Bindings.add x fs env.records
+
+  let getRecord (env: t) (x: ident): ((AST.ty * ident) list) option =
+    Bindings.find_opt x env.records
+
+  let addTypedef (env: t) (x: ident) (ty: AST.ty): unit =
+    env.typedefs <- Bindings.add x ty env.typedefs
+
+  let getTypedef (env: t) (x: ident): AST.ty option =
+    Bindings.find_opt x env.typedefs
+
+  let getFun (loc: l) (env: t) (x: ident): fun_sig =
+    (match Bindings.find_opt x env.functions with
+    | Some def -> def
+    | None     -> raise (SymbolicError (loc, "getFun " ^ pprint_ident x))
+    )
+
+  let addFun (loc: l) (env: t) (x: ident) (def: fun_sig): unit =
+    if false then Printf.printf "Adding function %s\n" (pprint_ident x);
+    if Bindings.mem x env.functions then begin
+     if true then begin
+        () (* silently override *)
+      end else if override_conflicts then begin
+        (* backward compatibility mode: only report a stern warning *)
+        Printf.printf "Stern warning: %s function %s conflicts with earlier definition - discarding earlier definition\n"
+          (pp_loc loc) (pprint_ident x);
+      end else begin
+        raise (TC.Ambiguous (loc, "function definition", pprint_ident x))
+      end
+    end;
+    env.functions <- Bindings.add x def env.functions
+
+  let getInstruction (loc: AST.l) (env: t) (x: ident): (encoding * (stmt list) option * bool * stmt list) =
+    Bindings.find x env.instructions
+
+  let addInstruction (loc: AST.l) (env: t) (x: ident) (instr: encoding * (stmt list) option * bool * stmt list): unit =
+    env.instructions <- Bindings.add x instr env.instructions
+
+  let getDecoder (env: t) (x: ident): decode_case =
+    Bindings.find x env.decoders
+
+  let addDecoder (env: t) (x: ident) (d: decode_case): unit =
+    env.decoders <- Bindings.add x d env.decoders
+
+  let setImpdef (env: t) (x: string) (v: value): unit =
+    env.impdefs <- ImpDefs.add x v env.impdefs
+
+  let getImpdef (loc: l) (env: t) (x: string): value =
+    (match ImpDefs.find_opt x env.impdefs with
+    | Some v -> v
+    | None -> symerror loc  @@ "Unknown value for IMPLEMENTATION_DEFINED \""^x^"\""
+    )
+
+  let empty _ = {
+    instructions = Bindings.empty;
+    decoders     = Bindings.empty;
+    functions    = Bindings.empty;
+    enums        = Bindings.empty;
+    records      = Bindings.empty;
+    typedefs     = Bindings.empty;
+    impdefs      = ImpDefs.empty;
+    constants    = empty_scope ();
+    globalnames  = empty_scope ();
+
+    globals      = empty_scope ();
+    locals       = [empty_scope ()];
+    residual     = Open [];
+    decls        = [];
+    returnSyms   = ref None;
+    numSymbols   = ref 0;
+  }
+
+  (** Clear the environment's local state and any modified globals *)
+  let reset env =  
+    env.globals    <- empty_scope();
+    env.locals     <- [ empty_scope () ];
+    env.residual   <- Open [];
+    env.decls      <- [];
+    env.numSymbols <- ref 0;
+    env.returnSyms <- ref None
+
+  (** Add instructions to the residual program *)
+  let push (p: prog) (env: t): unit =
+    env.residual <- push env.residual p
+
+  let residual (loc: l) (env: t): stmt list =
+    match !(env.returnSyms) with
+    | Some r -> env.decls @ resid_to_stmts loc (assign_stashed loc r) env.residual
+    | None -> env.decls @ resid_to_stmts loc (fun _ -> []) env.residual
+
+  (** Create an environment for a callee and return 
+      their result along with a residual program *)
+  let nestTop (k: t -> 'a) (parent: t): 'a * value =
+    let child = {
+      decoders     = parent.decoders;
+      instructions = parent.instructions;
+      functions    = parent.functions;
+      enums        = parent.enums;
+      records      = parent.records;
+      typedefs     = parent.typedefs;
+      globalnames  = parent.globalnames;
+      globals      = parent.globals;
+      constants    = parent.constants;
+      impdefs      = parent.impdefs;
+      numSymbols   = parent.numSymbols;
+
+      (* changes *)
+      locals       = [empty_scope ()];
+      residual     = Open [];
+      decls        = [];
+      returnSyms   = ref None;
+    } in
+    (* Run the child *)
+    let r = k child in
+    push (residual Unknown child) parent;
+    match !(child.returnSyms) with
+    | Some v -> 
+        (r, value_of_stashed v)
+    | None -> 
+        (r, VTuple [])
+
+  (** Create a nested scope within a function and return
+      the scope's result along with its residual program *)
+  let nest (k: t -> 'a) (parent: t): 'a =
+    let child = {
+      decoders     = parent.decoders;
+      instructions = parent.instructions;
+      functions    = parent.functions;
+      enums        = parent.enums;
+      records      = parent.records;
+      typedefs     = parent.typedefs;
+      globalnames  = parent.globalnames;
+      globals      = parent.globals;
+      constants    = parent.constants;
+      impdefs      = parent.impdefs;
+      numSymbols   = parent.numSymbols;
+      decls        = parent.decls;
+      returnSyms   = parent.returnSyms;
+
+      (* changes *)
+      locals       = empty_scope () :: parent.locals;
+      residual     = Open [];
+    } in
+    let r = k child in
+    push (residual Unknown child) parent;
+    r
+
+  let copy (env: t): t = {
+      decoders     = env.decoders;
+      instructions = env.instructions;
+      functions    = env.functions;
+      enums        = env.enums;
+      records      = env.records;
+      typedefs     = env.typedefs;
+      constants    = env.constants;
+      impdefs      = env.impdefs;
+      numSymbols   = env.numSymbols;
+      returnSyms   = env.returnSyms;
+      decls        = env.decls;
+      globalnames  = env.globalnames;
+
+      (* changes *)
+      globals      = { bs = env.globals.bs };
+      locals       = List.map (fun x -> { bs = x.bs }) env.locals;
+      residual     = Open [];
     }
 
-    let empty _ = {
-        decoders     = Bindings.empty;
-        instructions = Bindings.empty;
-        functions    = Bindings.empty;
-        enums        = Bindings.empty;
-        records      = Bindings.empty;
-        typedefs     = Bindings.empty;
-        impdefs      = ImpDefs.empty;
+  (** Generate a fresh temporary *)
+  let newTemp (loc: l) (v: value) (env: t): ident =
+    let i = ! (env.numSymbols) in
+    let n = Ident ("#"^string_of_int i) in
+    env.numSymbols := i + 1;
+    env.decls <- env.decls @ [Stmt_VarDeclsNoInit(to_type loc v, [n], loc)];
+    n
 
-        globals      = empty_scope ();
-        constants    = empty_scope ();
-        locals       = [empty_scope ()];
-        residual     = Open [];
-        decls        = [];
-        returnSyms   = None;
-        numSymbols   = ref 0;
-    }
+  (** Write a value to an lexpr, flattening the operation down to individual scalar writes if possible *)
+  let rec assignLExpr (loc: l) (x: AST.lexpr) (o: value) (v: value) (env: t): unit =
+    match o, v with
+    | VTuple os, VTuple vs -> 
+        unsupported loc "assignLExpr: can't expand tuple assignment"
+    | VRecord os, VRecord vs -> 
+        let upd k v1 v2 = Some (assignLExpr loc (LExpr_Field(x,k)) v1 v2 env) in
+        let _ = record_merge upd os vs in
+        ()
+    | VArray (os,od), VArray (vs,d) ->
+        let upd k v1 v2 = Some (assignLExpr loc (LExpr_Array(x,int_expr k)) v1 v2 env) in
+        let _ = Symbolic.array_merge upd os od vs d in
+        ()
+    | _ -> if v != o then push [AST.Stmt_Assign(x, to_expr loc v, loc)] env
 
-    let nestTop (k: t -> 'a) (parent: t): 'a * prog =
-        let child = {
-            decoders     = parent.decoders;
-            instructions = parent.instructions;
-            functions    = parent.functions;
-            enums        = parent.enums;
-            records      = parent.records;
-            typedefs     = parent.typedefs;
-            globals      = parent.globals;
-            constants    = parent.constants;
-            impdefs      = parent.impdefs;
-            locals       = [empty_scope ()];  (* only change *)
+  (** Load a global constant, no special handling due to constant *)
+  let getGlobalConst (x: ident) (env: t) : value =  
+    get_scope_val x env.constants
 
-            residual     = Open [];
-            decls        = [];
-            returnSyms   = None;
-            numSymbols   = parent.numSymbols;
-        } in
-        let r = k child in
-        (r, []) (* child.residual) *)
+  (** Get any variable, prefering recently defined locals to globals *)
+  let getVar (loc: l) (env: t) (x: ident): value =
+    match find_scope env.locals x with
+    | Some bs -> get_scope_val x bs
+    | None ->
+        if mem_scope x env.globals then get_scope_val x env.globals
+        else if mem_scope x env.globalnames then get_scope_val x env.globalnames
+        else if mem_scope x env.constants then get_scope_val x env.constants
+        else symerror loc @@ "getVar: Couldn't find " ^ pprint_ident x
 
-    let nest (k: t -> 'a) (parent: t): 'a * prog =
-        let child = {
-            decoders     = parent.decoders;
-            instructions = parent.instructions;
-            functions    = parent.functions;
-            enums        = parent.enums;
-            records      = parent.records;
-            typedefs     = parent.typedefs;
-            globals      = parent.globals;
-            constants    = parent.constants;
-            impdefs      = parent.impdefs;
-            locals       = empty_scope () :: parent.locals;  (* only change *)
+  (* Add a global constant *)
+  let addGlobalConst (env: t) (x: ident) (v: value): unit =
+    let v = subst_base (EVar x) v in
+    set_scope x v env.constants
 
-            residual = Open [];
-            decls = [];
-            returnSyms   = parent.returnSyms;
-            numSymbols = parent.numSymbols;
-        } in
-        let r = k child in
-        (r, []) (* child.residual) *)
+  (* Add a global variable, replacing any expressions with accesses to the provided identifier *)
+  let addGlobalVar (env: t) (x: ident) (v: value): unit =
+    let v = subst_base (EVar x) v in
+    set_scope x v env.globalnames
 
-    let copy (env: t): t =
-        {
-            decoders     = env.decoders;
-            instructions = env.instructions;
-            functions    = env.functions;
-            enums        = env.enums;
-            records      = env.records;
-            typedefs     = env.typedefs;
-            globals      = { bs = env.globals.bs };
-            constants    = env.constants;
-            impdefs      = env.impdefs;
-            locals       = List.map (fun x -> { bs = x.bs }) env.locals;
+  (* Add a local variable, don't stash it until necessary *)
+  let addLocalVar (loc: l) (env: t) (x: ident) (v: value): unit =
+    if !trace_write then Printf.printf "TRACE: decl local %s = %s\n" (pprint_ident x) (pp_value v);
+    match env.locals with
+    | (bs :: _) -> set_scope x (v) bs
+    | []        -> symerror loc "addLocalVar: no scopes available"
 
-            residual   = Open [];
-            decls = [];
-            returnSyms = env.returnSyms;
-            numSymbols = env.numSymbols;
-        }
+  (* Add a local constant, don't stash it until necessary *)
+  let addLocalConst (loc: l) (env: t) (x: ident) (v: value): unit =
+    if !trace_write then Printf.printf "TRACE: decl constlocal %s = %s\n" (pprint_ident x) (pp_value v);
+    match env.locals with
+    | (bs :: _) -> set_scope x (v) bs
+    | []        -> symerror loc "addLocalConst: no scopes available"
 
-    let addEnum (env: t) (x: ident) (vs: value list): unit =
-        env.enums    <- Bindings.add x vs env.enums
+  (* Set a local variable, currently just sets it, nothing else to worry about *)
+  (* TODO: hook for logic handling stashing of complex local expressions *)
+  let setLocalVar (loc: l) (env: t) (x: ident) (v: value) (s: scope): unit =
+    set_scope x v s
 
-    let getEnum (env: t) (x: ident): (value list) option =
-        Bindings.find_opt x env.enums
+  (* Set a global variable and add effects to the residual program *)
+  (* TODO: Either delay this to end of 'scope' or manage global reassignment *)
+  let setGlobalVar (loc: l) (env: t) (x: ident) (v: value): unit =
+    let prev = (match get_scope_opt x env.globals with
+    | Some v -> v
+    | None -> get_scope x env.globalnames)
+    in
+    assignLExpr loc (LExpr_Var x) prev v env; 
+    set_scope x v env.globals
 
-    let addRecord (env: t) (x: ident) (fs: (AST.ty * ident) list): unit =
-        env.records <- Bindings.add x fs env.records
+  (* Set a variable, either local or global *)
+  let setVar (loc: l) (env: t) (x: ident) (v: value): unit =
+    if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_value v);
+    match find_scope env.locals x with
+    | Some bs -> setLocalVar loc env x v bs
+    | None ->
+        if mem_scope x env.globalnames then setGlobalVar loc env x v
+        else symerror loc @@ "setVar: Couldn't find " ^ pprint_ident x
 
-    let getRecord (env: t) (x: ident): ((AST.ty * ident) list) option =
-        Bindings.find_opt x env.records
+  (** Merge two values to a single reference, potentially by stashing its value *)
+  let mergeValue (loc: l) (e1: t) (e2: t) (v1: value) (v2: value): value =
+    let s = stashed_of_value v1 in
+    let s' = merge_stashed_value (fun v -> newTemp loc v e1) s v2 in
+    push (assign_stashed loc s' v1) e1;
+    push (assign_stashed loc s' v2) e2;
+    value_of_stashed s'
 
-    let addTypedef (env: t) (x: ident) (ty: AST.ty): unit =
-        env.typedefs <- Bindings.add x ty env.typedefs
+  (* Join the variables of two states *)
+  let mergeState (loc: l) (e: expr) (orig: t) (e1: t) (e2: t): unit =
+    let merge l r: scope =
+      {
+        bs = Bindings.merge (fun k v1 v2 ->
+          match v1, v2 with
+          | Some v1, Some v2 -> Some (mergeValue loc e1 e2 v1 v2)
+          | Some v, None -> Some v
+          | None, Some v -> Some v
+          | _ -> None) l.bs r.bs
+      }
+    in
+    orig.residual <- push_branch loc orig.residual e e1.residual e2.residual;
+    match contains_open e1.residual, contains_open e2.residual with
+    | true, true ->
+        orig.locals <- List.map2 merge e1.locals e2.locals;
+        (* TODO: depending on global strategy, either gen temps or fall back to globalnames *)
+        orig.globals <- merge e1.globals e2.globals;
+    | true, false -> 
+        orig.locals <- e1.locals;
+        orig.globals <- e1.globals;
+    | false, true -> 
+        orig.locals <- e2.locals;
+        orig.globals <- e2.globals;
+    | _ -> ()
 
-    let getTypedef (env: t) (x: ident): AST.ty option =
-        Bindings.find_opt x env.typedefs
+  (* End disassembly due to a throw, we consider these unreachable *)
+  let throw (loc: l) (x: Primops.exc) (env: t): unit =
+    env.residual <- push_throw env.residual
 
-    let getFun (loc: l) (env: t) (x: ident): fun_sig =
-        (match Bindings.find_opt x env.functions with
-        | Some def -> def
-        | None     -> raise (SymbolicError (loc, "getFun " ^ pprint_ident x))
-        )
-
-    let addFun (loc: l) (env: t) (x: ident) (def: fun_sig): unit =
-        if false then Printf.printf "Adding function %s\n" (pprint_ident x);
-        if Bindings.mem x env.functions then begin
-            if true then begin
-                () (* silently override *)
-            end else if override_conflicts then begin
-                (* backward compatibility mode: only report a stern warning *)
-                Printf.printf "Stern warning: %s function %s conflicts with earlier definition - discarding earlier definition\n"
-                    (pp_loc loc) (pprint_ident x);
-            end else begin
-                raise (TC.Ambiguous (loc, "function definition", pprint_ident x))
-            end
-        end;
-        env.functions <- Bindings.add x def env.functions
-
-    let getInstruction (loc: AST.l) (env: t) (x: ident): (encoding * (stmt list) option * bool * stmt list) =
-        Bindings.find x env.instructions
-
-    let addInstruction (loc: AST.l) (env: t) (x: ident) (instr: encoding * (stmt list) option * bool * stmt list): unit =
-        env.instructions <- Bindings.add x instr env.instructions
-
-    let getDecoder (env: t) (x: ident): decode_case =
-        Bindings.find x env.decoders
-
-    let addDecoder (env: t) (x: ident) (d: decode_case): unit =
-        env.decoders <- Bindings.add x d env.decoders
-
-    let setImpdef (env: t) (x: string) (v: value): unit =
-        env.impdefs <- ImpDefs.add x v env.impdefs
-
-    let getImpdef (loc: l) (env: t) (x: string): value =
-        (match ImpDefs.find_opt x env.impdefs with
-        | Some v -> v
-        | None ->
-                raise (SymbolicError (loc, "Unknown value for IMPLEMENTATION_DEFINED \""^x^"\""))
-        )
-
-    (* CUSTOM WORK BELOW *)
-
-(*    let rec push_ret (p: prog) (e: prog): prog =
-      match List.rev p with
-      | (Stmt_ProcReturn _)::xs -> p
-      | (Stmt_If (g,tb,r,fb,loc))::xs -> List.rev ((Stmt_If (g,push_ret tb e,r,push_ret fb e,loc))::xs)
-      | _ -> p @ e *)
-
-    (* Add instructions to the residual program *)
-    let push (p: prog) (env: t): unit =
-      env.residual <- push env.residual p
-
-    (* Generate a fresh variable name *)
-    let freshName (env: t): ident =
-      let i = ! (env.numSymbols) in 
-      env.numSymbols := i + 1;
-      Ident ("#"^ string_of_int i)
-
-    (* Add a global constant *)
-    let addGlobalConst (env: t) (x: ident) (v: value): unit =
-      let v = subst_expr (EVar x) v in
-      set_scope x (v) env.constants
-
-    (* Add a global variable, replacing any expressions with accesses to the provided identifier *)
-    let addGlobalVar (env: t) (x: ident) (v: value): unit =
-      let v = subst_expr (EVar x) v in
-      set_scope x (v) env.globals
-
-    (* Add a local variable, don't stash it until necessary *)
-    let addLocalVar (loc: l) (env: t) (x: ident) (v: value): unit =
-      if !trace_write then Printf.printf "TRACE: decl local %s = %s\n" (pprint_ident x) (pp_value v);
-      match env.locals with
-      | (bs :: _) -> set_scope x (v) bs
-      | []        -> raise (SymbolicError (loc, "addLocalVar: no scopes available"))
-
-    (* Add a local constant, don't stash it until necessary *)
-    let addLocalConst (loc: l) (env: t) (x: ident) (v: value): unit =
-      if !trace_write then Printf.printf "TRACE: decl constlocal %s = %s\n" (pprint_ident x) (pp_value v);
-      match env.locals with
-      | (bs :: _) -> set_scope x (v) bs
-      | []        -> raise (SymbolicError (loc, "addLocalConst: no scopes available"))
-
-    (* Load a global constant *)
-    let getGlobalConst (env: t) (x: ident): value =
-      get_scope_val x env.constants
-
-    (* Search for a local definition of a variable *)
-    let findLocal (env: t) (x: ident): scope option =
-      let rec search (bss : scope list): scope option =
-        match bss with
-        | (bs :: bss') -> if mem_scope x bs then Some bs else search bss'
-        | [] -> None
-      in
-      search env.locals
-
-    (** Write a value to an lexpr, flattening the operation down to individual scalar writes where possible *)
-    let rec assignLExpr (loc: l) (x: AST.lexpr) (o: value) (v: value) (env: t): unit =
-      match o, v with
-      | VTuple os, VTuple vs -> unsupported loc "assignLExpr: can't expand tuple assignment"
-      | VRecord os, VRecord vs -> 
-          let _ = Bindings.merge (fun k v1 v2 ->
-            match v1, v2 with
-            | Some o, Some v -> Some (assignLExpr loc (LExpr_Field(x,k)) o v env)
-            | _ -> symerror loc "updateWrap: Assignment between records of different shapes") os vs in
-          ()
-      | VArray (os,od), VArray (vs,d) ->
-          let _ = Primops.ImmutableArray.merge (fun k v1 v2 ->
-            let e = LExpr_Array(x,int_expr k) in
-            match v1, v2 with
-            | Some o, Some v -> Some (assignLExpr loc e o v env)
-            | Some o, None   -> Some (assignLExpr loc e o (d) env)
-            | None, Some v   -> Some (assignLExpr loc e (od) v env)
-            | _ -> None) os vs in
-          ()
-      | _ -> 
-          if v = o then ()
-          else push [AST.Stmt_Assign(x, to_expr loc v, loc)] env
-
-    (** Update stashed temporaries with a new value, given its old *)
-    let rec assignTemps (loc: l) (x: value) (v: value) (env: t): value =
-      match x, v with
-      | VTuple xs, VTuple vs -> 
-          VTuple (List.map2 (fun x v -> assignTemps loc x v env) xs vs)
-      | VRecord xs, VRecord vs -> 
-          VRecord (Bindings.merge (fun k v1 v2 ->
-            match v1, v2 with
-            | Some w, Some v -> Some (assignTemps loc w v env)
-            | _ -> symerror loc "updateWrap: Assignment between records of different shapes") xs vs)
-      | VArray (ws,wd), VArray (vs,d) ->
-          VArray (Primops.ImmutableArray.merge (fun k v1 v2 ->
-            match v1, v2 with
-            | Some w, Some v -> Some (assignTemps loc w v env)
-            | Some w, None   -> Some (assignTemps loc w (d ) env)
-            | None, Some v   -> Some (assignTemps loc (wd) v env)
-            | _ -> None) ws vs,wd)
-      | _ -> 
-            if x = v then v
-            else
-              let n = freshName env in
-              push [AST.Stmt_VarDecl(to_type loc v, n, to_expr loc v, loc)] env;
-              subst_expr (EVar n) v
-
-    (* Merge two values to a single reference, potentially by stashing its value *)
-    let rec mergeValue (loc: l) (decl: t) (e1: t) (e2: t) (w1: value) (w2: value): value =
-      match w1, w2 with
-      | VTuple bs1, VTuple bs2 -> VTuple (List.map2 (mergeValue loc decl e1 e2) bs1 bs2)
-      | VRecord f1, VRecord f2 -> VRecord (Bindings.mapi (fun k v -> mergeValue loc decl e1 e2 v (Bindings.find k f2)) f1)
-      | VArray (a1,d1), VArray (a2,d2) -> 
-          VArray (Primops.ImmutableArray.merge (fun k v1 v2 ->
-            match v1, v2 with
-            | Some v1, Some v2 -> Some (mergeValue loc decl e1 e2 v1 v2)
-            | Some v1, None -> Some (mergeValue loc decl e1 e2 v1 (d2))
-            | None, Some v2 -> Some (mergeValue loc decl e1 e2 (d1) v2)
-            | _ -> None) a1 a2, d1)
-      | _ ->
-          if w1 = w2 then w1
-          else 
-            let n = freshName decl in
-            decl.decls <- decl.decls @ [Stmt_VarDeclsNoInit(to_type loc w1, [n], loc)];
-            push [AST.Stmt_Assign(LExpr_Var n, to_expr loc w1, loc)] e1;
-            push [AST.Stmt_Assign(LExpr_Var n, to_expr loc w2, loc)] e2;
-            subst_expr (EVar n) w1
-
-    let setLocalVar (loc: l) (env: t) (x: ident) (v: value) (s: scope): unit =
-      let o = get_scope x s in
-      match v with (* break aggregates down into scalars *)
-      | VTuple _ 
-      | VRecord _ 
-      | VArray _ -> set_scope x (assignTemps loc o v env) s
-      | _ -> set_scope x v s
-
-    let setGlobalVar (loc: l) (env: t) (x: ident) (v: value): unit =
-      let o = get_scope_val x env.globals in
-      assignLExpr loc (LExpr_Var x) o v env; 
-      set_scope x (v) env.globals
-      (* reassignment ??? *)
-
-    let setVar (loc: l) (env: t) (x: ident) (v: value): unit =
-      if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_value v);
-      match findLocal env x with
-      | Some bs -> setLocalVar loc env x v bs
-      | None ->
-          if mem_scope x env.globals then setGlobalVar loc env x v
-          else raise (SymbolicError (loc, "setVar: " ^ pprint_ident x))
-
-    let getVar (loc: l) (env: t) (x: ident): value =
-      match findLocal env x with
-      | Some bs -> get_scope_val x bs
-      | None ->
-          if mem_scope x env.globals then get_scope_val x env.globals 
-          else if mem_scope x env.constants then get_scope_val x env.constants
-          else raise (SymbolicError (loc, "getVar: " ^ pprint_ident x))
-
-    (* Access the residual program for this state *)
-    let residual (env: t): prog = env.decls (* @ env.residual *)
-
-    (* Join the variables of two states *)
-    let mergeVars (loc: l) (decl: t) (e1: t) (e2: t): unit =
-      let merge l r: scope =
-        {
-          bs = Bindings.merge (fun k v1 v2 ->
-            match v1, v2 with
-            | Some v1, Some v2 -> Some (mergeValue loc decl e1 e2 v1 v2)
-            | Some v, None -> Some v
-            | None, Some v -> Some v
-            | _ -> None) l.bs r.bs
-        }
-      in
-      decl.locals <- List.map2 merge e1.locals e2.locals;
-      decl.globals <- merge e1.globals e2.globals
-
-      (*
-    let rec createRet (loc: l) (v: value) (e: t): ret =
-      match v with
-      | VTuple vs -> ATuple (List.map (fun v -> createRet loc v e) vs)
-      | VRecord vs -> ARecord (Bindings.map (fun v -> createRet loc v e) vs)
-      | VArray (vs,d) -> failwith ""
-      | _ -> 
-          (let n = freshName e in
-          e.decls <- e.decls @ [Stmt_VarDeclsNoInit(to_type v, [n], loc)];
-          push [AST.Stmt_Assign(LExpr_Var n, to_expr loc v, loc)] e;
-          At n)
-
-    let rec stashRet (loc: l) (r: ret) (v: value) (e: t): unit =
-      match r, v with
-      | ATuple xs, VTuple vs      -> List.iter2 (fun x v -> stashRet loc x v e) xs vs
-      | ARecord xs, VRecord vs    -> Bindings.iter (fun k x -> stashRet loc x (Bindings.find k vs) e) xs
-      | At i, _                   -> push [AST.Stmt_Assign(LExpr_Var i, to_expr loc v, loc)] e
-      | _                 -> failwith ""
-
-    let stashResult (loc: l) (v: value) (e: t): unit =
-      match e.returnSyms with
-      | NoDecl::xs -> 
-          e.returnSyms <- (createRet loc v e)::xs
-      | x::xs -> stashRet loc x v e
-      | [] -> raise (SymbolicError (loc, "stashResult")) 
-
-*)
+  (* Exit a function by updating the return symbols and closing the residual program *)
+  let return (loc: l) (v: value) (env: t): unit =
+    env.returnSyms := (match !(env.returnSyms) with
+    | Some s -> Some (merge_stashed_value (fun v -> newTemp loc v env) s v)
+    | None -> Some (stashed_of_value v));
+    env.residual <- push_return env.residual v
 
 end
 
@@ -816,153 +839,133 @@ struct
   let unknown_enum    _ _ = VInt (Right EUnknown)
   let unknown_ram     _ _ = VRAM (Right EUnknown)
 
-end
-)(
-struct
+end)(struct
   type value = Symbolic.value
-  type 'a eff = Env.t -> ('a, exn) Either.t
-
-  exception Return    of value
+  type 'a eff = Env.t -> 'a Option.t
 
   (* Monadic *)
   let pure (a: 'a): 'a eff = 
-    fun _ -> Either.Left (a)
+    fun _ -> Some a
   let (>>) (a: 'a eff) (f: 'a -> 'b): 'b eff = 
     fun e ->
     match a e with
-    | Either.Left v -> Either.Left (f v)
-    | Either.Right e -> Either.Right e
+    | Some v -> Some (f v)
+    | None -> None
   let (>>=) (a: 'a eff) (f: 'a -> 'b eff): 'b eff = 
     fun e -> 
     match a e with
-    | Either.Left v -> f v e
-    | Either.Right e -> Either.Right e
+    | Some v -> f v e
+    | None -> None
 
-  (* State *)
-  let reset = pure () (* TODO: something *)
-  let scope b = 
-    fun e ->
-      let (r,p) = Env.nest b e in
-      Env.push p e;
-      r
-  let call (b : unit eff): value eff =
-    fun e -> (* need the body for the callee *)
-      let (r,p) = Env.nestTop b e in
-      Env.push p e;
-      match r with
-      | Either.Left () -> Either.Left (VTuple [])
-      | Either.Right (Return v) -> Left v
-      | Either.Right x -> Right x
-
+  (* Effectful primitives *)
   let runPrim f tes es = 
     match sym_pure_prim f tes es with
     | Some x -> pure (Some x)
     | None -> pure None
     (* TODO: non-pure primitive functions *)
 
-  let isGlobalConstFilter =
-    fun env ->
-      Either.Left (fun t ->
-        match Env.getGlobalConst env t with
-        | _ -> true
-        | exception _ -> false)
+  (* State *)
+  let reset: unit eff = 
+    fun e -> Some (Env.reset e)
+  let scope (b: unit eff): unit eff = 
+    fun e -> Env.nest b e
 
-  let wrap e = Either.Left (let () = e in ())
+  (* State Reads - TODO: Merge this structure with env *)
+  let getGlobalConst (x: ident) (env: Env.t) =
+    Some (Env.getGlobalConst x env)
+  let getVar (loc: l) (x: ident) (env: Env.t) = 
+    Some (Env.getVar loc env x)
+  let getImpdef (loc: l) (s: string) (env: Env.t) = 
+    Some (Env.getImpdef loc env s)
+  let getFun (loc: l) (x: ident) (env: Env.t) = 
+    Some (Env.getFun loc env x)
+  let getInstruction (loc: l) (x: ident) (env: Env.t) = 
+    Some (Env.getInstruction loc env x)
+  let getDecoder (x: ident) (env: Env.t) = 
+    Some (Env.getDecoder env x)
+  let getEnum (x: ident) (env: Env.t) = 
+    Some (Env.getEnum env x)
+  let getRecord (x: ident) (env: Env.t) = 
+    Some (Env.getRecord env x)
+  let getTypedef (x: ident) (env: Env.t) = 
+    Some (Env.getTypedef env x)
+  let isGlobalConstFilter (env: Env.t) =
+    Some (fun t ->
+      match Env.getGlobalConst t env with
+      | _ -> true
+      | exception _ -> false)
 
-  (* add these to the state, but don't add anything to residual *)
-  let addLocalVar   (loc: l) (x: ident) (v: value) (env: Env.t)     = wrap (Env.addLocalVar   loc env x v)
-  let addLocalConst (loc: l) (x: ident) (v: value) (env: Env.t)     = wrap (Env.addLocalConst loc env x v)
-  let addGlobalVar (x: ident) (v: value) (env: Env.t)               = wrap (Env.addGlobalVar env x v)
-
-  let setVar (loc: l) (x: ident) (v: value) (env: Env.t)            = wrap (Env.setVar loc env x v)
-
-  let getVar (loc: l) (x: ident) (env: Env.t)                       = Either.Left (Env.getVar loc env x)
-
-  (* immutable state *)
-  let addGlobalConst (x: ident) (v: value) (env: Env.t)             = wrap (Env.addGlobalConst env x v)
-  let getGlobalConst (x: ident) (env: Env.t)                        = Either.Left (Env.getGlobalConst env x)
-
-  let addEnum (x: ident) (vs: value list) (env: Env.t)              = wrap (Env.addEnum env x vs)
-  let getEnum (x: ident) (env: Env.t)                               = Either.Left (Env.getEnum env x)
-
-  let addRecord (x: ident) (vs: (AST.ty * ident) list) (env: Env.t) = wrap (Env.addRecord env x vs)
-  let getRecord (x: ident) (env: Env.t)                             = Either.Left (Env.getRecord env x)
-
-  let addTypedef (x: ident) (t: AST.ty) (env: Env.t)                = wrap (Env.addTypedef env x t)
-  let getTypedef (x: ident) (env: Env.t)                            = Either.Left (Env.getTypedef env x)
-
-  let addFun (loc: l) (x: ident) (f: fun_sig) (env: Env.t)          = wrap (Env.addFun loc env x f)
-  let getFun (loc: l) (x: ident) (env: Env.t)                       = Either.Left (Env.getFun loc env x)
-
-  let addInstruction (loc: l) (x: ident) (i: inst_sig) (env: Env.t) = wrap (Env.addInstruction loc env x i)
-  let getInstruction (loc: l) (x: ident) (env: Env.t)               = Either.Left (Env.getInstruction loc env x)
-
-  let addDecoder (x: ident) (d: decode_case) (env: Env.t)           = wrap (Env.addDecoder env x d)
-  let getDecoder (x: ident) (env: Env.t)                            = Either.Left (Env.getDecoder env x)
-
-  let getImpdef (loc: l) (s: string) (env: Env.t)                   = Either.Left (Env.getImpdef loc env s)
+  (* State Writes *)
+  let addRecord (x: ident) (vs: (AST.ty * ident) list) (env: Env.t) = 
+    Some (Env.addRecord env x vs)
+  let addGlobalConst (x: ident) (v: value) (env: Env.t) = 
+    Some (Env.addGlobalConst env x v)
+  let addGlobalVar (x: ident) (v: value) (env: Env.t) = 
+    Some (Env.addGlobalVar env x v)
+  let addEnum (x: ident) (vs: value list) (env: Env.t) = 
+    Some (Env.addEnum env x vs)
+  let addTypedef (x: ident) (t: AST.ty) (env: Env.t) = 
+    Some (Env.addTypedef env x t)
+  let addDecoder (x: ident) (d: decode_case) (env: Env.t) = 
+    Some (Env.addDecoder env x d)
+  let addInstruction (loc: l) (x: ident) (i: inst_sig) (env: Env.t) = 
+    Some (Env.addInstruction loc env x i)
+  let addFun (loc: l) (x: ident) (f: fun_sig) (env: Env.t) = 
+    Some (Env.addFun loc env x f)
+  let addLocalVar   (loc: l) (x: ident) (v: value) (env: Env.t) = 
+    Some (Env.addLocalVar   loc env x v)
+  let addLocalConst (loc: l) (x: ident) (v: value) (env: Env.t) = 
+    Some (Env.addLocalConst loc env x v)
+  let setVar (loc: l) (x: ident) (v: value) (env: Env.t) = 
+    Some (Env.setVar loc env x v)
 
   (* Control Flow *)
   let branch (c: value) (t: value eff lazy_t) (f: value eff lazy_t) = 
     let loc = Unknown in 
     fun e ->
-    match to_bool loc c with
-    | (Left true) -> Lazy.force t e
-    | (Left false) -> Lazy.force f e
-    | (Right exp) -> 
-        let te = Env.copy e in
-        let fe = Env.copy e in
-        let tr = Lazy.force t te in
-        let fr = Lazy.force f fe in
-        match tr, fr with
-        | Left v1, Left v2 when v2 = v1 -> 
-            Env.mergeVars loc e te fe;
-            Env.push [AST.Stmt_If (lift_expr loc exp,Env.residual te,[],Env.residual fe,loc) ] e;
-            Left v1 
-        | Left v1, Left v2 ->
-            let v = Env.mergeValue loc e te fe v1 v2 in
-            Env.mergeVars loc e te fe;
-            Env.push [AST.Stmt_If (lift_expr loc exp,Env.residual te,[],Env.residual fe,loc) ] e;
-            Left v
-        | Left v, Right (Return r) ->
-            (* Env.stashResult loc r fe; *)
-            Env.push [AST.Stmt_If (lift_expr loc exp,Env.residual te,[],Env.residual fe@[AST.Stmt_ProcReturn(loc)],loc) ] e;
-            (*Env.copy_vars e te;*)
-            Left v
-        | _ -> raise (SymbolicError (Unknown, "symbolic if")) 
+      match to_bool loc c with
+      | (Left true) -> Lazy.force t e
+      | (Left false) -> Lazy.force f e
+      | (Right exp) -> 
+          let te = Env.copy e in
+          let fe = Env.copy e in
+          let r = (match Lazy.force t te, Lazy.force f fe with
+          | Some v1, Some v2 -> Some (Env.mergeValue loc te fe v1 v2)
+          | Some v, None | None, Some v -> Some v
+          | _ -> None) in
+          Env.mergeState loc exp e te fe;
+          r
 
   let iter (b: value -> (value * value) eff) (s: value): value eff =
     raise (SymbolicError (Unknown,"loop"))
-
+  let call (b : unit eff): value eff =
+    fun e -> let (r,v) = Env.nestTop b e in Some v
   let catch (b: 'a eff) (f: AST.l -> Primops.exc -> 'a eff): 'a eff = 
-    fun e ->
-      match b e with
-      | Right (Value.Throw(l, x)) -> f l x e
-      | x -> x
-
+    fun e -> b e
   let return v: 'a eff = 
-    fun _ -> Either.Right (Return v)
-
-  let throw l x = 
     fun e -> 
-      Env.push [AST.Stmt_Assert (bool_expr false, l)] e;
-      Either.Right (Throw (l,x))
-
+      Env.return Unknown v e; None
+  let throw l x: 'a eff = 
+    fun e -> 
+      Env.throw l x e; None
   let error l s = 
     fun _ -> raise (SymbolicError (l,s))
 
 end)
 
 let eval_decode_case (loc: AST.l) (env: Env.t) (d: AST.decode_case) (v: value): prog =
-  match Disem.eval_decode_case loc d v env with
-  | Left () -> Env.residual env
-  | Right e -> raise e
+  let _ = Disem.eval_decode_case loc d v env in
+  Env.residual loc env
 
 let build_evaluation_environment (defs: AST.declaration list): Env.t =
-  let e = Env.empty () in
-  match Disem.build_evaluation_environment defs e with
-  | Left () -> e
-  | Right x -> raise x
+  try
+    let e = Env.empty () in
+    let _ = Disem.build_evaluation_environment defs e in
+    e
+  with
+  | SymbolicError (loc, msg) -> 
+      Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
+      exit 1;
 
 (****************************************************************
  * End
