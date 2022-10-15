@@ -2,7 +2,7 @@
  * ASL disassembler
  ****************************************************************)
 
-(** ASL dissassembler *)
+(** ASL disassembler *)
 
 module PP   = Asl_parser_pp
 module AST  = Asl_ast

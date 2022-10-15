@@ -66,6 +66,10 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Decoding and executing instruction %s %s\n" iset (Z.format "%x" op);
         cpu.opcode iset op
+    | [":sem"; iset; opcode] ->
+        let op = Z.of_int (int_of_string opcode) in
+        Printf.printf "Decoding and partially executing instruction %s %s\n" iset (Z.format "%x" op);
+        cpu.sem iset op
     | (":set" :: "impdef" :: rest) ->
         let cmd = String.concat " " rest in
         let loc = mkLoc fname cmd in
@@ -130,6 +134,12 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
                 )
             )
         with
+        | Symbolic.SymbolicError(loc, msg) ->
+            Printf.printf "  Symbolic Error %s : %s\n" (pp_loc loc) msg;
+            Printexc.print_backtrace stdout
+        | Symbolic.UnsupportedError(loc, msg) ->
+            Printf.printf "  Unsupported Error %s : %s\n" (pp_loc loc) msg;
+            Printexc.print_backtrace stdout
         | exc ->
             Printf.printf "  Error %s\n" (Printexc.to_string exc);
             Printexc.print_backtrace stdout
@@ -187,11 +197,19 @@ let main () =
             Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
             exit 1
         ) in
+        let dis = (try
+            Dis.build_evaluation_environment (List.concat (t::ts))
+        with
+        | Value.EvalError (loc, msg) ->
+            Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
+            exit 1
+        ) in
+
         if !opt_verbose then Printf.printf "Built evaluation environment\n";
 
         LNoise.history_load ~filename:"asl_history" |> ignore;
         LNoise.history_set ~max_length:100 |> ignore;
-        repl (TC.Env.mkEnv TC.env0) (Cpu.mkCPU env)
+        repl (TC.Env.mkEnv TC.env0) (Cpu.mkCPU env dis)
     end
 
 let _ =ignore(main ())
