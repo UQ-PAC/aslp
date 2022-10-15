@@ -29,7 +29,7 @@ module type Value = sig
   val to_exc    : AST.l -> t -> (AST.l * Primops.exc)
 
   (* Unit *)
-  val vunit   : t
+  val unit    : t
   val is_unit : t -> bool
 
   (* Bool *)
@@ -72,21 +72,19 @@ module type Effect = sig
   type 'a eff
   type value
 
+  (* Effectful primitives *)
+  val runPrim : string -> value list -> value list -> value option eff
+
   (* Monadic *)
   val pure  : 'a -> 'a eff
   val (>>=) : 'a eff -> ('a -> 'b eff) -> 'b eff
-  val (>>) : 'a eff -> ('a -> 'b) -> 'b eff
-  val traverse : ('a -> 'b eff) -> 'a list -> 'b list eff
+  val (>>)  : 'a eff -> ('a -> 'b) -> 'b eff
 
   (* State *)
   val reset : unit eff
-  val scope : 'a eff -> 'a eff
-  val call  : unit eff -> value eff
+  val scope : unit eff -> unit eff
 
-  val setVar : AST.l -> AST.ident -> value -> unit eff
-  val runPrim : string -> value list -> value list -> value option eff
-  val isGlobalConstFilter : (AST.ident -> bool) eff
-
+  (* State Reads *)
   val getGlobalConst      : AST.ident -> value eff
   val getVar              : AST.l -> AST.ident -> value eff
   val getImpdef           : AST.l -> string -> value eff
@@ -96,24 +94,28 @@ module type Effect = sig
   val getEnum             : AST.ident -> value list option eff
   val getRecord           : AST.ident -> (AST.ty * AST.ident) list option eff
   val getTypedef          : AST.ident -> AST.ty option eff
+  val isGlobalConstFilter : (AST.ident -> bool) eff
 
+  (* State Writes *)
   val addRecord      : AST.ident -> (AST.ty * AST.ident) list -> unit eff
-  val addGlobalConst : AST.ident -> value -> unit eff
-  val addGlobalVar   : AST.ident -> value -> unit eff
-  val addEnum        : AST.ident -> value list -> unit eff
-  val addTypedef     : AST.ident -> AST.ty -> unit eff
-  val addDecoder     : AST.ident -> AST.decode_case -> unit eff
-  val addInstruction : AST.l -> AST.ident -> inst_sig -> unit eff
-  val addFun         : AST.l -> AST.ident -> fun_sig -> unit eff
-  val addLocalVar    : AST.l -> AST.ident -> value -> unit eff
-  val addLocalConst  : AST.l -> AST.ident -> value -> unit eff
+  val addGlobalConst : AST.ident -> value                     -> unit eff
+  val addGlobalVar   : AST.ident -> value                     -> unit eff
+  val addEnum        : AST.ident -> value list                -> unit eff
+  val addTypedef     : AST.ident -> AST.ty                    -> unit eff
+  val addDecoder     : AST.ident -> AST.decode_case           -> unit eff
+  val addInstruction : AST.l     -> AST.ident -> inst_sig     -> unit eff
+  val addFun         : AST.l     -> AST.ident -> fun_sig      -> unit eff
+  val addLocalVar    : AST.l     -> AST.ident -> value        -> unit eff
+  val addLocalConst  : AST.l     -> AST.ident -> value        -> unit eff
+  val setVar         : AST.l     -> AST.ident -> value        -> unit eff
 
   (* Control Flow *)
   val branch    : value -> value eff Lazy.t -> value eff Lazy.t -> value eff
   val iter      : (value -> (value * value) eff) -> value -> value eff
+  val call      : unit eff  -> value eff
+  val catch     : unit eff -> (AST.l -> Primops.exc -> unit eff) -> unit eff
   val return    : value -> 'a eff
   val throw     : AST.l -> Primops.exc -> 'a eff
-  val catch     : 'a eff -> (AST.l -> Primops.exc -> 'a eff) -> 'a eff
   val error     : AST.l -> string -> 'a eff
 end
 

@@ -23,8 +23,13 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
   let (let+) = I.(>>)
   let (>>>) = fun a b -> a >>= (fun _ -> b)
 
+  let rec traverse (f: 'a -> 'b eff) (xs: 'a list): 'b list eff =
+    match xs with
+    | [] -> pure []
+    | (x::xs) -> f x >>= fun b -> traverse f xs >> fun bs -> b::bs
+
   let traverse_ f a =
-    let+ _ = traverse f a in ()
+    traverse f a >>> unit
 
   let traverse2 (f: 'a -> 'b -> 'c eff) (a: 'a list) (b: 'b list): 'c list eff =
     traverse (fun (a,b) -> f a b) (List.combine a b)
@@ -34,7 +39,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
   let vfalse = V.from_bool false
 
   let branch_ (c: value) (t: 'a eff Lazy.t) (f: 'a eff Lazy.t): unit eff =
-    let to_vunit x = Lazy.map_val (fun _ -> pure vunit) t in
+    let to_vunit x = Lazy.map_val (fun _ -> pure V.unit) t in
     branch c (to_vunit t) (to_vunit f)
     >>> pure ()
 
@@ -355,11 +360,11 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         let* v = eval_expr loc e in
         return v
     | Stmt_ProcReturn(loc) ->
-        return vunit
+        return V.unit
     | Stmt_Assert(e, loc) ->
         let* v = eval_expr loc e in
         branch_ v (* then *)
-          (Lazy.from_val @@ return vunit)
+          (Lazy.from_val @@ return V.unit)
         (* else *)
           (lazy (error loc "assertion failure")) (* runtime error *)
     | Stmt_Unpred(loc) ->
@@ -459,14 +464,14 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           branch g (lazy (eval_stmts b >>> pure vtrue)) (lazy (pure vfalse)))
         in
         let iter_fun (f: 'a -> value eff) (x: 'a): ('a * value) eff =
-          let+ x' = f x in (vunit, x')
+          let+ x' = f x in (V.unit, x')
         in
-        iter (iter_fun f) vunit
+        iter (iter_fun f) V.unit
         >>> unit
     | Stmt_Repeat(b, c, loc) ->
         iter (fun _ ->
           let* () = eval_stmts b in
-          let+ g = eval_expr loc c in (vunit,g)) vunit
+          let+ g = eval_expr loc c in (V.unit,g)) V.unit
         >>> unit
     | Stmt_Try(tb, ev, catchers, odefault, loc) ->
         catch (eval_stmts tb) (fun l ex -> scope (
@@ -532,7 +537,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
             throw l e) >>>
       let* rs = traverse (fun arg ->
         match arg with
-        | Formal_In _ -> pure V.vunit
+        | Formal_In _ -> pure V.unit
         | Formal_InOut (_,arg) -> getVar loc arg
       ) args in
       return (from_tuple rs)

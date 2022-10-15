@@ -112,7 +112,7 @@ and lift_expr (loc: AST.l) (e: expr): AST.expr =
 
 (* Conversion from basic values *)
 
-let rec from_value (v: Value.value) : value =
+let rec from_concrete (loc: AST.l) (v: Value.value) : value =
   match v with
   | Value.VBool i        -> VBool (Left i)
   | Value.VEnum (_,i)    -> VInt (Left (Z.of_int i))
@@ -123,61 +123,25 @@ let rec from_value (v: Value.value) : value =
   | Value.VString i      -> VString (Left i)
   | Value.VRAM a         -> VRAM (Left a)
   | Value.VExc e         -> VExc e
-  | Value.VTuple ts      -> VTuple (List.map from_value ts)
-  | Value.VRecord fs     -> VRecord (Bindings.map from_value fs)
-  | Value.VArray (a,v)   -> VArray (ImmutableArray.map from_value a, from_value v)
-  | Value.VUninitialized ->
-      unsupported Unknown "uninitialized value has insufficient information to build symbolic"
+  | Value.VTuple ts      -> VTuple  (List.map (from_concrete loc) ts)
+  | Value.VRecord fs     -> VRecord (Bindings.map (from_concrete loc) fs)
+  | Value.VArray (a,v)   -> VArray  (ImmutableArray.map (from_concrete loc) a, from_concrete loc v)
+  | Value.VUninitialized -> unsupported loc "from_concrete: insufficient information to build symbolic"
 
-let rec to_value (v: value): Value.value =
+let rec to_concrete (loc: AST.l) (v: value): Value.value =
   match v with
-  | VBool (Left x) -> Value.VBool x
-  | VInt (Left x) -> Value.VInt x
-  | VReal (Left x) -> Value.VReal x
-  | VBits (Left x) -> Value.VBits x
-  | VMask (Left x) -> Value.VMask x
+  | VBool (Left x)   -> Value.VBool x
+  | VInt (Left x)    -> Value.VInt x
+  | VReal (Left x)   -> Value.VReal x
+  | VBits (Left x)   -> Value.VBits x
+  | VMask (Left x)   -> Value.VMask x
   | VString (Left x) -> Value.VString x
-  | VRAM (Left x) -> Value.VRAM x
-  | VExc x -> Value.VExc x
-  | VTuple (vs) -> Value.VTuple (List.map to_value vs)
-  | VRecord (vs) -> Value.VRecord (Bindings.map to_value vs)
-  | VArray (vs,d) -> Value.VArray (ImmutableArray.map to_value vs, to_value d)
-  | _ -> unsupported Unknown "cannot coerce expression value to concrete value"
-
-let rec to_type (v: value): AST.ty =
-  match v with
-  | VBool _ -> Type_Constructor (Ident "boolean")
-  | VInt _ -> Type_Constructor (Ident "integer")
-  | VReal _ -> Type_Constructor (Ident "real")
-  | VBits (Left {n=n; v=v}) -> Type_Bits (Expr_LitInt (string_of_int n))
-  | VBits (Right {n=Left n; v=v}) -> Type_Bits (Expr_LitInt (Z.to_string n))
-  | VBits (Right {n=Right n; v=v}) -> Type_Bits (lift_expr Unknown n)
-  | VMask _ -> Type_Constructor (Ident "__mask")
-  | VString _ -> Type_Constructor (Ident "string")
-  | VRAM _ -> Type_Constructor (Ident "__RAM")
-  | VExc _ -> TC.type_exn
-  | VTuple (vs) -> Type_Tuple (List.map to_type vs)
-  | VArray (vs,d) -> Type_Array (Index_Enum (Ident "dummy"), to_type d)
-  | _ -> Type_Constructor (Ident "unknown")
-  (* | VRecord (vs) -> Value.VRecord (Bindings.map to_value vs)
-) *)
-  (* | _ -> unsupported Unknown "cannot coerce expression value to concrete value" *)
-
-  (*
-let copy_type (v: value): expr -> value =
-  match v with
-  | VBool _ -> fun x -> VBool (Right x)
-  | VInt _ -> fun x -> VInt (Right x)
-  | VReal _ -> fun x -> VReal (Right x)
-  | VBits (Left {n=n; _}) -> fun x -> VBits (Right {n=Left (Z.of_int n); v=x})
-  | VBits (Right {n=n; _}) -> fun x -> VBits (Right {n=n; v=x})
-  | VMask _ -> fun x -> VMask (Right x)
-  | VString _ -> fun x -> VString (Right x)
-  | VRAM _ -> fun x -> VRAM (Right x)
-  (* | VExc _ -> fun x -> VExc (x) *)
-  | VTuple vs -> fun x -> assert false
-  | _ -> assert false
-*)
+  | VRAM (Left x)    -> Value.VRAM x
+  | VExc x           -> Value.VExc x
+  | VTuple (vs)      -> Value.VTuple (List.map (to_concrete loc) vs)
+  | VRecord (vs)     -> Value.VRecord (Bindings.map (to_concrete loc) vs)
+  | VArray (vs, d)   -> Value.VArray (ImmutableArray.map (to_concrete loc) vs, to_concrete loc d)
+  | _                -> unsupported Unknown "to_concrete: cannot coerce expression value to concrete value"
 
 let rec map_expr (f: expr -> expr) (v: value): value =
   match v with
@@ -307,6 +271,8 @@ let sym_and_bits (x: vbits) (y: vbits): vbits =
   let w = sym_width_bits x in
   match x, y with
   | Left x', Left y' -> Left (prim_and_bits x' y')
+  | Left z, y
+  | y, Left z when z.v = Z.zero -> Left z
   | _ -> vcall w "and_bits" [VInt w] [VBits x; VBits y]
 
 let sym_in_mask (x: vbits) (m: mask sym): bool sym =
@@ -400,6 +366,20 @@ let rec sym_eq (loc: AST.l) (x: value) (y: value): bool sym =
       List.fold_left2 (fun b v1 v2 -> sym_and_bool b (sym_eq loc v1 v2)) (Left true) x' y'
   | _ -> symerror loc @@ "matchable scalar types expected. Got " ^ pp_value x ^ " " ^ pp_value y
 
+let rec to_type (loc: AST.l) (v: value): AST.ty =
+  match v with
+  | VBool _        -> Type_Constructor (Ident "boolean")
+  | VInt _         -> Type_Constructor (Ident "integer")
+  | VReal _        -> Type_Constructor (Ident "real")
+  | VBits v        -> Type_Bits (lift_int loc (sym_width_bits v))
+  | VMask _        -> Type_Constructor (Ident "__mask")
+  | VString _      -> Type_Constructor (Ident "string")
+  | VRAM _         -> Type_Constructor (Ident "__RAM")
+  | VExc _         -> TC.type_exn
+  | VTuple (vs)    -> Type_Tuple (List.map (to_type loc) vs)
+  | VArray (vs, d) -> Type_Array (Index_Enum (Ident "dummy"), to_type loc d)
+  | VRecord _      -> Type_Constructor (Ident "unknown")
+
 (* Records *)
 
 let sym_get_field (loc: AST.l) (x: value) (f: AST.ident): value =
@@ -451,13 +431,13 @@ module SymbolicValue : Abstract_interface.Value = struct
   let from_exc x y       : value = VExc (x,y)
   let from_tuple l       : value = VTuple l
 
-  (* Parsers *)
-  let from_intLit    s = from_value (Value.from_intLit s)
-  let from_hexLit    s = from_value (Value.from_hexLit s)
-  let from_realLit   s = from_value (Value.from_realLit s)
-  let from_bitsLit   s = from_value (Value.from_bitsLit s)
-  let from_maskLit   s = from_value (Value.from_maskLit s)
-  let from_stringLit s = from_value (Value.from_stringLit s)
+  (* Parsers: feels like this should go in abtract *)
+  let from_intLit    s = from_concrete Unknown (Value.from_intLit s)
+  let from_hexLit    s = from_concrete Unknown (Value.from_hexLit s)
+  let from_realLit   s = from_concrete Unknown (Value.from_realLit s)
+  let from_bitsLit   s = from_concrete Unknown (Value.from_bitsLit s)
+  let from_maskLit   s = from_concrete Unknown (Value.from_maskLit s)
+  let from_stringLit s = from_concrete Unknown (Value.from_stringLit s)
 
   (* Value Destructors *)
   let to_tuple (loc: AST.l) (x: value): value list =
@@ -476,7 +456,7 @@ module SymbolicValue : Abstract_interface.Value = struct
     | _ -> symerror loc @@ "exception expected. Got " ^ pp_value x
 
   (* Unit *)
-  let vunit = VTuple []
+  let unit = VTuple []
   let is_unit v =
     match v with
     | VTuple [] -> true

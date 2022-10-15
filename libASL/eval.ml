@@ -336,7 +336,7 @@ module Semantics = Abstract.Make(struct
   let to_tuple        = Value.of_tuple
 
   (* Unit *)
-  let vunit     = Value.VTuple []
+  let unit      = Value.VTuple []
   let is_unit v = match v with Value.VTuple [] -> true | _ -> false
 
   (* Bool *)
@@ -382,16 +382,9 @@ end) (struct
   let pure a e = a
   let (>>) a f e = let (r) = a e in (f r)
   let (>>=) a f e = let (r) = a e in f r e
-  let rec traverse f xs e =
-    match xs with
-    | [] -> ([])
-    | (x::xs) ->
-        let (x') = f x e in
-        let (xs') = traverse f xs e in
-        (x'::xs')
 
   (* State *)
-  let reset e = ()
+  let reset = pure ()
   let scope = Env.nest
   let call (b : unit eff) e =
     try

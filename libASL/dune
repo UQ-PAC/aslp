@@ -18,6 +18,6 @@
  (public_name asli.libASL)
  (flags
   (:standard -w -27 -cclib -lstdc++))
- (modules asl_ast asl_parser asl_parser_pp asl_utils asl_visitor cpu elf eval abstract abstract_interface dis symbolic rws monad additional
+ (modules asl_ast asl_parser asl_parser_pp asl_utils asl_visitor cpu elf eval abstract abstract_interface symbolic
    lexer lexersupport loadASL primops tcheck utils value visitor)
  (libraries pprint zarith z3))
