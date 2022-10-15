@@ -11,14 +11,14 @@ module type Value = sig
   type t
 
   (* Value Constructors *)
-  val from_bool      : bool -> t
-  val from_int       : int -> t
-  val from_intLit    : string -> t
-  val from_hexLit    : string -> t
-  val from_realLit   : string -> t
-  val from_bitsLit   : string -> t
-  val from_maskLit   : string -> t
-  val from_stringLit : string -> t
+  val mk_bool   : bool -> t
+  val mk_int    : int -> t
+  val mk_bigint : Z.t -> t
+  val mk_real   : Q.t -> t
+  val mk_bits   : int -> Z.t -> t
+  val mk_mask   : int -> Z.t -> Z.t -> t
+  val mk_string : string -> t
+
   val from_enum      : AST.ident -> int -> t
   val from_exc       : AST.l -> Primops.exc -> t
   val from_tuple     : t list -> t

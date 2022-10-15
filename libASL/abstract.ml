@@ -34,9 +34,74 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
   let traverse2 (f: 'a -> 'b -> 'c eff) (a: 'a list) (b: 'b list): 'c list eff =
     traverse (fun (a,b) -> f a b) (List.combine a b)
 
+  (** String Utilities *)
+  let drop_chars (x: string) (c: char): string =
+    (* First calculate final length *)
+    let len = ref 0 in
+    String.iter (fun t -> if t <> c then len := !len + 1) x;
+
+    (* search for next character not matching c *)
+    let i = ref 0 in
+    let rec next_char (_: int): char =
+        let r = String.get x !i in
+        i := !i + 1;
+        if r = c then next_char 0 else r
+    in
+    (* create result *)
+    String.init !len next_char
+
+  let from_intLit (s: string): value =
+    mk_bigint (Z.of_string s)
+  let from_hexLit (s: string): value =
+    mk_bigint (Z.of_string_base 16 (drop_chars s '_'))
+
+  let from_realLit (x: AST.realLit): value =
+    let pt          = String.index x '.' in
+    let fracsz      = String.length x - pt - 1 in
+    let intpart     = String.sub x 0 pt in
+    let frac        = String.sub x (pt+1) fracsz in
+    let numerator   = Z.of_string (intpart ^ frac) in
+    let denominator = Z.pow (Z.of_int 10) fracsz in
+    mk_real (Q.make numerator denominator)
+
+  let from_bitsLit (x: AST.bitsLit): value =
+    let x' = drop_chars x ' ' in
+    mk_bits (String.length x') (Z.of_string_base 2 x')
+
+  let from_maskLit (x: AST.maskLit): value =
+    let x' = drop_chars x ' ' in
+    let n = String.length x' in
+    let v = String.map (function 'x' -> '0' | c -> c) x' in
+    let m = String.map (function 'x' -> '0' | c -> '1') x' in
+    mk_mask n (Z.of_string_base 2 v) (Z.of_string_base 2 m)
+
+  let from_stringLit (x: string): value =
+    let r = ref "" in
+    let rec unescape (i: int): unit =
+        if i < String.length x then begin
+            let c = String.get x i in
+            if c = '\\' then begin
+                assert (i+1 < String.length x);
+                let c = String.get x (i+1) in
+                if c = '\\' then
+                    r := !r ^ String.make 1 '\\'
+                else if c = 'n' then
+                    r := !r ^ String.make 1 '\n'
+                else
+                    assert false;
+                unescape (i+2)
+            end else begin
+                r := !r ^ String.make 1 c;
+                unescape (i+1)
+            end
+        end
+    in
+    unescape 0;
+    mk_string !r
+
   (** Boolean Utilities *)
-  let vtrue = V.from_bool true
-  let vfalse = V.from_bool false
+  let vtrue = mk_bool true
+  let vfalse = mk_bool false
 
   let branch_ (c: value) (t: 'a eff Lazy.t) (f: 'a eff Lazy.t): unit eff =
     let to_vunit x = Lazy.map_val (fun _ -> pure V.unit) t in
@@ -96,7 +161,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
 
   (** Bitvector Utilities *)
   let extract_bits_int (loc: l) (v: value) (l: int) (w: int): value =
-    extract_bits loc v (from_int l) (from_int w)
+    extract_bits loc v (mk_int l) (mk_int w)
 
   let removeGlobalConsts (ids: IdentSet.t): IdentSet.t eff =
     let+ f = isGlobalConstFilter in
@@ -152,11 +217,11 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     match x with
     | Slice_Single(i) ->
         let+ i' = eval_expr loc i in
-        (i', from_int 1)
+        (i', mk_int 1)
     | Slice_HiLo(hi, lo) ->
         let* hi' = eval_expr loc hi in
         let+ lo' = eval_expr loc lo in
-        (lo', add_int loc (sub_int loc hi' lo') (from_int 1))
+        (lo', add_int loc (sub_int loc hi' lo') (mk_int 1))
     | Slice_LoWd(lo, wd) ->
         let* lo' = eval_expr loc lo in
         let+ wd' = eval_expr loc wd in
@@ -270,7 +335,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
               set_fields n fs' v'
           )
         in
-        eval_lexpr_modify loc l (set_fields (from_int 0) (List.rev fs))
+        eval_lexpr_modify loc l (set_fields (mk_int 0) (List.rev fs))
     | LExpr_Slices(l, ss) ->
         let rec eval (o: value) (ss': slice list) (prev: value): value eff =
           (match ss' with
@@ -281,7 +346,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
               eval (add_int loc o w) ss (insert_bits loc prev i w v)
           )
         in
-        eval_lexpr_modify loc l (eval (from_int 0) (List.rev ss))
+        eval_lexpr_modify loc l (eval (mk_int 0) (List.rev ss))
     | LExpr_BitTuple(ls) ->
         failwith "eval_lexpr: bittuple"
     | LExpr_Tuple(ls) ->
@@ -443,8 +508,8 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           branch c (* then *)
             (lazy (scope (addLocalVar loc v i >>> eval_stmts b) >>>
             let i' = (match dir with
-            | Direction_Up   -> add_int loc i (from_int 1)
-            | Direction_Down -> sub_int loc i (from_int 1)
+            | Direction_Up   -> add_int loc i (mk_int 1)
+            | Direction_Down -> sub_int loc i (mk_int 1)
             ) in
             pure (from_tuple [i'; vtrue])))
           (* else *)

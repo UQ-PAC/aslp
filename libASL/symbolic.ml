@@ -425,19 +425,17 @@ module SymbolicValue : Abstract_interface.Value = struct
   type t = value
 
   (* Value Constructors *)
-  let from_bool (x: bool): value = VBool (Left x)
-  let from_int  (x: int) : value = VInt (Left (Z.of_int x))
+  let mk_bool (x: bool): value                  = VBool (Left x)
+  let mk_int (x: int): value                    = VInt (Left (Z.of_int x))
+  let mk_bigint (x: Z.t): value                 = VInt (Left x)
+  let mk_real (x: Q.t): value                   = VReal (Left x)
+  let mk_bits (n: int) (v: Z.t): value          = VBits (Left (mkBits n v))
+  let mk_mask (n: int) (v: Z.t) (m: Z.t): value = VMask (Left (mkMask n v m))
+  let mk_string (x: string): value              = VString (Left x)
+
   let from_enum x y      : value = VInt (Left (Z.of_int y))
   let from_exc x y       : value = VExc (x,y)
   let from_tuple l       : value = VTuple l
-
-  (* Parsers: feels like this should go in abtract *)
-  let from_intLit    s = from_concrete Unknown (Value.from_intLit s)
-  let from_hexLit    s = from_concrete Unknown (Value.from_hexLit s)
-  let from_realLit   s = from_concrete Unknown (Value.from_realLit s)
-  let from_bitsLit   s = from_concrete Unknown (Value.from_bitsLit s)
-  let from_maskLit   s = from_concrete Unknown (Value.from_maskLit s)
-  let from_stringLit s = from_concrete Unknown (Value.from_stringLit s)
 
   (* Value Destructors *)
   let to_tuple (loc: AST.l) (x: value): value list =

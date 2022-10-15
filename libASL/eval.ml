@@ -318,14 +318,14 @@ module Semantics = Abstract.Make(struct
   type t = Value.value
 
   (* Value Constructors *)
-  let from_bool b    = Value.VBool b
-  let from_int i     = Value.VInt (Z.of_int i)
-  let from_intLit    = Value.from_intLit
-  let from_hexLit    = Value.from_hexLit
-  let from_realLit   = Value.from_realLit
-  let from_bitsLit   = Value.from_bitsLit
-  let from_maskLit   = Value.from_maskLit
-  let from_stringLit = Value.from_stringLit
+  let mk_bool b     = Value.VBool b
+  let mk_int i      = Value.VInt (Z.of_int i)
+  let mk_bigint i   = Value.VInt i
+  let mk_real q     = Value.VReal q
+  let mk_bits n v   = Value.VBits (Primops.mkBits n v)
+  let mk_mask n v m = Value.VMask (Primops.mkMask n v m)
+  let mk_string s   = Value.VString s
+
   let from_enum e i  = Value.VEnum (e, i)
   let from_exc loc e = Value.VExc (loc, e)
   let from_tuple     = Value.to_tuple
