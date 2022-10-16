@@ -106,6 +106,9 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
   let branch_ (c: value) (t: unit eff) (f: unit eff): unit eff =
     branch c (t >> fun _ -> V.unit) (f >> fun _ -> V.unit) >>> pure ()
 
+  let iter_ (body: value eff): unit eff =
+    iter (fun _ -> let+ c = body in (V.unit,c)) V.unit >>> pure ()
+
   let short_and (x: value eff) (y: value eff): value eff =
     let* c = x in branch c y (pure vfalse)
 
@@ -199,7 +202,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | Pat_Const(c)   -> getGlobalConst c >> eq loc v
     | Pat_Wildcard   -> pure vtrue
     | Pat_Tuple(ps) ->
-        let vs = to_tuple loc v in
+        let vs = get_tuple loc v in
         assert (List.length vs = List.length ps);
         for_all2 (eval_pattern loc) vs ps
     | Pat_Set(ps) ->
@@ -291,7 +294,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         end
     | Expr_Tuple(es) ->
         let+ vs = eval_exprs loc es in
-        from_tuple vs
+        mk_tuple vs
     | Expr_Unop(op, e) ->
         error loc @@ "unary operation should have been removed" (* static error *)
     | Expr_Unknown(t) ->
@@ -348,7 +351,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | LExpr_BitTuple(ls) ->
         failwith "eval_lexpr: bittuple"
     | LExpr_Tuple(ls) ->
-        let rs = to_tuple loc r in
+        let rs = get_tuple loc r in
         assert (List.length ls = List.length rs);
         let+ _ = traverse2 (eval_lexpr loc) ls rs in
         ()
@@ -448,10 +451,10 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         throw loc Exc_Undefined
     | Stmt_See(e, loc) ->
         let* v = eval_expr loc e in
-        throw loc @@ Exc_SEE (to_string loc v)
+        throw loc @@ Exc_SEE (get_string loc v)
     | Stmt_Throw(v, loc) ->
         let* v = getVar loc v in
-        let (l,e) = to_exc loc v in
+        let (l,e) = get_exc loc v in
         throw l e
     | Stmt_DecodeExecute(i, e, loc) ->
         let* dec = getDecoder i in
@@ -501,41 +504,31 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         let body i =
           let c = (match dir with
           | Direction_Up   -> leq_int loc i stop'
-          | Direction_Down -> leq_int loc stop' i
-          ) in
-          branch c (* then *)
+          | Direction_Down -> leq_int loc stop' i) in
+          let+ i = branch c (* then *)
             (scope (addLocalVar loc v i >>> eval_stmts b) >>>
-            let i' = (match dir with
+            pure (match dir with
             | Direction_Up   -> add_int loc i (mk_int 1)
-            | Direction_Down -> sub_int loc i (mk_int 1)
-            ) in
-            pure (from_tuple [i'; vtrue]))
+            | Direction_Down -> sub_int loc i (mk_int 1)))
           (* else *)
-            (pure (from_tuple [i; vfalse]))
+            (pure i)
+          in (i,c)
         in
-        let iter_fun (f: value -> value eff) (x: value): (value * value) eff =
-          let+ x' = f x in
-          match to_tuple Unknown x' with
-          | [i; c] -> (i, c)
-          | _ -> failwith "a"
-        in
-        let+ _ = iter (iter_fun body) start' in
+        let+ f = iter body start' in
         ()
     | Stmt_While(c, b, loc) ->
-        let f = (fun _ ->
+        let body =
           let* g = eval_expr loc c in
-          branch g (eval_stmts b >>> pure vtrue) (pure vfalse))
+          branch_ g (eval_stmts b) unit >>>
+          pure g
         in
-        let iter_fun (f: 'a -> value eff) (x: 'a): ('a * value) eff =
-          let+ x' = f x in (V.unit, x')
-        in
-        iter (iter_fun f) V.unit
-        >>> unit
+        iter_ body
     | Stmt_Repeat(b, c, loc) ->
-        iter (fun _ ->
+        let body =
           let* () = eval_stmts b in
-          let+ g = eval_expr loc c in (V.unit,g)) V.unit
-        >>> unit
+          eval_expr loc c
+        in
+        iter_ body
     | Stmt_Try(tb, ev, catchers, odefault, loc) ->
         catch (eval_stmts tb) (fun l ex -> scope (
           let rec eval cs =
@@ -548,7 +541,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
                 let* c = eval_expr loc c in
                 branch_ c (eval_stmts b) (eval cs')
           in
-          addLocalVar loc ev (from_exc l ex) >>>
+          addLocalVar loc ev (mk_exc l ex) >>>
           eval catchers) )
 
   (** Evaluate call to function or procedure *)
@@ -603,10 +596,10 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         | Formal_In _ -> pure V.unit
         | Formal_InOut (_,arg) -> getVar loc arg
       ) args in
-      return (from_tuple rs)
+      return (mk_tuple rs)
     ) in
     let upd r e = if is_unit r then unit else let* lexpr = expr_to_lexpr loc e in eval_lexpr loc lexpr r in
-    let out = to_tuple loc rs in
+    let out = get_tuple loc rs in
     if List.length out > 0 then begin
       assert (List.length out = List.length es');
       let* _ = traverse2 upd out es' in unit
@@ -726,7 +719,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         new_array v
     | Type_Tuple(tys) ->
         let+ vs = traverse (eval_unknown loc) tys in
-        from_tuple vs
+        mk_tuple vs
 
   (** Construct environment from global declarations *)
   let build_evaluation_environment (ds: declaration list): unit eff = begin
@@ -742,7 +735,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           let evs = if qid = Ident "boolean" then begin (* optimized special case *)
             [ (Ident "FALSE", vfalse); (Ident "TRUE", vtrue) ]
           end else begin
-            List.mapi (fun i e -> (e, from_enum e i)) es;
+            List.mapi (fun i e -> (e, mk_enum e i)) es;
           end
           in
           traverse_ (fun (e, v) -> addGlobalConst e v) evs >>>

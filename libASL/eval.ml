@@ -322,14 +322,14 @@ module Semantics = Abstract.Make(struct
   let mk_mask n v m = Value.VMask (Primops.mkMask n v m)
   let mk_string s   = Value.VString s
 
-  let from_enum e i  = Value.VEnum (e, i)
-  let from_exc loc e = Value.VExc (loc, e)
-  let from_tuple     = Value.to_tuple
+  let mk_enum e i  = Value.VEnum (e, i)
+  let mk_exc loc e = Value.VExc (loc, e)
+  let mk_tuple     = Value.to_tuple
 
   (* Value Destructors *)
-  let to_string loc v = Value.to_string loc v
-  let to_exc loc v    = Value.to_exc loc v
-  let to_tuple        = Value.of_tuple
+  let get_string loc v = Value.to_string loc v
+  let get_exc loc v    = Value.to_exc loc v
+  let get_tuple        = Value.of_tuple
 
   (* Unit *)
   let unit      = Value.VTuple []

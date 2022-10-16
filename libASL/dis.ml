@@ -767,23 +767,22 @@ struct
   let mk_bits (n: int) (v: Z.t): value          = VBits (Left (Primops.mkBits n v))
   let mk_mask (n: int) (v: Z.t) (m: Z.t): value = VMask (Left (Primops.mkMask n v m))
   let mk_string (x: string): value              = VString (Left x)
-
-  let from_enum x y      : value = VInt (Left (Z.of_int y))
-  let from_exc x y       : value = VExc (x,y)
-  let from_tuple l       : value = VTuple l
+  let mk_enum x y      : value = VInt (Left (Z.of_int y))
+  let mk_exc x y       : value = VExc (x,y)
+  let mk_tuple l       : value = VTuple l
 
   (* Value Destructors *)
-  let to_tuple (loc: AST.l) (x: value): value list =
+  let get_tuple (loc: AST.l) (x: value): value list =
     match x with
     | VTuple xs -> xs
     | _ -> symerror loc @@ "tuple expected. Got " ^ pp_value x
-  let to_string (loc: AST.l) (x: value): string =
+  let get_string (loc: AST.l) (x: value): string =
     match x with
     | VString (Left v) -> v
     | VString (Right e) ->
         unsupported loc @@ "can't convert symbolic string to concrete value. Got " ^ pp_value x
     | _ -> symerror loc @@ "string expected. Got " ^ pp_value x
-  let to_exc (loc: AST.l) (x: value): (AST.l * Primops.exc) =
+  let get_exc (loc: AST.l) (x: value): (AST.l * Primops.exc) =
     match x with
     | VExc v -> v
     | _ -> symerror loc @@ "exception expected. Got " ^ pp_value x

@@ -20,15 +20,14 @@ module type Value = sig
   val mk_bits   : int -> Z.t -> t
   val mk_mask   : int -> Z.t -> Z.t -> t
   val mk_string : string -> t
-
-  val from_enum      : AST.ident -> int -> t
-  val from_exc       : AST.l -> Primops.exc -> t
-  val from_tuple     : t list -> t
+  val mk_enum   : AST.ident -> int -> t
+  val mk_exc    : AST.l -> Primops.exc -> t
+  val mk_tuple  : t list -> t
 
   (* Value Destructors *)
-  val to_tuple  : AST.l -> t -> t list
-  val to_string : AST.l -> t -> string
-  val to_exc    : AST.l -> t -> (AST.l * Primops.exc)
+  val get_tuple  : AST.l -> t -> t list
+  val get_string : AST.l -> t -> string
+  val get_exc    : AST.l -> t -> (AST.l * Primops.exc)
 
   (* Unit *)
   val unit    : t
