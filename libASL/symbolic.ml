@@ -13,9 +13,10 @@ exception UnsupportedError of (AST.l * string)
 let symerror loc err = raise (SymbolicError (loc, err))
 let unsupported loc err = raise (UnsupportedError (loc, err))
 
+
 type 'a sym = ('a, expr) Either.t
-and sbitvector = {n: Z.t sym; v: expr}
-and vbits = (bitvector, sbitvector) Either.t
+and eint = {sign: bool; min: vint; max: vint; width: vint; value: expr}
+and vint = (bitvector, eint) Either.t
 and expr =
   | ECall of (AST.ident * value list * value list)
   | EVar of AST.ident
@@ -23,9 +24,8 @@ and expr =
   | EUnknown
 and value =
   | VBool   of bool sym
-  | VInt    of Z.t sym
+  | VInt    of vint
   | VReal   of real sym
-  | VBits   of vbits
   | VMask   of mask sym
   | VString of string sym
   | VRAM    of ram sym
@@ -34,7 +34,7 @@ and value =
   | VRecord of (value Bindings.t)
   | VArray  of (value ImmutableArray.t * value)
 and access =
-  | CArray of (Z.t sym)
+  | CArray of vint
   | CTuple of (int)
   | CField of (AST.ident)
 
@@ -49,17 +49,18 @@ and pp_expr (x: expr): string =
   | EAccess (e,CTuple i) -> pp_expr e ^ "(" ^ string_of_int i ^ ")"
   | EAccess (e,CField f) -> pp_expr e ^ "." ^ AST.pprint_ident f
   | EUnknown -> "UNINITIALIZED"
-and pp_int (x: Z.t sym): string = Either.fold ~left:prim_cvt_int_decstr ~right:pp_expr x
+and pp_int (x: vint): string = 
+  match x with
+  | Left v -> prim_cvt_bits_str (Z.of_int v.n) v
+  | Right n -> pp_expr n.value
 and pp_value (x: value): string =
   match x with
   | VInt  n -> pp_int n
   | VBool (Left n)    -> prim_cvt_bool_str n
   | VReal (Left n)    -> prim_cvt_real_str n
-  | VBits (Left n)    -> prim_cvt_bits_str (Z.of_int n.n) n
   | VString (Left n)  -> "\"" ^ n ^ "\""
   | VBool (Right n)   -> pp_expr n
   | VReal (Right n)   -> pp_expr n
-  | VBits (Right n)   -> pp_expr n.v
   | VString (Right n) -> pp_expr n
   | VMask   m         -> "todo: mask"
   | VExc (loc, exc)   ->
@@ -95,10 +96,10 @@ let rec to_expr (loc: AST.l) (v: value): AST.expr =
   | VBits (Right n)   -> lift_expr loc  n.v
   | VString (Right n) -> lift_expr loc  n
   | _ -> unsupported loc @@ "casting unhandled value type to expression: " ^ pp_value v
-and lift_int (loc: AST.l) (i: Z.t sym): AST.expr =
+and lift_int (loc: AST.l) (i: vint): AST.expr =
   match i with
-  | Left i -> AST.Expr_LitInt(Z.to_string i)
-  | Right i -> lift_expr loc  i
+  | Left i -> AST.Expr_LitInt(Z.to_string i) (*AST.Expr_LitBits(Z.format ("%0" ^"b") i)*)
+  | Right i -> lift_expr loc i.e
 and lift_expr (loc: AST.l) (e: expr): AST.expr =
   match e with
   | ECall (FIdent("extract_bits",0), _, [v; lo; wd]) ->
@@ -110,60 +111,17 @@ and lift_expr (loc: AST.l) (e: expr): AST.expr =
   | EAccess (e,CField f) -> AST.Expr_Field (lift_expr loc e,f)
   | EUnknown -> unsupported loc @@ "unknown expression"
 
-(* Conversion from basic values *)
+let mk_bigint (x: Z.t) =
+  Either.Left x
 
-let rec from_concrete (loc: AST.l) (v: Value.value) : value =
-  match v with
-  | Value.VBool i        -> VBool (Left i)
-  | Value.VEnum (_,i)    -> VInt (Left (Z.of_int i))
-  | Value.VInt i         -> VInt (Left i)
-  | Value.VReal i        -> VReal (Left i)
-  | Value.VBits i        -> VBits (Left i)
-  | Value.VMask i        -> VMask (Left i)
-  | Value.VString i      -> VString (Left i)
-  | Value.VRAM a         -> VRAM (Left a)
-  | Value.VExc e         -> VExc e
-  | Value.VTuple ts      -> VTuple  (List.map (from_concrete loc) ts)
-  | Value.VRecord fs     -> VRecord (Bindings.map (from_concrete loc) fs)
-  | Value.VArray (a,v)   -> VArray  (ImmutableArray.map (from_concrete loc) a, from_concrete loc v)
-  | Value.VUninitialized -> unsupported loc "from_concrete: insufficient information to build symbolic"
-
-let rec to_concrete (loc: AST.l) (v: value): Value.value =
-  match v with
-  | VBool (Left x)   -> Value.VBool x
-  | VInt (Left x)    -> Value.VInt x
-  | VReal (Left x)   -> Value.VReal x
-  | VBits (Left x)   -> Value.VBits x
-  | VMask (Left x)   -> Value.VMask x
-  | VString (Left x) -> Value.VString x
-  | VRAM (Left x)    -> Value.VRAM x
-  | VExc x           -> Value.VExc x
-  | VTuple (vs)      -> Value.VTuple (List.map (to_concrete loc) vs)
-  | VRecord (vs)     -> Value.VRecord (Bindings.map (to_concrete loc) vs)
-  | VArray (vs, d)   -> Value.VArray (ImmutableArray.map (to_concrete loc) vs, to_concrete loc d)
-  | _                -> unsupported Unknown "to_concrete: cannot coerce expression value to concrete value"
-
-let rec map_expr (f: expr -> expr) (v: value): value =
-  match v with
-  | VBool (Right e)         -> VBool (Right (f e))
-  | VInt  (Right e)         -> VInt  (Right (f e))
-  | VReal (Right e)         -> VReal (Right (f e))
-  | VBits (Right {n=n;v=e}) -> VBits (Right {n=n; v=f e})
-  | VString (Right e)       -> VString (Right (f e))
-  | VRAM (Right e)          -> VRAM (Right (f e))
-  | VTuple vs               -> VTuple (List.map (map_expr f) vs)
-  | VRecord bs              -> VRecord (Bindings.map (map_expr f) bs)
-  | VArray (a,d)            -> VArray (ImmutableArray.map (map_expr f) a, map_expr f d)
-  | _                       -> v
-
-let subst_expr (e: expr) (v: value): value =
-  map_expr (fun _ -> e) v
+let mk_int (x: int) =
+  mk_bigint (Z.of_int x)
 
 (* Modify the base expr of a value, collecting the access chain required to reach it *)
 let rec map_base_expr (f: access list -> expr -> expr) (r: access list) (v: value): value =
   match v with
   | VBool (Right e)         -> VBool (Right (f r e))
-  | VInt  (Right e)         -> VInt  (Right (f r e))
+  | VInt  (Right e)         -> VInt  (Right ({s=e.s; min=e.min; max=e.max; w=e.w; e=f r e.e}))
   | VReal (Right e)         -> VReal (Right (f r e))
   | VBits (Right {n=n;v=e}) -> VBits (Right {n=n; v=f r e})
   | VString (Right e)       -> VString (Right (f r e))
@@ -171,7 +129,7 @@ let rec map_base_expr (f: access list -> expr -> expr) (r: access list) (v: valu
   | VTuple vs               -> VTuple (List.mapi (fun k -> map_base_expr f (CTuple k::r)) vs)
   | VRecord bs              -> VRecord (Bindings.mapi (fun k -> map_base_expr f (CField k::r)) bs)
   | VArray (a,d)            -> VArray (ImmutableArray.mapi (fun k -> 
-      map_base_expr f (CArray (Left (Z.of_int k))::r)) a, map_base_expr f r d)
+      map_base_expr f (CArray (mk_int k)::r)) a, map_base_expr f r d)
   | _                       -> v
 
 (** Build a chained access expression, given a list order by outer most access first *)
@@ -190,7 +148,7 @@ let to_bool (loc: AST.l) (x: value): bool sym =
   | VBool b -> b
   | _ -> symerror loc @@ "boolean expected.  Got " ^ pp_value x
 
-let to_int (loc: AST.l) (x: value): Z.t sym =
+let to_int (loc: AST.l) (x: value): vint =
   match x with
   | VInt b -> b
   | _ -> symerror loc @@ "integer expected.  Got " ^ pp_value x
@@ -232,21 +190,66 @@ let sym_eq_bool (x: bool sym) (y: bool sym): bool sym =
 
 (* Integer *)
 
-let zero: Z.t sym = Left (Z.zero)
+let zero: vint = Left (Z.zero)
 
-let sym_add_int (x: Z.t sym) (y: Z.t sym): Z.t sym =
+let int_max (x: vint): Z.t =
+  match x with
+  | Left x -> x
+  | Right n -> match n.max with Some v -> v | _ -> unsupported Unknown "huh"
+
+let int_min (x: vint): Z.t =
+  match x with
+  | Left x -> x
+  | Right n -> match n.min with Some v -> v | _ -> unsupported Unknown "huh"
+
+let int_sign (x: vint): bool =
+  match x with
+  | Left x -> Z.lt x Z.zero
+  | Right n -> n.s
+
+let find_bitrep (sign: bool) (max: Z.t) (min: Z.t) =
+  assert (Z.geq max min);
+  if not sign then begin
+    assert (Z.geq min Z.zero);
+    ( Z.of_int (Z.log2up (Z.succ max)))
+  end else begin
+    let neg = if Z.leq min Z.zero then Z.of_int ((Z.log2up (Z.neg min)) + 1) else Z.zero in
+    let pos = if Z.leq Z.zero max then Z.of_int ((Z.log2up (Z.succ max)) + 1) else Z.zero in
+    ( Z.max neg pos)
+  end
+
+let ecall f te e = ECall (FIdent (f, 0), te, e)
+
+let cast_int (x: vint) (s: bool) (w: Z.t): vint =
+  let n = VInt (mk_bigint w) in
+  match x with
+  | Left x -> Left x
+  | Right r -> 
+      if w <= r.w then Right r else
+      let f = if r.s then "SignExtend" else "ZeroExtend" in
+      Right {s; min=r.min; max=r.max; w; e=ECall (FIdent (f, 0), [VInt (mk_bigint r.w); n], [VInt x; n])}
+
+let sym_add_int (x: vint) (y: vint): vint =
   match x, y with
-  | Left x', Left y' -> Left (Z.add x' y')
-  | Left x, y
-  | y, Left x when x = Z.zero -> y
-  | _ -> call "add_int" [] [VInt x; VInt y]
+  | Left x', Left y' -> mk_bigint (prim_add_int x' y')
+  | _ -> 
+      let max = Z.max (Z.max (int_max x) (int_max y)) (Z.add (int_max x) (int_max y)) in
+      let min = Z.min (Z.min (int_min x) (int_min y)) (Z.add (int_min x) (int_min y)) in
+      let s = Z.lt min Z.zero || int_sign x || int_sign y in
+      let w = find_bitrep s max min in
+      Right {s; min=Some(min); max=Some(max); w; e=ecall "add_bits" [VInt (mk_bigint w)] [VInt (cast_int x s w); VInt (cast_int y s w)]}
 
-let sym_sub_int (x: Z.t sym) (y: Z.t sym): Z.t sym =
+let sym_sub_int (x: vint) (y: vint): vint =
   match x, y with
-  | Left x', Left y' -> Left (Z.sub x' y')
-  | y, Left x when x = Z.zero -> y
-  | _ -> call "sub_int" [] [VInt x; VInt y]
+  | Left x', Left y' -> mk_bigint (prim_sub_int x' y')
+  | _ -> 
+      let max = Z.max (Z.max (int_max x) (int_max y)) (Z.sub (int_max x) (int_min y)) in
+      let min = Z.min (Z.min (int_min x) (int_min y)) (Z.sub (int_min x) (int_max y)) in
+      let s = Z.lt min Z.zero || int_sign x || int_sign y in
+      let w = find_bitrep s max min in
+      Right {s; min=Some(min); max=Some(max); w; e=ecall "sub_bits" [VInt (mk_bigint w)] [VInt (cast_int x s w); VInt (cast_int y s w)]}
 
+(*
 let sym_mul_int (x: Z.t sym) (y: Z.t sym): Z.t sym =
   match x, y with
   | Left x', Left y' -> Left (Z.mul x' y')
@@ -255,20 +258,31 @@ let sym_mul_int (x: Z.t sym) (y: Z.t sym): Z.t sym =
   | x, Left n
   | Left n, x when Z.equal n Z.one -> x
   | _ -> call "mul_int" [] [VInt x; VInt y]
+*)
 
-let sym_leq_int (x: Z.t sym) (y: Z.t sym): bool sym =
+let sym_le_int (x: vint) (y: vint): bool sym =
   match x, y with
   | Left x', Left y' -> Left (Z.leq x' y')
-  | _ -> call "leq_int" [] [VInt x; VInt y]
+  | _ -> 
+      let max = Z.max (int_max x) (int_max y) in
+      let min = Z.min (int_min x) (int_min y) in
+      let s = Z.lt min Z.zero || int_sign x || int_sign y in
+      let w = find_bitrep s max min in
+      call "le_bits" [VInt (mk_bigint w)] [VInt (cast_int x s w); VInt (cast_int y s w)]
 
-let sym_eq_int (x: Z.t sym) (y: Z.t sym): bool sym =
+let sym_eq_int (x: vint) (y: vint): bool sym =
   match x, y with
   | Left x', Left y' -> Left (Z.equal x' y')
-  | _ -> call "eq_int" [] [VInt x; VInt y]
+  | _ -> 
+      let max = Z.max (int_max x) (int_max y) in
+      let min = Z.min (int_min x) (int_min y) in
+      let s = Z.lt min Z.zero || int_sign x || int_sign y in
+      let w = find_bitrep s max min in
+      call "eq_bits" [VInt (mk_bigint w)] [VInt (cast_int x s w); VInt (cast_int y s w)]
 
 (* Bitvector *)
 
-let sym_width_bits (x: vbits): Z.t sym =
+let sym_width_bits (x: vbits): vint =
   match x with
   | Left x' -> Left (Z.of_int x'.n)
   | Right x' -> x'.n
@@ -310,7 +324,7 @@ let sym_append_bits (x: vbits) (y: vbits): vbits =
   | _ ->
       vcall w "append_bits" [VInt xw; VInt yw] [VBits x; VBits y]
 
-let rec sym_extract_bits (x: vbits) (lo: Z.t sym) (wd: Z.t sym): vbits =
+let rec sym_extract_bits (x: vbits) (lo: vint) (wd: vint): vbits =
   match x, lo, wd with
   | _, _, Left i when i <= Z.zero ->
       Left empty_bits
@@ -320,9 +334,9 @@ let rec sym_extract_bits (x: vbits) (lo: Z.t sym) (wd: Z.t sym): vbits =
       sym_extract_bits x' (sym_add_int lo' lo) wd
   | Right {n=_; v=ECall (FIdent ("append_bits", 0), _, [VBits x1; VBits x2])}, _, _ ->
       let t2 = sym_width_bits x2 in
-      if sym_leq_int t2 lo = Left true then
+      if sym_le_int t2 lo = Left true then
         sym_extract_bits x1 (sym_sub_int lo t2) wd
-      else if sym_leq_int (sym_add_int lo wd) t2 = Left true then
+      else if sym_le_int (sym_add_int lo wd) t2 = Left true then
         sym_extract_bits x2 lo wd
       else
         let w2 = sym_sub_int t2 lo in
@@ -337,7 +351,7 @@ let sym_concat_bits (xs: vbits list): vbits =
   | [] -> Left empty_bits
   | x::xs -> List.fold_left sym_append_bits x xs
 
-let sym_insert_bits (x: vbits) (lo: Z.t sym) (wd: Z.t sym) (y: vbits): vbits =
+let sym_insert_bits (x: vbits) (lo: vint) (wd: vint) (y: vbits): vbits =
   let yw = match sym_width_bits y with Left v -> Either.Left v | _ -> wd in
   match x, lo, yw, y with
   | Left x', Left lo', Left yw', Left y' -> Left (prim_insert x' lo' yw' y')
@@ -346,10 +360,46 @@ let sym_insert_bits (x: vbits) (lo: Z.t sym) (wd: Z.t sym) (y: vbits): vbits =
       let up = sym_add_int lo yw in
       sym_concat_bits [sym_extract_bits x up (sym_sub_int xw up); y; sym_extract_bits x zero lo]
 
-let sym_int_to_bits (x: Z.t sym) (lo: Z.t sym) (wd: Z.t sym): vbits =
+let int_to_bits (x: vint) (w: vint): vbits =
+  match x, w with
+  | Left x, Left w  -> Left {n=Z.to_int w; v=x}
+  | Left x, Right w -> failwith ""
+  | Right r, _      -> Right {n=Left (r.w); v=r.e}
+
+let sym_int_to_bits (x: vint) (lo: vint) (wd: vint): vbits =
+  sym_extract_bits (int_to_bits x (sym_add_int lo wd)) lo wd
+
+  (*
   match x, lo, wd with
   | Left x', Left lo', Left wd' -> Left (prim_extract_int x' lo' wd')
   | _ -> vcall wd "extract_bits" [] [VInt x; VInt lo; VInt wd]
+  *)
+
+let sym_cvt_int_bits (x: vint) (y: vint): vbits =
+  sym_extract_bits (int_to_bits x y) (mk_int 0) y
+
+let sym_cvt_bits_uint (x: vbits): vint =
+  match x with
+  | Left x -> Left (prim_cvt_bits_uint x)
+  | Right e -> 
+      match sym_width_bits x with
+      | Left w ->
+          let max = Some (Z.pred (Z.shift_left Z.one (Z.to_int w))) in
+          Right {s=false; min=Some (Z.zero); max; w; e=e.v}
+      | Right _ -> unsupported Unknown "cast of bitvector with unknown length to integer"
+
+let sym_cvt_bits_sint (x: vbits): vint =
+  match x with
+  | Left x -> Left (prim_cvt_bits_sint x)
+  | Right e -> 
+      match sym_width_bits x with
+      | Left w ->
+          let w' = Z.to_int w - 1 in
+          let max = Some (Z.pred (Z.shift_left Z.one w')) in
+          let min = Some (Z.neg (Z.shift_left Z.one w')) in
+          Right {s=true; min; max; w; e=e.v}
+      | Right _ -> unsupported Unknown "cast of bitvector with unknown length to integer"
+
 
 (* Real *)
 
@@ -395,7 +445,7 @@ let rec to_type (loc: AST.l) (v: value): AST.ty =
 let copy_scalar_type (e: expr) (v: value): value =
   match v with
   | VBool _         -> VBool (Right e)
-  | VInt  _         -> VInt  (Right e)
+  | VInt  _         -> VInt (Right {s=true; min=None; max=None; w=Z.zero; e=e})
   | VReal _         -> VReal (Right e)
   | VBits v         -> VBits (Right {n=sym_width_bits v; v=e})
   | VString _       -> VString (Right e)

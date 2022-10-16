@@ -20,8 +20,13 @@ let bool_expr (b: bool): AST.expr = AST.Expr_Var(if b then Ident "TRUE" else Ide
 let sym_pure_prim (f: string) (tvs: value list) (vs: value list): value option =
 let open Primops in
 let f' : type a. a Symbolic.sym = Either.Right (ECall (FIdent (f,0), tvs, vs)) in
-let b' : Z.t Symbolic.sym -> vbits = fun n -> Right {n=n; v=ECall (FIdent (f,0), tvs, vs)} in
+let b' : vint -> vbits = fun n -> Right {n=n; v=ECall (FIdent (f,0), tvs, vs)} in
 ( match (f, tvs, vs) with
+| ("add_int",           [      ], [VInt  x; VInt  y    ])     -> Some (VInt    (sym_add_int    x y))
+| ("cvt_bits_uint",     [VInt n], [VBits x             ])     -> Some (VInt    (sym_cvt_bits_uint x))
+| ("cvt_bits_sint",     [VInt n], [VBits x             ])     -> Some (VInt    (sym_cvt_bits_sint x))
+| ("eq_int",            [      ], [VInt  x; VInt  y    ])     -> Some (VBool   (sym_eq_int x y))
+
 | ("eq_enum",           [      ], [VInt (Left x); VInt (Left y)    ])     -> Some (VBool   (Left(x = y)))
 | ("eq_enum",           [      ], [VInt _       ; VInt _           ])     -> Some (VBool   (f'))
 | ("eq_enum",           [      ], [VBool (Left x); VBool (Left y)    ])     -> Some (VBool   (Left(x = y)))
@@ -38,8 +43,6 @@ let b' : Z.t Symbolic.sym -> vbits = fun n -> Right {n=n; v=ECall (FIdent (f,0),
 | ("equiv_bool",        [      ], [VBool _       ; VBool _           ])     -> Some (VBool   (f'))
 | ("not_bool",          [      ], [VBool (Left x)             ])     -> Some (VBool   (Left(prim_not_bool x)))
 | ("not_bool",          [      ], [VBool _                    ])     -> Some (VBool   (f'))
-| ("eq_int",            [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VBool   (Left(prim_eq_int     x y)))
-| ("eq_int",            [      ], [VInt  _       ; VInt  _           ])     -> Some (VBool   (f'))
 | ("ne_int",            [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VBool   (Left(prim_ne_int     x y)))
 | ("ne_int",            [      ], [VInt  _       ; VInt  _           ])     -> Some (VBool   (f'))
 | ("le_int",            [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VBool   (Left(prim_le_int     x y)))
@@ -53,33 +56,18 @@ let b' : Z.t Symbolic.sym -> vbits = fun n -> Right {n=n; v=ECall (FIdent (f,0),
 | ("is_pow2_int",       [      ], [VInt  (Left x)             ])     -> Some (VBool   (Left(prim_is_pow2_int x)))
 | ("is_pow2_int",       [      ], [VInt  _                    ])     -> Some (VBool   (f'))
 | ("neg_int",           [      ], [VInt  (Left x)             ])     -> Some (VInt    (Left(prim_neg_int    x)))
-| ("neg_int",           [      ], [VInt  _                    ])     -> Some (VInt    (f'))
-| ("add_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_add_int    x y)))
-| ("add_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("sub_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_sub_int    x y)))
-| ("sub_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("shl_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_shl_int    x y)))
-| ("shl_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("shr_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_shr_int    x y)))
-| ("shr_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("mul_int",           [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_mul_int    x y)))
-| ("mul_int",           [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("zdiv_int",          [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_zdiv_int   x y)))
-| ("zdiv_int",          [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("zrem_int",          [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_zrem_int   x y)))
-| ("zrem_int",          [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("fdiv_int",          [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_fdiv_int   x y)))
-| ("fdiv_int",          [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("frem_int",          [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_frem_int   x y)))
-| ("frem_int",          [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("mod_pow2_int",      [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_mod_pow2_int x y)))
-| ("mod_pow2_int",      [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("align_int",         [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_align_int    x y)))
-| ("align_int",         [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("pow2_int",          [      ], [VInt  (Left x)             ])     -> Some (VInt    (Left(prim_pow2_int     x)))
-| ("pow2_int",          [      ], [VInt  _                    ])     -> Some (VInt    (f'))
 | ("pow_int_int",       [      ], [VInt  (Left x); VInt  (Left y)    ])     -> Some (VInt    (Left(prim_pow_int_int  x y)))
-| ("pow_int_int",       [      ], [VInt  _       ; VInt  _           ])     -> Some (VInt    (f'))
 | ("cvt_int_real",      [      ], [VInt (Left x)              ])     -> Some (VReal   (Left(prim_cvt_int_real x)))
 | ("cvt_int_real",      [      ], [VInt _                     ])     -> Some (VReal   (f'))
 | ("eq_real",           [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VBool   (Left(prim_eq_real x y)))
@@ -107,19 +95,14 @@ let b' : Z.t Symbolic.sym -> vbits = fun n -> Right {n=n; v=ECall (FIdent (f,0),
 | ("pow2_real",         [      ], [VInt  (Left x)             ])     -> Some (VReal   (Left(prim_pow2_real x)))
 | ("pow2_real",         [      ], [VInt  _                    ])     -> Some (VReal   (f'))
 | ("round_tozero_real", [      ], [VReal (Left x)             ])     -> Some (VInt    (Left(prim_round_tozero_real x)))
-| ("round_tozero_real", [      ], [VReal _                    ])     -> Some (VInt    (f'))
 | ("round_down_real",   [      ], [VReal (Left x)             ])     -> Some (VInt    (Left(prim_round_down_real x)))
-| ("round_down_real",   [      ], [VReal _                    ])     -> Some (VInt    (f'))
 | ("round_up_real",     [      ], [VReal (Left x)             ])     -> Some (VInt    (Left(prim_round_up_real x)))
-| ("round_up_real",     [      ], [VReal _                    ])     -> Some (VInt    (f'))
 | ("sqrt_real",         [      ], [VReal (Left x); VReal (Left y)    ])     -> Some (VReal   (Left(prim_sqrt_real x)))
 | ("sqrt_real",         [      ], [VReal _       ; VReal _           ])     -> Some (VReal   (f'))
 | ("cvt_int_bits",      [_     ], [VInt  (Left x); VInt  (Left n)    ])     -> Some (VBits   (Left(prim_cvt_int_bits n x)))
 | ("cvt_int_bits",      [VInt n], [VInt  _       ; VInt  _           ])     -> Some (VBits   (b' n))
-| ("cvt_bits_sint",     [VInt n], [VBits (Left x)             ])     -> Some (VInt    (Left(prim_cvt_bits_sint x)))
-| ("cvt_bits_sint",     [VInt n], [VBits _                    ])     -> Some (VInt    (f'))
-| ("cvt_bits_uint",     [VInt n], [VBits (Left x)             ])     -> Some (VInt    (Left(prim_cvt_bits_uint x)))
-| ("cvt_bits_uint",     [VInt n], [VBits _                    ])     -> Some (VInt    (f'))
+
+
 | ("in_mask",           [VInt n], [VBits (Left x); VMask (Left y)    ])     -> Some (VBool  (Left(prim_in_mask x y)))
 | ("in_mask",           [VInt n], [VBits _       ; VMask _           ])     -> Some (VBool  (f'))
 | ("notin_mask",        [VInt n], [VBits (Left x); VMask (Left y)    ])     -> Some (VBool  (Left(prim_notin_mask x y)))
@@ -145,7 +128,6 @@ let b' : Z.t Symbolic.sym -> vbits = fun n -> Right {n=n; v=ECall (FIdent (f,0),
 | ("zeros_bits",        [VInt (Left n)], [                    ])     -> Some (VBits   (Left(prim_zeros_bits n)))
 | ("ones_bits",         [VInt (Left n)], [                    ])     -> Some (VBits   (Left(prim_ones_bits n)))
 | ("replicate_bits",    [_; _  ], [VBits (Left x); VInt (Left y)     ])     -> Some (VBits   (Left(prim_replicate_bits x y)))
-| ("replicate_bits",    [VInt m; VInt n], [VBits _       ; VInt _            ])     -> Some (VBits   (b' (sym_mul_int m n)))
 | ("append_bits",       [VInt m; VInt n], [VBits (Left x); VBits (Left y)]) -> Some (VBits   (Left(prim_append_bits x y)))
 | ("append_bits",       [VInt m; VInt n], [VBits _       ; VBits _       ]) -> Some (VBits   (b' (sym_add_int m n)))
 | ("eq_str",            [      ], [VString (Left x); VString (Left y)])     -> Some (VBool   (Left(prim_eq_str x y)))
@@ -808,7 +790,7 @@ struct
   let sub_int (loc: AST.l) (x: value) (y: value): value =
     VInt (sym_sub_int (to_int loc x) (to_int loc y))
   let leq_int (loc: AST.l) (x: value) (y: value): value =
-    VBool (sym_leq_int (to_int loc x) (to_int loc y))
+    VBool (sym_le_int (to_int loc x) (to_int loc y))
 
   (* Bitvector *)
   let concat_bits (loc: AST.l) (x: value list) : value =
@@ -835,11 +817,11 @@ struct
   let new_array = sym_new_array
 
   (* Unknown *)
-  let unknown_integer _   = VInt (Right EUnknown)
+  let unknown_integer _   = VInt (Right {s=true; min=None; max=None; w=Z.zero; e=EUnknown})
   let unknown_real    _   = VReal (Right EUnknown)
   let unknown_string  _   = VString (Right EUnknown)
   let unknown_bits    l w = VBits (Right {n=to_int l w; v=EUnknown})
-  let unknown_enum    _ _ = VInt (Right EUnknown)
+  let unknown_enum    _ _ = VInt (Right {s=true; min=None; max=None; w=Z.zero; e=EUnknown})
   let unknown_ram     _ _ = VRAM (Right EUnknown)
 
 end)(struct
