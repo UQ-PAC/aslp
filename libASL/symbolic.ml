@@ -318,6 +318,8 @@ let rec sym_extract_bits (x: vbits) (lo: Z.t sym) (wd: Z.t sym): vbits =
       Left (prim_extract x' lo' wd')
   | Right {n=_; v=ECall (FIdent ("extract_bits", 0), _, [VBits x'; VInt lo'; VInt wd'])}, _, _ ->
       sym_extract_bits x' (sym_add_int lo' lo) wd
+  | Right {n=_; v=ECall (FIdent ("extract_bits", 0), _, [VInt x'; VInt lo'; VInt wd'])}, _, _ ->
+      vcall wd "extract_bits" [] [VInt x'; VInt (sym_add_int lo' lo); VInt wd]
   | Right {n=_; v=ECall (FIdent ("append_bits", 0), _, [VBits x1; VBits x2])}, _, _ ->
       let t2 = sym_width_bits x2 in
       if sym_leq_int t2 lo = Left true then
