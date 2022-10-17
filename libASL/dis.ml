@@ -352,11 +352,11 @@ module Env : sig
     type t
 
     val empty               : unit -> t
-    val reset               : t -> unit
     val copy                : t -> t
 
-    val nestTop             : (t -> 'a) -> (t -> 'a * value)
-    val nest                : (t -> 'a) -> (t -> 'a)
+    val instScope           : (t -> 'a) -> (t -> 'a * prog)
+    val funScope            : (t -> 'a) -> (t -> 'a * value)
+    val innerScope          : (t -> 'a) -> (t -> 'a)
 
     val addLocalVar         : AST.l -> t -> ident -> value -> unit
     val addLocalConst       : AST.l -> t -> ident -> value -> unit
@@ -483,6 +483,43 @@ end = struct
     | None -> symerror loc  @@ "Unknown value for IMPLEMENTATION_DEFINED \""^x^"\""
     )
 
+  (** Add instructions to the residual program *)
+  let push (p: prog) (env: t): unit =
+    env.residual <- push env.residual p
+
+  let inner_residual (loc: l) (env: t): stmt list =
+    match !(env.returnSyms) with
+    | Some r -> resid_to_stmts loc (assign_stashed loc r) env.residual
+    | None -> resid_to_stmts loc (fun _ -> []) env.residual
+
+  let residual (loc: l) (env: t): stmt list =
+    !(env.decls) @ inner_residual loc env
+
+  (** Write a value to an lexpr, flattening the operation down to individual scalar writes if possible *)
+  let rec assignLExpr (loc: l) (x: AST.lexpr) (o: value) (v: value) (env: t): unit =
+    match o, v with
+    | VTuple os, VTuple vs ->
+        unsupported loc "assignLExpr: can't expand tuple assignment"
+    | VRecord os, VRecord vs ->
+        let upd k v1 v2 = Some (assignLExpr loc (LExpr_Field(x,k)) v1 v2 env) in
+        let _ = record_merge upd os vs in
+        ()
+    | VArray (os,od), VArray (vs,d) ->
+        let upd k v1 v2 = Some (assignLExpr loc (LExpr_Array(x,int_expr k)) v1 v2 env) in
+        let _ = Symbolic.array_merge upd os od vs d in
+        ()
+    | _ -> if v != o then push [AST.Stmt_Assign(x, to_expr loc v, loc)] env
+
+  let updateGlobals (env: t): unit =
+    Bindings.iter (fun k v ->
+      let prev = get_scope k env.globalnames in
+      assignLExpr Unknown (LExpr_Var k) prev v env
+    ) env.globals.bs
+
+(****************************************************************
+ * Scopes
+ ****************************************************************)
+
   let empty _ = {
     instructions = Bindings.empty;
     decoders     = Bindings.empty;
@@ -502,30 +539,34 @@ end = struct
     numSymbols   = ref 0;
   }
 
-  (** Clear the environment's local state and any modified globals *)
-  let reset env =  
-    env.globals    <- empty_scope();
-    env.locals     <- [ empty_scope () ];
-    env.residual   <- Open [];
-    env.decls      <- ref [];
-    env.numSymbols <- ref 0;
-    env.returnSyms <- ref None
+  (** Setup structures that are shared across an instruction *)
+  let instScope (k: t -> 'a) (parent: t): 'a * prog =
+    let child = {
+      decoders     = parent.decoders;
+      instructions = parent.instructions;
+      functions    = parent.functions;
+      enums        = parent.enums;
+      records      = parent.records;
+      typedefs     = parent.typedefs;
+      globalnames  = parent.globalnames;
+      constants    = parent.constants;
+      impdefs      = parent.impdefs;
 
-  (** Add instructions to the residual program *)
-  let push (p: prog) (env: t): unit =
-    env.residual <- push env.residual p
-
-  let inner_residual (loc: l) (env: t): stmt list =
-    match !(env.returnSyms) with
-    | Some r -> resid_to_stmts loc (assign_stashed loc r) env.residual
-    | None -> resid_to_stmts loc (fun _ -> []) env.residual
-
-  let residual (loc: l) (env: t): stmt list =
-    !(env.decls) @ inner_residual loc env
+      (* changes *)
+      globals      = empty_scope();
+      decls        = ref [];
+      numSymbols   = ref 0;
+      locals       = [empty_scope ()];
+      residual     = Open [];
+      returnSyms   = ref None;
+    } in
+    let r = k child in
+    updateGlobals child;
+    (r, residual Unknown child)
 
   (** Create an environment for a callee and return 
       their result along with a residual program *)
-  let nestTop (k: t -> 'a) (parent: t): 'a * value =
+  let funScope (k: t -> 'a) (parent: t): 'a * value =
     let child = {
       decoders     = parent.decoders;
       instructions = parent.instructions;
@@ -547,16 +588,18 @@ end = struct
     } in
     (* Run the child *)
     let r = k child in
+    (* TODO: rather than refs, can we pull the shared items out? *)
+    (* copy out: numSymbols, new decls, etc. *)
     push (inner_residual Unknown child) parent;
     match !(child.returnSyms) with
     | Some v -> 
         (r, value_of_stashed v)
     | None -> 
-        (r, VTuple [])
+        (r, VTuple []) (* TODO: Value.unit *)
 
   (** Create a nested scope within a function and return
       the scope's result along with its residual program *)
-  let nest (k: t -> 'a) (parent: t): 'a =
+  let innerScope (k: t -> 'a) (parent: t): 'a =
     let child = {
       decoders     = parent.decoders;
       instructions = parent.instructions;
@@ -580,6 +623,17 @@ end = struct
     push (inner_residual Unknown child) parent;
     r
 
+  (* TODO: something like 'revertible': 
+        run a command on a new state, but hide all of its effects and return them somehow.
+        would be nice if this returned just (globals * locals * residual * command result)
+        then the argument that only these have to be merged is obvious
+
+  let (tres,tchg) = Env.revertible tbranch e in
+  let (fres,fchg) = Env.revertible fbranch e in
+  let changes = Env.mergeChanges tchg fchg in
+  Env.applyChanges changes env
+
+        *)
   let copy (env: t): t = {
       decoders     = env.decoders;
       instructions = env.instructions;
@@ -607,21 +661,6 @@ end = struct
     env.numSymbols := i + 1;
     env.decls := !(env.decls) @ [Stmt_VarDeclsNoInit(to_type loc v, [n], loc)];
     n
-
-  (** Write a value to an lexpr, flattening the operation down to individual scalar writes if possible *)
-  let rec assignLExpr (loc: l) (x: AST.lexpr) (o: value) (v: value) (env: t): unit =
-    match o, v with
-    | VTuple os, VTuple vs -> 
-        unsupported loc "assignLExpr: can't expand tuple assignment"
-    | VRecord os, VRecord vs -> 
-        let upd k v1 v2 = Some (assignLExpr loc (LExpr_Field(x,k)) v1 v2 env) in
-        let _ = record_merge upd os vs in
-        ()
-    | VArray (os,od), VArray (vs,d) ->
-        let upd k v1 v2 = Some (assignLExpr loc (LExpr_Array(x,int_expr k)) v1 v2 env) in
-        let _ = Symbolic.array_merge upd os od vs d in
-        ()
-    | _ -> if v != o then push [AST.Stmt_Assign(x, to_expr loc v, loc)] env
 
   (** Load a global constant, no special handling due to constant *)
   let getGlobalConst (x: ident) (env: t) : value =  
@@ -667,13 +706,12 @@ end = struct
     set_scope x v s
 
   (* Set a global variable and add effects to the residual program *)
-  (* TODO: Either delay this to end of 'scope' or manage global reassignment *)
   let setGlobalVar (loc: l) (env: t) (x: ident) (v: value): unit =
-    let prev = (match get_scope_opt x env.globals with
+    (*let prev = (match get_scope_opt x env.globals with
     | Some v -> v
     | None -> get_scope x env.globalnames)
     in
-    assignLExpr loc (LExpr_Var x) prev v env; 
+    assignLExpr loc (LExpr_Var x) prev v env; *)
     set_scope x v env.globals
 
   (* Set a variable, either local or global *)
@@ -709,7 +747,6 @@ end = struct
     match contains_open e1.residual, contains_open e2.residual with
     | true, true ->
         orig.locals <- List.map2 merge e1.locals e2.locals;
-        (* TODO: depending on global strategy, either gen temps or fall back to globalnames *)
         orig.globals <- merge e1.globals e2.globals;
     | true, false -> 
         orig.locals <- e1.locals;
@@ -729,7 +766,6 @@ end = struct
     | Some s -> Some (merge_stashed_value (fun v -> newTemp loc v env) s v)
     | None -> Some (stashed_of_value v));
     env.residual <- push_return env.residual v
-
 end
 
 (****************************************************************)
@@ -824,7 +860,8 @@ struct
   let unknown_enum    _ _ = VInt (Right {s=true; min=None; max=None; w=Z.zero; e=EUnknown})
   let unknown_ram     _ _ = VRAM (Right EUnknown)
 
-end)(struct
+end
+)(struct
   type value = Symbolic.value
   type 'a eff = Env.t -> 'a Option.t
 
@@ -851,9 +888,9 @@ end)(struct
 
   (* State *)
   let reset: unit eff = 
-    fun e -> Some (Env.reset e)
+    fun e -> Some () (* TODO: needed? *)
   let scope (b: unit eff): unit eff = 
-    fun e -> Env.nest b e
+    fun e -> Env.innerScope b e
 
   (* State Reads - TODO: Merge this structure with env *)
   let getGlobalConst (x: ident) (env: Env.t) =
@@ -924,7 +961,7 @@ end)(struct
   let iter (b: value -> (value * value) eff) (s: value): value eff =
     raise (SymbolicError (Unknown,"loop"))
   let call (b : unit eff): value eff =
-    fun e -> let (r,v) = Env.nestTop b e in Some v
+    fun e -> let (r,v) = Env.funScope b e in Some v
   let catch (b: 'a eff) (f: AST.l -> Primops.exc -> 'a eff): 'a eff = 
     fun e -> b e
   let return v: 'a eff = 
@@ -939,8 +976,8 @@ end)(struct
 end)
 
 let eval_decode_case (loc: AST.l) (env: Env.t) (d: AST.decode_case) (v: value): prog =
-  let _ = Disem.eval_decode_case loc d v env in
-  Env.residual loc env
+  let (_,res) = Env.instScope (Disem.eval_decode_case loc d v) env in
+  res
 
 let build_evaluation_environment (defs: AST.declaration list): Env.t =
   try
