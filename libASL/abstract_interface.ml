@@ -4,21 +4,23 @@
 
 module AST = Asl_ast
 
-type fun_sig = (AST.ty option * ((AST.ty * AST.ident) list) * AST.ident list * AST.ident list * AST.l * AST.stmt list)
+type fun_sig = (AST.ty option * AST.ident list * AST.sformal list * AST.l * AST.stmt list)
 type inst_sig = AST.encoding * (AST.stmt list) option * bool * AST.stmt list
 
 module type Value = sig
   type t
 
+  val pp_value : t -> string
+
   (* Value Constructors *)
-  val from_bool      : bool -> t
-  val from_int       : int -> t
-  val from_intLit    : string -> t
-  val from_hexLit    : string -> t
-  val from_realLit   : string -> t
-  val from_bitsLit   : string -> t
-  val from_maskLit   : string -> t
-  val from_stringLit : string -> t
+  val mk_bool   : bool -> t
+  val mk_int    : int -> t
+  val mk_bigint : Z.t -> t
+  val mk_real   : Q.t -> t
+  val mk_bits   : int -> Z.t -> t
+  val mk_mask   : int -> Z.t -> Z.t -> t
+  val mk_string : string -> t
+
   val from_enum      : AST.ident -> int -> t
   val from_exc       : AST.l -> Primops.exc -> t
   val from_tuple     : t list -> t
@@ -29,7 +31,7 @@ module type Value = sig
   val to_exc    : AST.l -> t -> (AST.l * Primops.exc)
 
   (* Unit *)
-  val vunit   : t
+  val unit    : t
   val is_unit : t -> bool
 
   (* Bool *)
@@ -72,21 +74,19 @@ module type Effect = sig
   type 'a eff
   type value
 
+  (* Effectful primitives *)
+  val runPrim : string -> value list -> value list -> value option eff
+
   (* Monadic *)
   val pure  : 'a -> 'a eff
   val (>>=) : 'a eff -> ('a -> 'b eff) -> 'b eff
-  val (>>) : 'a eff -> ('a -> 'b) -> 'b eff
-  val traverse : ('a -> 'b eff) -> 'a list -> 'b list eff
+  val (>>)  : 'a eff -> ('a -> 'b) -> 'b eff
 
   (* State *)
   val reset : unit eff
-  val scope : 'a eff -> 'a eff
-  val call  : unit eff -> value eff
+  val scope : unit eff -> unit eff
 
-  val setVar : AST.l -> AST.ident -> value -> unit eff
-  val runPrim : string -> value list -> value list -> value option eff
-  val isGlobalConstFilter : (AST.ident -> bool) eff
-
+  (* State Reads *)
   val getGlobalConst      : AST.ident -> value eff
   val getVar              : AST.l -> AST.ident -> value eff
   val getImpdef           : AST.l -> string -> value eff
@@ -96,24 +96,28 @@ module type Effect = sig
   val getEnum             : AST.ident -> value list option eff
   val getRecord           : AST.ident -> (AST.ty * AST.ident) list option eff
   val getTypedef          : AST.ident -> AST.ty option eff
+  val isGlobalConstFilter : (AST.ident -> bool) eff
 
+  (* State Writes *)
   val addRecord      : AST.ident -> (AST.ty * AST.ident) list -> unit eff
-  val addGlobalConst : AST.ident -> value -> unit eff
-  val addGlobalVar   : AST.ident -> value -> unit eff
-  val addEnum        : AST.ident -> value list -> unit eff
-  val addTypedef     : AST.ident -> AST.ty -> unit eff
-  val addDecoder     : AST.ident -> AST.decode_case -> unit eff
-  val addInstruction : AST.l -> AST.ident -> inst_sig -> unit eff
-  val addFun         : AST.l -> AST.ident -> fun_sig -> unit eff
-  val addLocalVar    : AST.l -> AST.ident -> value -> unit eff
-  val addLocalConst  : AST.l -> AST.ident -> value -> unit eff
+  val addGlobalConst : AST.ident -> value                     -> unit eff
+  val addGlobalVar   : AST.ident -> value                     -> unit eff
+  val addEnum        : AST.ident -> value list                -> unit eff
+  val addTypedef     : AST.ident -> AST.ty                    -> unit eff
+  val addDecoder     : AST.ident -> AST.decode_case           -> unit eff
+  val addInstruction : AST.l     -> AST.ident -> inst_sig     -> unit eff
+  val addFun         : AST.l     -> AST.ident -> fun_sig      -> unit eff
+  val addLocalVar    : AST.l     -> AST.ident -> value        -> unit eff
+  val addLocalConst  : AST.l     -> AST.ident -> value        -> unit eff
+  val setVar         : AST.l     -> AST.ident -> value        -> unit eff
 
   (* Control Flow *)
-  val branch    : value -> 'a eff -> 'a eff -> 'a eff
-  val iter      : ('a -> ('a * value) eff) -> 'a -> 'a eff
+  val branch    : value -> value eff -> value eff -> value eff
+  val iter      : (value -> (value * value) eff) -> value -> value eff
+  val call      : unit eff  -> value eff
+  val catch     : unit eff -> (AST.l -> Primops.exc -> unit eff) -> unit eff
   val return    : value -> 'a eff
   val throw     : AST.l -> Primops.exc -> 'a eff
-  val catch     : 'a eff -> (AST.l -> Primops.exc -> 'a eff) -> 'a eff
   val error     : AST.l -> string -> 'a eff
 end
 

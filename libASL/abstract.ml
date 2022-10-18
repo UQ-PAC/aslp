@@ -23,15 +23,88 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
   let (let+) = I.(>>)
   let (>>>) = fun a b -> a >>= (fun _ -> b)
 
+  let rec traverse (f: 'a -> 'b eff) (xs: 'a list): 'b list eff =
+    match xs with
+    | [] -> pure []
+    | (x::xs) -> f x >>= fun b -> traverse f xs >> fun bs -> b::bs
+
   let traverse_ f a =
-    let+ _ = traverse f a in ()
+    traverse f a >>> unit
 
   let traverse2 (f: 'a -> 'b -> 'c eff) (a: 'a list) (b: 'b list): 'c list eff =
     traverse (fun (a,b) -> f a b) (List.combine a b)
 
+  (** String Utilities *)
+  let drop_chars (x: string) (c: char): string =
+    (* First calculate final length *)
+    let len = ref 0 in
+    String.iter (fun t -> if t <> c then len := !len + 1) x;
+
+    (* search for next character not matching c *)
+    let i = ref 0 in
+    let rec next_char (_: int): char =
+        let r = String.get x !i in
+        i := !i + 1;
+        if r = c then next_char 0 else r
+    in
+    (* create result *)
+    String.init !len next_char
+
+  let from_intLit (s: string): value =
+    mk_bigint (Z.of_string s)
+  let from_hexLit (s: string): value =
+    mk_bigint (Z.of_string_base 16 (drop_chars s '_'))
+
+  let from_realLit (x: AST.realLit): value =
+    let pt          = String.index x '.' in
+    let fracsz      = String.length x - pt - 1 in
+    let intpart     = String.sub x 0 pt in
+    let frac        = String.sub x (pt+1) fracsz in
+    let numerator   = Z.of_string (intpart ^ frac) in
+    let denominator = Z.pow (Z.of_int 10) fracsz in
+    mk_real (Q.make numerator denominator)
+
+  let from_bitsLit (x: AST.bitsLit): value =
+    let x' = drop_chars x ' ' in
+    mk_bits (String.length x') (Z.of_string_base 2 x')
+
+  let from_maskLit (x: AST.maskLit): value =
+    let x' = drop_chars x ' ' in
+    let n = String.length x' in
+    let v = String.map (function 'x' -> '0' | c -> c) x' in
+    let m = String.map (function 'x' -> '0' | c -> '1') x' in
+    mk_mask n (Z.of_string_base 2 v) (Z.of_string_base 2 m)
+
+  let from_stringLit (x: string): value =
+    let r = ref "" in
+    let rec unescape (i: int): unit =
+        if i < String.length x then begin
+            let c = String.get x i in
+            if c = '\\' then begin
+                assert (i+1 < String.length x);
+                let c = String.get x (i+1) in
+                if c = '\\' then
+                    r := !r ^ String.make 1 '\\'
+                else if c = 'n' then
+                    r := !r ^ String.make 1 '\n'
+                else
+                    assert false;
+                unescape (i+2)
+            end else begin
+                r := !r ^ String.make 1 c;
+                unescape (i+1)
+            end
+        end
+    in
+    unescape 0;
+    mk_string !r
+
   (** Boolean Utilities *)
-  let vtrue = V.from_bool true
-  let vfalse = V.from_bool false
+  let vtrue = mk_bool true
+  let vfalse = mk_bool false
+
+  let branch_ (c: value) (t: unit eff) (f: unit eff): unit eff =
+    branch c (t >> fun _ -> V.unit) (f >> fun _ -> V.unit) >>> pure ()
 
   let short_and (x: value eff) (y: value eff): value eff =
     let* c = x in branch c y (pure vfalse)
@@ -53,9 +126,40 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | [a] -> p a
     | a::l -> short_or (p a) (exists p l)
 
+  let mk_formal_in (a,b) = Formal_In(a,b)
+
+  let expr_of_int (i: Z.t): expr =
+    Expr_LitInt (Z.to_string i)
+
+  let rec expr_to_lexpr (loc: l) (e: expr): lexpr eff =
+    match e with
+    | Expr_Var x ->
+        pure (LExpr_Var x)
+    | Expr_Field (e,f) ->
+        let+ e' = expr_to_lexpr loc e in
+        LExpr_Field (e', f)
+    | Expr_Fields (e,fs) ->
+        let+ e' = expr_to_lexpr loc e in
+        LExpr_Fields (e', fs)
+    | Expr_Slices (e,ss) ->
+        let+ e' = expr_to_lexpr loc e in
+        LExpr_Slices (e', ss)
+    | Expr_Tuple es ->
+        let+ es' = traverse (expr_to_lexpr loc) es in
+        LExpr_Tuple es'
+    (* TODO: the following cases may modify state, resulting in doubling of effects when handling references
+    | Expr_Array (e,i) ->
+        let+ e' = expr_to_lexpr loc e in
+        LExpr_Array (e', i)
+    | Expr_TApply (FIdent (nm, n), tes, es) when Utils.endswith nm ".read" ->
+      (match String.split_on_char '.' nm with
+      | [nm'; "read"] -> pure (LExpr_Write (FIdent (nm' ^ ".write", n), tes, es))
+      | _ -> error loc @@ "expr_to_lexpr: cannot derive lexpr for " ^ pp_expr e) *)
+    | _ -> error loc @@ "unexpected expression in expr_to_lexpr coercion: " ^ pp_expr e
+
   (** Bitvector Utilities *)
   let extract_bits_int (loc: l) (v: value) (l: int) (w: int): value =
-    extract_bits loc v (from_int l) (from_int w)
+    extract_bits loc v (mk_int l) (mk_int w)
 
   let removeGlobalConsts (ids: IdentSet.t): IdentSet.t eff =
     let+ f = isGlobalConstFilter in
@@ -111,11 +215,11 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     match x with
     | Slice_Single(i) ->
         let+ i' = eval_expr loc i in
-        (i', from_int 1)
+        (i', mk_int 1)
     | Slice_HiLo(hi, lo) ->
         let* hi' = eval_expr loc hi in
         let+ lo' = eval_expr loc lo in
-        (lo', add_int loc (sub_int loc hi' lo') (from_int 1))
+        (lo', add_int loc (sub_int loc hi' lo') (mk_int 1))
     | Slice_LoWd(lo, wd) ->
         let* lo' = eval_expr loc lo in
         let+ wd' = eval_expr loc wd in
@@ -229,7 +333,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
               set_fields n fs' v'
           )
         in
-        eval_lexpr_modify loc l (set_fields (from_int 0) (List.rev fs))
+        eval_lexpr_modify loc l (set_fields (mk_int 0) (List.rev fs))
     | LExpr_Slices(l, ss) ->
         let rec eval (o: value) (ss': slice list) (prev: value): value eff =
           (match ss' with
@@ -240,7 +344,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
               eval (add_int loc o w) ss (insert_bits loc prev i w v)
           )
         in
-        eval_lexpr_modify loc l (eval (from_int 0) (List.rev ss))
+        eval_lexpr_modify loc l (eval (mk_int 0) (List.rev ss))
     | LExpr_BitTuple(ls) ->
         failwith "eval_lexpr: bittuple"
     | LExpr_Tuple(ls) ->
@@ -254,7 +358,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | LExpr_Write(setter, tes, es) ->
         let* tvs = eval_exprs loc tes in
         let* vs  = eval_exprs loc es in
-        eval_proccall loc setter tvs (List.append vs [r])
+        eval_setter loc setter tvs (List.append vs [r]) es
     | _ ->
         failwith ("eval_lexpr: "^ (pp_lexpr x))
 
@@ -290,7 +394,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         let* vs  = eval_exprs loc es in
         let* old = eval_funcall loc getter tvs vs in
         let* n = modify old in
-        eval_proccall loc setter tvs (List.append vs [n])
+        eval_setter loc setter tvs (List.append vs [n]) es
     | _ -> failwith "eval_lexpr_modify"
 
   (** Evaluate list of statements *)
@@ -319,13 +423,13 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         let* v = eval_expr loc e in
         return v
     | Stmt_ProcReturn(loc) ->
-        return vunit
+        return V.unit
     | Stmt_Assert(e, loc) ->
         let* v = eval_expr loc e in
-        branch v (* then *)
+        branch_ v (* then *)
           unit
         (* else *)
-          (error loc "assertion failure") (* runtime error *)
+          (error loc "assertion failure")
     | Stmt_Unpred(loc) ->
         throw loc Exc_Unpredictable
     | Stmt_ConstrainedUnpred(loc) ->
@@ -359,7 +463,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           | [] -> eval_stmts d
           | (S_Elsif_Cond(c, s) :: css') ->
               let* g = eval_expr loc c in
-              branch g (* then *)
+              branch_ g (* then *)
                 (eval_stmts s)
               (* else *)
                 (eval css' d)
@@ -375,7 +479,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
               )
           | (Alt_Alt(ps, None, s) :: alts') ->
               let* g = exists (eval_pattern loc v) ps in
-              branch g (* then *)
+              branch_ g (* then *)
                 (eval_stmts s)
               (* else *)
                 (eval v alts')
@@ -383,7 +487,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
               let c1 = exists (eval_pattern loc v) ps in
               let c2 = eval_expr loc c in
               let* g = short_and c1 c2 in
-              branch g (* then *)
+              branch_ g (* then *)
                 (eval_stmts s)
               (* else *)
                 (eval v alts')
@@ -402,23 +506,36 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           branch c (* then *)
             (scope (addLocalVar loc v i >>> eval_stmts b) >>>
             let i' = (match dir with
-            | Direction_Up   -> add_int loc i (from_int 1)
-            | Direction_Down -> sub_int loc i (from_int 1)
+            | Direction_Up   -> add_int loc i (mk_int 1)
+            | Direction_Down -> sub_int loc i (mk_int 1)
             ) in
-            pure (i', vtrue))
+            pure (from_tuple [i'; vtrue]))
           (* else *)
-            (pure (i, vfalse))
+            (pure (from_tuple [i; vfalse]))
         in
-        let+ _ = iter body start' in
+        let iter_fun (f: value -> value eff) (x: value): (value * value) eff =
+          let+ x' = f x in
+          match to_tuple Unknown x' with
+          | [i; c] -> (i, c)
+          | _ -> failwith "a"
+        in
+        let+ _ = iter (iter_fun body) start' in
         ()
     | Stmt_While(c, b, loc) ->
-        iter (fun _ ->
+        let f = (fun _ ->
           let* g = eval_expr loc c in
-          branch g (eval_stmts b >>> pure ((),vtrue)) (pure ((),vfalse))) ()
+          branch g (eval_stmts b >>> pure vtrue) (pure vfalse))
+        in
+        let iter_fun (f: 'a -> value eff) (x: 'a): ('a * value) eff =
+          let+ x' = f x in (V.unit, x')
+        in
+        iter (iter_fun f) V.unit
+        >>> unit
     | Stmt_Repeat(b, c, loc) ->
         iter (fun _ ->
           let* () = eval_stmts b in
-          let+ g = eval_expr loc c in ((),g)) ()
+          let+ g = eval_expr loc c in (V.unit,g)) V.unit
+        >>> unit
     | Stmt_Try(tb, ev, catchers, odefault, loc) ->
         catch (eval_stmts tb) (fun l ex -> scope (
           let rec eval cs =
@@ -429,7 +546,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
                 | Some s -> eval_stmts s)
             | (Catcher_Guarded(c, b) :: cs') ->
                 let* c = eval_expr loc c in
-                branch c (eval_stmts b) (eval cs')
+                branch_ c (eval_stmts b) (eval cs')
           in
           addLocalVar loc ev (from_exc l ex) >>>
           eval catchers) )
@@ -441,12 +558,12 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | Some r -> pure r
     | None ->
         begin
-          let* (rty, atys, targs, args, loc, b) = getFun loc f in
+          let* (rty, targs, args, loc, b) = getFun loc f in
           assert (List.length targs = List.length tvs);
           assert (List.length args  = List.length vs);
           call (
-            traverse2 (fun arg v -> addLocalVar loc arg v) targs tvs >>>
-            traverse2 (fun arg v -> addLocalVar loc arg v) args vs >>>
+            traverse2 (addLocalVar loc) targs tvs >>>
+            traverse2 (addLocalVar loc) (List.map TC.sformal_var args) vs >>>
             eval_stmts b
           )
         end
@@ -462,6 +579,40 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     let* r = eval_call loc f tvs vs in
     if is_unit r then unit else error loc "value return from proc"
 
+  (** Evaluate call to a setter *)
+  and eval_setter (loc: l) (f: ident) (tvs: value list) (vs: value list) (es: expr list): unit eff =
+    let* (rty, targs, args, loc, b) = getFun loc f in
+    assert (List.length targs = List.length tvs);
+    assert (List.length args  = List.length vs);
+    (* Shouldn't have an expression for the setter's implicit value *)
+    let es' = List.append es [expr_of_int Z.zero] in
+    assert (List.length args  = List.length es');
+    (* Exploting lack of return to hand the reference values back to caller *)
+    assert (rty = None);
+    let* rs = call (
+      traverse2 (addLocalVar loc) targs tvs >>>
+      traverse2 (addLocalVar loc) (List.map TC.sformal_var args) vs >>>
+      catch (eval_stmts b)
+        (fun l e -> (* TODO: We will fail to capture the result and update reference variables if b throws *)
+          if List.exists (function Formal_InOut _ -> true | _ -> false) args then
+            error loc "Exception thrown in setter with reference args"
+          else
+            throw l e) >>>
+      let* rs = traverse (fun arg ->
+        match arg with
+        | Formal_In _ -> pure V.unit
+        | Formal_InOut (_,arg) -> getVar loc arg
+      ) args in
+      return (from_tuple rs)
+    ) in
+    let upd r e = if is_unit r then unit else let* lexpr = expr_to_lexpr loc e in eval_lexpr loc lexpr r in
+    let out = to_tuple loc rs in
+    if List.length out > 0 then begin
+      assert (List.length out = List.length es');
+      let* _ = traverse2 upd out es' in unit
+    end
+    else unit
+
   (** Evaluate instruction decode case *)
   and eval_decode_case (loc: l) (x: decode_case) (op: value): unit eff =
     match x with
@@ -471,7 +622,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           (match alts with
           | (alt::alts') ->
               let* g = eval_decode_alt loc alt vs op in
-              branch g unit (eval alts')
+              branch_ g unit (eval alts')
           | [] -> error loc "unmatched decode pattern"
           )
         in
@@ -522,7 +673,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         traverse (fun (i, b) ->
           branch (eq loc (extract_bits_int loc op i 1) (from_bitsLit b))
             (throw loc Exc_Unpredictable)
-            unit
+            (pure V.unit)
         ) unpreds >>>
         traverse eval_stmt b >>>
         pure vtrue
@@ -610,42 +761,28 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
       | Decl_FunDefn(rty, f, atys, body, loc) ->
           let* t = removeGlobalConsts (TC.fv_funtype (f, false, [], [], atys, rty)) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (Some rty, atys, tvs, args, loc, body)
+          addFun loc f (Some rty, tvs, List.map mk_formal_in atys, loc, body)
       | Decl_ProcDefn(f, atys, body, loc) ->
           let* t = removeGlobalConsts (Asl_utils.fv_args atys) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (None, atys, tvs, args, loc, body)
+          addFun loc f (None, tvs, List.map mk_formal_in atys, loc, body)
       | Decl_VarGetterDefn(ty, f, body, loc) ->
           let* t = removeGlobalConsts (Asl_utils.fv_type ty) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = [] in
-          addFun loc f (Some ty, [], tvs, args, loc, body)
+          addFun loc f (Some ty, tvs, [], loc, body)
       | Decl_ArrayGetterDefn(rty, f, atys, body, loc) ->
           let* t = removeGlobalConsts (TC.fv_funtype (f, true, [], [], atys, rty)) in
           let tvs = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (Some rty, atys, tvs, args, loc, body)
+          addFun loc f (Some rty, tvs, List.map mk_formal_in atys, loc, body)
       | Decl_VarSetterDefn(f, ty, v, body, loc) ->
           let* t = removeGlobalConsts (Asl_utils.fv_type ty) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = [v] in
-          addFun loc f (Some ty, [], tvs, args, loc, body)
+          addFun loc f (Some ty, tvs, [Formal_In (ty,v)], loc, body)
       | Decl_ArraySetterDefn(f, atys, ty, v, body, loc) ->
           let ts = Asl_utils.IdentSet.union (Asl_utils.fv_sformals atys) (Asl_utils.fv_type ty) in
           let* t = removeGlobalConsts ts in
           let tvs = Asl_utils.to_sorted_list t in
-          let tuple_of (x: AST.sformal): ty * ident =
-              (match x with
-              | Formal_In (t, nm) -> t,nm
-              | Formal_InOut (t, nm) -> t,nm
-              )
-          in
-          (* Add value parameter for setter to end of arguments. *)
-          let atys' = List.map tuple_of atys @ [(ty, v)] in
-          let args = List.map snd atys' in
-          addFun loc f (None, atys', tvs, args, loc, body)
+          addFun loc f (None, tvs, atys@[Formal_In (ty,v)], loc, body)
       | Decl_InstructionDefn(nm, encs, opost, conditional, exec, loc) ->
           (* Instructions are looked up by their encoding name *)
           traverse_ (fun enc ->
@@ -657,8 +794,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
       | Decl_NewMapDefn(rty, f, atys, body, loc) ->
           let* t = removeGlobalConsts (TC.fv_funtype (f, false, [], [], atys, rty)) in
           let tvs  = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (Some rty, atys, tvs, args, loc, body)
+          addFun loc f (Some rty, tvs, List.map mk_formal_in atys, loc, body)
       (*
       | Decl_MapClause(f, atys, cond, body, loc) ->
               let tvs   = Asl_utils.to_sorted_list (Asl_utils.fv_args atys) in
@@ -668,11 +804,10 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
       | Decl_NewEventDefn (f, atys, loc) ->
           let* t = removeGlobalConsts (Asl_utils.fv_args atys) in
           let tvs = Asl_utils.to_sorted_list t in
-          let args = List.map snd atys in
-          addFun loc f (None, atys, tvs, args, loc, [])
+          addFun loc f (None, tvs, List.map mk_formal_in atys, loc, [])
       | Decl_EventClause (f, body, loc) ->
-          let* (_, _, tvs, args, _, body0) = getFun loc f in
-          addFun loc f (None, [], tvs, args, loc, List.append body body0)
+          let* (_, tvs, args, _, body0) = getFun loc f in
+          addFun loc f (None, tvs, args, loc, List.append body body0)
       (* todo: when creating initial environment, should pass in a set of configuration
        * options that will override any default values given in definition
        *)

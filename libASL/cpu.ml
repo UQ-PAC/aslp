@@ -9,15 +9,17 @@ module AST = Asl_ast
 
 type cpu = {
     env      : Eval.Env.t;
+    dis      : Dis.Env.t;
     reset    : unit -> unit;
     step     : unit -> unit;
     getPC    : unit -> Primops.bigint;
     setPC    : Primops.bigint -> unit;
     elfwrite : Int64.t -> char -> unit;
     opcode   : string -> Primops.bigint -> unit;
+    sem      : string -> Primops.bigint -> unit;
 }
 
-let mkCPU (env : Eval.Env.t): cpu =
+let mkCPU (env : Eval.Env.t) (dis : Dis.Env.t): cpu =
     let loc = AST.Unknown in
 
     let reset (_ : unit): unit =
@@ -43,15 +45,24 @@ let mkCPU (env : Eval.Env.t): cpu =
         let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
         let decoder = Eval.Env.getDecoder env (Ident iset) in
         Eval.eval_decode_case AST.Unknown env decoder op
+
+    and sem (iset: string) (opcode: Primops.bigint): unit =
+        let op = Symbolic.VBits (Left (Primops.prim_cvt_int_bits (Z.of_int 32) opcode)) in
+        let decoder = Eval.Env.getDecoder env (Ident iset) in
+        List.iter
+            (fun s -> Printf.printf "%s\n" (Asl_utils.pp_stmt s))
+            (Dis.eval_decode_case AST.Unknown dis decoder op)
     in
     {
         env      = env;
+        dis      = dis;
         reset    = reset;
         step     = step;
         getPC    = getPC;
         setPC    = setPC;
         elfwrite = elfwrite;
-        opcode   = opcode
+        opcode   = opcode;
+        sem = sem
     }
 
 (****************************************************************
