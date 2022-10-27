@@ -462,7 +462,7 @@ end = struct
   let getFun (loc: l) (env: t) (x: ident): fun_sig =
     (match Bindings.find_opt x env.functions with
     | Some def -> def
-    | None     -> raise (SymbolicError (loc, "getFun " ^ pprint_ident x))
+    | None     -> symerror loc @@ "getFun " ^ pprint_ident x
     )
 
   let addFun (loc: l) (env: t) (x: ident) (def: fun_sig): unit =
@@ -977,8 +977,73 @@ end
           Env.mergeState loc exp e te fe;
           r
 
-  let iter (b: value -> (value * value) eff) (s: value): value eff =
-    raise (SymbolicError (Unknown,"loop"))
+  let rec iter (b: value -> (value * value) eff) (i: value): value eff =
+    let loc = Unknown in
+    fun e ->
+      let be = Env.copy e in 
+      match b i be with
+      | Some (c,ib) -> 
+          (match to_bool loc c with
+          | Left true -> iter b ib e (* unfold the loop body, but which env? be or e? *)
+          | Left false -> Some ib (* loop exited *)
+          | Right exp -> (* symbolic loop condition *)
+              (* are be and e the same? if so, its a fixed point
+                 what about i? need to merge that value.
+
+                 merge i+ib, e+eb
+                  -> fixed: build loop from residual body
+                  -> run loop body with merged input + state, loop back and ask if fixed
+
+                 trouble is the style of merge:
+                   -> changes to loop dynamic variables need to be stashed once identified, rather than being held symbolically
+                   -> for instance, if i changes throughout the loop, needs a new #T to represent it
+                      then rather than tracking a symbolic variant (e.g. i -> #T + 1), which can never reach a fixed point, 
+                      we can ignore it as we are just going to write the value to #T 
+
+                 caching decisions from prior passes mean we don't need to merge over those values
+                 searching for a stable frame, effectively
+                 once you have a stable frame, merge e + eb, generating all of the stores to setup the dynamic state in the entry + body
+
+  let eb = Env.hide_diff e diff in
+  let (c,ib) = b im be in
+  if c is constant and diff is empty then run standard case else
+  let diff' = Env.merge e eb + delta of i ib in
+  if diff' - diff = Empty then exit with built loop body else repeat with diff'
+
+  let ((c,ib),diff) = End.revertible (b i) e in
+  if c is constant true -> commit diff, continue
+  if c is constant false -> commit diff, exit
+  if diff == old_diff -> fixed point, exit
+  else 
+
+  if diff != old_diff -> stash diff, overapprox?, repeat
+  else 
+
+                 {e}
+                 #T := i
+                 do {
+                   (c,i') := b #T
+                   {eb}
+                   #T := i'
+                 } while (c)
+
+    termination by fixed upper bound of variable names
+
+    general thought:
+      - can't have an abstract join over symbolic values unless we allow for the creation
+        of new temporaries in the value theory
+      - this is possible with some notion of a callback, but not great
+      - particularly because there would be a different placement for each one + state implications
+
+               *)
+
+              unsupported loc "todo")
+
+      | None -> None (* arb. control flow exit from loop *)
+
+    (*
+      attempt 
+    *)
   let call (b : unit eff): value eff =
     fun e -> let (r,v) = Env.funScope b e in Some v
   let catch (b: 'a eff) (f: AST.l -> Primops.exc -> 'a eff): 'a eff = 
@@ -990,7 +1055,7 @@ end
     fun e -> 
       Env.throw l x e; None
   let error l s = 
-    fun _ -> raise (SymbolicError (l,s))
+    fun _ -> symerror l s
 
 end)
 
