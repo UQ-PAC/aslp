@@ -428,9 +428,9 @@ end) (struct
 
   (* Control Flow *)
   let branch c t f e = if Value.to_bool Unknown ( c ) then t e else f e
-  let rec iter b s e =
-    let (s',c) = b s e in
-    if Value.to_bool Unknown c then iter b s' e else s'
+  let rec repeat b e =
+    let c = b e in
+    if Value.to_bool Unknown c then repeat b e else ()
   let return v _ = raise (Value.Return v)
   let throw l e _ = raise (Value.Throw (l,e))
   let catch b f e = try b e with Value.Throw (l,x) -> f l x e

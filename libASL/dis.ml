@@ -13,6 +13,29 @@ open Asl_utils
 open Abstract_interface
 open Symbolic
 
+let rec string n s =
+  if n = 0 then "" else s ^ string (n - 1) s
+
+let rec print_stmts (d: int) (xs: stmt list) =
+  match xs with
+  | [] -> ()
+  | Stmt_Repeat(b,c,loc)::xs ->
+      Printf.printf "%srepeat {\n" (string d " ");
+      print_stmts (d+2) b;
+      Printf.printf "%s} until %s\n" (string d " ") (Asl_utils.pp_expr c);
+  | Stmt_If(c,l,[],r,loc)::xs ->
+      Printf.printf "%sif %s then {\n" (string d " ") (Asl_utils.pp_expr c);
+      print_stmts (d+2) l;
+      Printf.printf "%s} else {\n" (string d " ");
+      print_stmts (d+2) r;
+      Printf.printf "%s}\n" (string d " ");
+      print_stmts d xs
+  | x::xs ->
+      let p = string d " " in
+      let s = Asl_utils.pp_stmt x in
+      Printf.printf "%s%s\n" p s;
+      print_stmts d xs
+
 let int_expr (i: int): AST.expr = AST.Expr_LitInt (string_of_int i)
 
 let bool_expr (b: bool): AST.expr = AST.Expr_Var(if b then Ident "TRUE" else Ident "FALSE")
@@ -258,6 +281,13 @@ let rec resid_to_stmts (loc: l) (r: 'a -> stmt list) (res: 'a resid): stmt list 
   | Throw s -> s @ [AST.Stmt_Assert (bool_expr false,loc)]
   | Branch (_,s,c,ls,rs) -> s @ [AST.Stmt_If (lift_expr loc c,resid_to_stmts loc r ls,[],resid_to_stmts loc r rs,loc)]
 
+let pp_resid r =
+  match r with
+  | Open s -> Printf.printf "Open \n"; print_stmts 2 s
+  | Return (s,v) -> Printf.printf "Return \n"
+  | Throw s -> Printf.printf "Throw \n"
+  | Branch _ -> Printf.printf "Branch \n"
+
 (****************************************************************)
 (** {2 Stashed Value}                                           *)
 (****************************************************************)
@@ -294,6 +324,25 @@ let array_merge (f: 'a -> 'b -> 'c) (dl: 'k -> 'a) (dr: 'k -> 'b) k (a: 'a optio
   | None, Some b'    -> Some (f (dl k) b')
   | _ -> None
 
+(** Merge two stashed variables, reusing an existing stashed variable if possible *)
+let rec merge_stashed (f: value -> ident) (l: stashed) (r: stashed): stashed =
+  let loop l r = merge_stashed f l r in
+  let loop' _ s v = Some (merge_stashed f s v) in
+  match l, r with
+  | STuple ls, STuple rs -> STuple (List.map2 loop ls rs)
+  | SRecord ls, SRecord rs -> SRecord (record_merge loop' ls rs)
+  | SArray (ls,ld), SArray (rs,rd) -> 
+      assert (ld = rd);
+      SArray (Primops.ImmutableArray.merge (array_merge loop 
+        (fun k -> SVal (array_default rd k)) 
+        (fun k -> SVal (array_default ld k))
+        ) ls rs, rd)
+  | SVal l, SVal r -> if l = r then SVal l else let i = f l in SIdent (i, l)
+  | SIdent (i, l), SVal _ 
+  | SIdent (i, l), SIdent _
+  | SVal _, SIdent (i, l) -> SIdent (i, l)
+  | _ -> invalid_arg "merge of different aggregate types"
+
 (** Create new stashed variables *)
 let rec merge_stashed_value (f: value -> ident) (s: stashed) (v: value): stashed =
   let loop s v = merge_stashed_value f s v in
@@ -321,18 +370,74 @@ let assign_stashed (loc: l) (s: stashed) (v: value): stmt list =
         in ()
     | SIdent (i,_), _ -> 
         out := AST.Stmt_Assign(LExpr_Var i, to_expr loc v, loc)::!out
+    | SVal v, v' ->
+        if v != v' then
+          Printf.printf "assignment with different values %s %s\n" (pp_value v) (pp_value v')
+        else 
+          Printf.printf "return of single value %s\n" (pp_value v)
+    | _ -> failwith "assignStashed: unknown case"
+  in
+  loop s v;
+  !out
+
+let is_unknown v =
+  match v with
+  | VInt (Right EUnknown) -> true
+  | VBool (Right EUnknown) -> true
+  | VReal (Right EUnknown) -> true
+  | VString (Right EUnknown) -> true
+  | VMask (Right EUnknown) -> true
+  | VRAM (Right EUnknown) -> true
+  | VBits (Right {n;v}) -> v = EUnknown
+  | _ -> false
+
+(*
+  write a stashed variable to another
+  won't introduce a write if the two are equal
+*)
+let assign_stashed2 (loc: l) (s: stashed) (v: stashed): stmt list =
+  let out = ref [] in
+  let rec loop s v = match s, v with
+    | STuple ts, STuple vs -> List.iter2 loop ts vs 
+    | SRecord fs, SRecord vs -> let _ = record_merge (fun _ a b -> Some (loop a b)) fs vs in ()
+    | SArray (a,ds), SArray (vs,v) -> 
+        assert (ds = v);
+        let _ = (Primops.ImmutableArray.merge (array_merge loop 
+          (fun k -> SVal (array_default ds k)) (fun k -> SVal (array_default v k))) a vs, ds)
+        in ()
+    | SIdent (i,_), SIdent (j,v) -> 
+        if i = j then ()
+        else 
+          let load = copy_scalar_type (EVar j) v in
+          out := AST.Stmt_Assign(LExpr_Var i, to_expr loc load, loc)::!out
+    | SIdent (i,_), SVal v -> 
+        out := AST.Stmt_Assign(LExpr_Var i, to_expr loc v, loc)::!out
     | SVal _, _ -> ()
     | _ -> failwith "assignStashed: unknown case"
   in
   loop s v;
   !out
 
+let rec pp_stashed (v: stashed): string =
+  match v with
+  | SVal v -> "SVal (" ^ pp_value v ^ ")"
+  | SIdent (i,v) -> "SIdent (" ^ pprint_ident i ^ ")"
+  | STuple ts -> "STuple (" ^ String.concat "," (List.map pp_stashed ts) ^ ")"
+  | SRecord ts -> 
+      let out = ref "SRecord (" in
+      let _ = Bindings.iter (fun k v ->
+        out := !out ^ ", " ^ pprint_ident k ^ " -> " ^ pp_stashed v
+      ) ts in
+      !out ^ ")"
+  | _ -> "Sthing"
+
+
 (****************************************************************)
 (** {2 Scopes}                                                  *)
 (****************************************************************)
 
 (** Basically just a mutable binding *)
-type scope = { mutable bs : value Bindings.t; }
+type scope = { mutable bs : stashed Bindings.t; }
 
 let empty_scope (_: unit): scope =
   let bs = Bindings.empty in
@@ -341,16 +446,16 @@ let empty_scope (_: unit): scope =
 let mem_scope (k: ident) (s: scope): bool =
   Bindings.mem k s.bs
 
-let get_scope (k: ident) (s: scope): value =
+let get_scope (k: ident) (s: scope): stashed =
   Bindings.find k s.bs
 
 let get_scope_val (k: ident) (s: scope): value =
-  (* value_of_value *) (Bindings.find k s.bs)
+  value_of_stashed (Bindings.find k s.bs)
 
-let get_scope_opt (k: ident) (s: scope): value option =
+let get_scope_opt (k: ident) (s: scope): stashed option =
   Bindings.find_opt k s.bs
 
-let set_scope (k: ident) (v: value) (s: scope): unit =
+let set_scope (k: ident) (v: stashed) (s: scope): unit =
     s.bs <- Bindings.add k v s.bs
 
 let rec find_scope (bss: scope list) (x: ident): scope option =
@@ -414,6 +519,12 @@ module Env : sig
     val residual            : AST.l -> t -> stmt list
     val mergeState          : AST.l -> expr -> t -> t -> t -> unit
     val mergeValue          : AST.l -> t -> t -> value -> value -> value
+
+    val sameVars : t -> t -> bool
+    val stmts : t -> stmt list
+    val push : prog -> t -> unit
+
+    val dump : t -> unit
 
 end = struct
   type t = {
@@ -507,8 +618,11 @@ end = struct
 
   let inner_residual (loc: l) (env: t): stmt list =
     match !(env.returnSyms) with
-    | Some r -> resid_to_stmts loc (assign_stashed loc r) env.residual
-    | None -> resid_to_stmts loc (fun _ -> []) env.residual
+    | Some r -> resid_to_stmts loc (fun k -> Printf.printf "returning\n"; assign_stashed loc r k) env.residual
+    | None -> resid_to_stmts loc (fun _ -> Printf.printf"something is wrong\n" ;  []) env.residual
+
+  let stmts (env: t): stmt list =
+    resid_to_stmts Unknown (fun _ -> Printf.printf"something is wrong\n" ; []) env.residual
 
   let residual (loc: l) (env: t): stmt list =
     !(env.decls) @ inner_residual loc env
@@ -528,10 +642,23 @@ end = struct
         ()
     | _ -> if v != o then push [AST.Stmt_Assign(x, to_expr loc v, loc)] env
 
+
+  let dump (env: t) : unit =
+    let dump bs = Bindings.iter (fun k v ->
+      Printf.printf "%s %s\n" (pprint_ident k) (pp_stashed v)
+    ) bs
+    in
+    Printf.printf "globals\n";
+    dump (env.globals.bs);
+    Printf.printf "locals\n";
+    List.iter (fun ls -> dump ls.bs) env.locals
+
+
+  (** *)
   let updateGlobals (env: t): unit =
     Bindings.iter (fun k v ->
       let prev = get_scope k env.globalnames in
-      assignLExpr Unknown (LExpr_Var k) prev v env
+      assignLExpr Unknown (LExpr_Var k) (value_of_stashed prev) (value_of_stashed v) env
     ) env.globals.bs
 
 (****************************************************************
@@ -641,17 +768,6 @@ end = struct
     push (inner_residual Unknown child) parent;
     r
 
-  (* TODO: something like 'revertible': 
-        run a command on a new state, but hide all of its effects and return them somehow.
-        would be nice if this returned just (globals * locals * residual * command result)
-        then the argument that only these have to be merged is obvious
-
-  let (tres,tchg) = Env.revertible tbranch e in
-  let (fres,fchg) = Env.revertible fbranch e in
-  let changes = Env.mergeChanges tchg fchg in
-  Env.applyChanges changes env
-
-        *)
   let copy (env: t): t = {
       decoders     = env.decoders;
       instructions = env.instructions;
@@ -697,31 +813,31 @@ end = struct
   (* Add a global constant *)
   let addGlobalConst (env: t) (x: ident) (v: value): unit =
     let v = subst_base (EVar x) v in
-    set_scope x v env.constants
+    set_scope x (stashed_of_value v) env.constants
 
   (* Add a global variable, replacing any expressions with accesses to the provided identifier *)
   let addGlobalVar (env: t) (x: ident) (v: value): unit =
     let v = subst_base (EVar x) v in
-    set_scope x v env.globalnames
+    set_scope x (stashed_of_value v) env.globalnames
 
   (* Add a local variable, don't stash it until necessary *)
   let addLocalVar (loc: l) (env: t) (x: ident) (v: value): unit =
     if !trace_write then Printf.printf "TRACE: decl local %s = %s\n" (pprint_ident x) (pp_value v);
     match env.locals with
-    | (bs :: _) -> set_scope x (v) bs
+    | (bs :: _) -> set_scope x (stashed_of_value v) bs
     | []        -> symerror loc "addLocalVar: no scopes available"
 
   (* Add a local constant, don't stash it until necessary *)
   let addLocalConst (loc: l) (env: t) (x: ident) (v: value): unit =
     if !trace_write then Printf.printf "TRACE: decl constlocal %s = %s\n" (pprint_ident x) (pp_value v);
     match env.locals with
-    | (bs :: _) -> set_scope x (v) bs
+    | (bs :: _) -> set_scope x (stashed_of_value v) bs
     | []        -> symerror loc "addLocalConst: no scopes available"
 
   (* Set a local variable, currently just sets it, nothing else to worry about *)
   (* TODO: hook for logic handling stashing of complex local expressions *)
   let setLocalVar (loc: l) (env: t) (x: ident) (v: value) (s: scope): unit =
-    set_scope x v s
+    set_scope x (stashed_of_value v) s
 
   (* Set a global variable and add effects to the residual program *)
   let setGlobalVar (loc: l) (env: t) (x: ident) (v: value): unit =
@@ -730,7 +846,7 @@ end = struct
     | None -> get_scope x env.globalnames)
     in
     assignLExpr loc (LExpr_Var x) prev v env; *)
-    set_scope x v env.globals
+    set_scope x (stashed_of_value v) env.globals
 
   (* Set a variable, either local or global *)
   let setVar (loc: l) (env: t) (x: ident) (v: value): unit =
@@ -749,30 +865,57 @@ end = struct
     push (assign_stashed loc s' v2) e2;
     value_of_stashed s'
 
+  let joinStashed (loc: l) (e1: t) (e2: t) (v1: stashed) (v2: stashed): stashed =
+    let s' = merge_stashed (fun v -> newTemp loc v e1) v1 v2 in
+    push (assign_stashed2 loc s' v1) e1;
+    push (assign_stashed2 loc s' v2) e2;
+    s'
+
+
   (* Join the variables of two states *)
   let mergeState (loc: l) (e: expr) (orig: t) (e1: t) (e2: t): unit =
-    let merge l r: scope =
-      {
-        bs = Bindings.merge (fun k v1 v2 ->
+    let merge l r =
+      Bindings.merge (fun k v1 v2 ->
           match v1, v2 with
-          | Some v1, Some v2 -> Some (mergeValue loc e1 e2 v1 v2)
+          | Some v1, Some v2 -> Some (joinStashed loc e1 e2 v1 v2)
           | Some v, None -> Some v
           | None, Some v -> Some v
           | _ -> None) l.bs r.bs
-      }
     in
-    orig.residual <- push_branch loc orig.residual e e1.residual e2.residual;
-    match contains_open e1.residual, contains_open e2.residual with
+    (match contains_open e1.residual, contains_open e2.residual with
     | true, true ->
-        orig.locals <- List.map2 merge e1.locals e2.locals;
-        orig.globals <- merge e1.globals e2.globals;
+        let ls = List.map2 merge e1.locals e2.locals in
+        let gs =  merge e1.globals e2.globals in
+        List.iter2 (fun s bs -> s.bs <- bs) e1.locals ls;
+        List.iter2 (fun s bs -> s.bs <- bs) e2.locals ls;
+        List.iter2 (fun s bs -> s.bs <- bs) orig.locals ls;
+        e1.globals.bs <- gs;
+        e2.globals.bs <- gs;
+        orig.globals.bs <- gs;
     | true, false -> 
-        orig.locals <- e1.locals;
-        orig.globals <- e1.globals;
+        List.iter2 (fun s i -> s.bs <- i.bs) orig.locals e1.locals;
+        orig.globals.bs <- e1.globals.bs;
     | false, true -> 
-        orig.locals <- e2.locals;
-        orig.globals <- e2.globals;
-    | _ -> ()
+        List.iter2 (fun s i -> s.bs <- i.bs) orig.locals e2.locals;
+        orig.globals.bs <- e2.globals.bs;
+    | _ -> ());
+    if e1.residual <> Open [] || e2.residual <> Open [] then
+      orig.residual <- push_branch loc orig.residual e e1.residual e2.residual
+
+  let sameVars (l: t) (r: t): bool =
+    let merge l r =
+      let out = ref true in
+      let _ = Bindings.merge (fun k v1 v2 ->
+          match v1, v2 with
+          | Some v1, Some v2 -> 
+              if v1 = v2 then Some ()
+              else Some (out := false)
+          | Some v, None -> Some (out := false)
+          | None, Some v -> Some (out := false)
+          | _ -> None) l.bs r.bs in
+      !out
+    in
+    merge l.globals r.globals && List.for_all2 merge l.locals r.locals
 
   (* End disassembly due to a throw, we consider these unreachable *)
   let throw (loc: l) (x: Primops.exc) (env: t): unit =
@@ -960,7 +1103,7 @@ end
   let setVar (loc: l) (x: ident) (v: value) (env: Env.t) = 
     Some (Env.setVar loc env x v)
 
-  (* Control Flow *)
+  (* Branching *)
   let branch (c: value) (t: value eff) (f: value eff) = 
     let loc = Unknown in 
     fun e ->
@@ -977,73 +1120,39 @@ end
           Env.mergeState loc exp e te fe;
           r
 
-  let rec iter (b: value -> (value * value) eff) (i: value): value eff =
+  (* Iteration *)
+  let rec repeat (b: value eff): unit eff =
     let loc = Unknown in
     fun e ->
-      let be = Env.copy e in 
-      match b i be with
-      | Some (c,ib) -> 
+      let rec loop e =
+        let be = Env.copy e in
+        (match b be with
+        | Some c ->
           (match to_bool loc c with
-          | Left true -> iter b ib e (* unfold the loop body, but which env? be or e? *)
-          | Left false -> Some ib (* loop exited *)
-          | Right exp -> (* symbolic loop condition *)
-              (* are be and e the same? if so, its a fixed point
-                 what about i? need to merge that value.
+          | Left true -> 
+              repeat b be
+          | Left false -> 
+              Some ()
+          | Right exp -> 
+              let e' = Env.copy e in
+                let merge = Env.copy e in
+                Env.mergeState loc exp merge e be;
+                if Env.sameVars e e' then
+                  (* extract a program from the residual, force it to have no returns (for now) *)
+                  let body = Env.stmts be in 
+                  (* build the loop *)
+                  let stmts = [AST.Stmt_Repeat (body,lift_expr loc exp,loc)] in  
+                  (* push these stmts onto the residual in e *)
+                  Env.push stmts e;
+                  Some()
+                else
+                  (* run the loop again, after hiding some state via merge *)
+                  loop e 
+          )
+        | None -> None)
+      in
+      loop e
 
-                 merge i+ib, e+eb
-                  -> fixed: build loop from residual body
-                  -> run loop body with merged input + state, loop back and ask if fixed
-
-                 trouble is the style of merge:
-                   -> changes to loop dynamic variables need to be stashed once identified, rather than being held symbolically
-                   -> for instance, if i changes throughout the loop, needs a new #T to represent it
-                      then rather than tracking a symbolic variant (e.g. i -> #T + 1), which can never reach a fixed point, 
-                      we can ignore it as we are just going to write the value to #T 
-
-                 caching decisions from prior passes mean we don't need to merge over those values
-                 searching for a stable frame, effectively
-                 once you have a stable frame, merge e + eb, generating all of the stores to setup the dynamic state in the entry + body
-
-  let eb = Env.hide_diff e diff in
-  let (c,ib) = b im be in
-  if c is constant and diff is empty then run standard case else
-  let diff' = Env.merge e eb + delta of i ib in
-  if diff' - diff = Empty then exit with built loop body else repeat with diff'
-
-  let ((c,ib),diff) = End.revertible (b i) e in
-  if c is constant true -> commit diff, continue
-  if c is constant false -> commit diff, exit
-  if diff == old_diff -> fixed point, exit
-  else 
-
-  if diff != old_diff -> stash diff, overapprox?, repeat
-  else 
-
-                 {e}
-                 #T := i
-                 do {
-                   (c,i') := b #T
-                   {eb}
-                   #T := i'
-                 } while (c)
-
-    termination by fixed upper bound of variable names
-
-    general thought:
-      - can't have an abstract join over symbolic values unless we allow for the creation
-        of new temporaries in the value theory
-      - this is possible with some notion of a callback, but not great
-      - particularly because there would be a different placement for each one + state implications
-
-               *)
-
-              unsupported loc "todo")
-
-      | None -> None (* arb. control flow exit from loop *)
-
-    (*
-      attempt 
-    *)
   let call (b : unit eff): value eff =
     fun e -> let (r,v) = Env.funScope b e in Some v
   let catch (b: 'a eff) (f: AST.l -> Primops.exc -> 'a eff): 'a eff = 

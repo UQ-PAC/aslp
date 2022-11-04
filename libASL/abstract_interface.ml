@@ -113,7 +113,7 @@ module type Effect = sig
 
   (* Control Flow *)
   val branch    : value -> value eff -> value eff -> value eff
-  val iter      : (value -> (value * value) eff) -> value -> value eff
+  val repeat    : value eff -> unit eff
   val call      : unit eff  -> value eff
   val catch     : unit eff -> (AST.l -> Primops.exc -> unit eff) -> unit eff
   val return    : value -> 'a eff

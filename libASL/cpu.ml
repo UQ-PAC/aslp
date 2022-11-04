@@ -49,9 +49,8 @@ let mkCPU (env : Eval.Env.t) (dis : Dis.Env.t): cpu =
     and sem (iset: string) (opcode: Primops.bigint): unit =
         let op = Symbolic.VBits (Left (Primops.prim_cvt_int_bits (Z.of_int 32) opcode)) in
         let decoder = Eval.Env.getDecoder env (Ident iset) in
-        List.iter
-            (fun s -> Printf.printf "%s\n" (Asl_utils.pp_stmt s))
-            (Dis.eval_decode_case AST.Unknown dis decoder op)
+        let sem = Dis.eval_decode_case AST.Unknown dis decoder op in
+        Dis.print_stmts 0 sem
     in
     {
         env      = env;

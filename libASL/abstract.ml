@@ -498,44 +498,36 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | Stmt_For(v, start, dir, stop, b, loc) ->
         let* start' = eval_expr loc start in
         let* stop'  = eval_expr loc stop in
-        let body i =
-          let c = (match dir with
-          | Direction_Up   -> leq_int loc i stop'
-          | Direction_Down -> leq_int loc stop' i
-          ) in
-          branch c (* then *)
-            (scope (addLocalVar loc v i >>> eval_stmts b) >>>
-            let i' = (match dir with
-            | Direction_Up   -> add_int loc i (mk_int 1)
-            | Direction_Down -> sub_int loc i (mk_int 1)
+        scope ( (* Scope to avoid naming collision on the index variable *)
+          let* index  = addLocalVar loc v start' in
+          repeat (
+            let* i = getVar loc v in
+            let c = (match dir with
+            | Direction_Up   -> leq_int loc i stop'
+            | Direction_Down -> leq_int loc stop' i
             ) in
-            pure (from_tuple [i'; vtrue]))
-          (* else *)
-            (pure (from_tuple [i; vfalse]))
-        in
-        let iter_fun (f: value -> value eff) (x: value): (value * value) eff =
-          let+ x' = f x in
-          match to_tuple Unknown x' with
-          | [i; c] -> (i, c)
-          | _ -> failwith "a"
-        in
-        let+ _ = iter (iter_fun body) start' in
-        ()
+            let* () = branch_ c (* then *)
+              (eval_stmts b >>>
+              let i' = (match dir with
+              | Direction_Up   -> add_int loc i (mk_int 1)
+              | Direction_Down -> sub_int loc i (mk_int 1)
+              ) in
+              setVar loc v i')
+              unit
+            in pure c
+          )
+        )
     | Stmt_While(c, b, loc) ->
-        let f = (fun _ ->
+        repeat (
           let* g = eval_expr loc c in
-          branch g (eval_stmts b >>> pure vtrue) (pure vfalse))
-        in
-        let iter_fun (f: 'a -> value eff) (x: 'a): ('a * value) eff =
-          let+ x' = f x in (V.unit, x')
-        in
-        iter (iter_fun f) V.unit
-        >>> unit
+          let+ () = branch_ g (eval_stmts b) (unit) in
+          g
+        )
     | Stmt_Repeat(b, c, loc) ->
-        iter (fun _ ->
+        repeat (
           let* () = eval_stmts b in
-          let+ g = eval_expr loc c in (V.unit,g)) V.unit
-        >>> unit
+          eval_expr loc c
+        )
     | Stmt_Try(tb, ev, catchers, odefault, loc) ->
         catch (eval_stmts tb) (fun l ex -> scope (
           let rec eval cs =
