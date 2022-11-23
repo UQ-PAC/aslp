@@ -1145,7 +1145,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
 
         (match (start', stop') with
         | Val startval, Val stopval ->
-            let rec dis_for (i: value): unit rws =
+            let rec dis_for (i: value): stmt list =
                 let c = (match dir with
                 | Direction_Up -> eval_leq loc i stopval
                 | Direction_Down -> eval_leq loc stopval i
@@ -1155,14 +1155,15 @@ and dis_stmt' (x: AST.stmt): unit rws =
                     | Direction_Up   -> eval_add_int loc i (VInt Z.one)
                     | Direction_Down -> eval_sub_int loc i (VInt Z.one)
                     ) in
-                    let@ () = dis_stmts ([Stmt_Assign (LExpr_Var var, val_expr i, loc)] @ body)
-                    in
-                    dis_for i'
+                    let rest = dis_for i' in
+                    [Stmt_Assign (LExpr_Var var, val_expr i, loc)]
+                        @ body
+                        @ rest
                 else
-                    DisEnv.unit
+                    []
             in
             declare_var loc type_integer var >>
-            dis_for startval
+            dis_stmts (dis_for startval)
         | _, _ ->
             raise (DisUnsupported (loc, "for loop bounds not statically known: " ^ pp_stmt x)))
     | Stmt_Dep_Undefined loc
