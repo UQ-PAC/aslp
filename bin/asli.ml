@@ -185,6 +185,12 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
         cpu'.sem iset op
+    | ":dis" :: _ ->
+        let str = String.sub input 5 (String.length input - 5) in
+        let stmt = LoadASL.read_stmt tcenv str in
+        print_endline ("Disassembling statement: " ^ pp_stmt stmt);
+        let dis = Dis.dis_stmts_entry cpu.env tcenv Unknown (Dis.dis_stmt stmt) in
+        List.iter (fun x -> print_endline (pp_stmt x)) dis;
     | ":dump" :: iset :: opcode :: rest ->
         let fname = 
             (match rest with 

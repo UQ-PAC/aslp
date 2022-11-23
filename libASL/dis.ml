@@ -116,29 +116,28 @@ module LocalEnv = struct
     let pp_sym_bindings (bss: (ty * sym) Bindings.t list) =
         Utils.pp_list (pp_bindings (fun (_,e) -> pp_sym e)) bss
 
-    let init (env: Eval.Env.t) =
+    let init (env: Eval.Env.t) (tenv: TC.Env.t) =
         let eval e = val_expr (Eval.eval_expr Unknown env e) in
-        let tenv = Tcheck.env0 in
         let get_global_type id =
-            (match Tcheck.GlobalEnv.getGlobalVar tenv id with
-            | Some (Type_Bits e) ->
+            (match Tcheck.Env.getVar tenv id with
+            | Some (_, Type_Bits e) ->
                 (Type_Bits (eval e))
-            | Some (Type_App (i, es)) ->
+            | Some (_, Type_App (i, es)) ->
                 (Type_App (i, List.map eval es))
-            | Some t -> (t)
+            | Some (_, t) -> (t)
             | _ -> internal_error Unknown @@ "cannot find type for global: " ^ pprint_ident id)
         in
 
+        let locals = Eval.Env.readLocals env in
         let globals = Eval.Env.readGlobals env in
         let consts = Eval.Env.readGlobalConsts env in
 
         let merge_left k l r = Some l in
-        let globalsAndConsts = Bindings.union merge_left globals consts
-        in
-        let globals = Bindings.mapi
-            (fun id v -> (get_global_type id, Val v))
-            globalsAndConsts
-        in
+        let bindings_with_ty = Bindings.mapi (fun id v -> (get_global_type id, Val v)) in
+        let variables = List.map bindings_with_ty 
+            (locals @ [globals; consts]) in
+        let globals = List.fold_right
+            (Bindings.union merge_left) variables Bindings.empty in
         {
             locals = [Bindings.empty ; globals];
             returnSymbols = [];
@@ -158,6 +157,9 @@ module LocalEnv = struct
             (fun i x -> if i = last then Bindings.empty else x) env.locals in
         Printf.sprintf "locals = %s" (pp_sym_bindings withoutGlobals)
         (* Printf.sprintf "locals = %s" (pp_sym_bindings env.locals) *)
+
+    let readGlobals (env: t): (ty * sym) Bindings.t = 
+        List.hd (List.rev (env.locals))
 
     let getReturnSymbol (loc: l) (env: t): expr =
         match env.returnSymbols with
@@ -1315,13 +1317,11 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
     else
         DisEnv.pure false
 
-let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt list =
-    let DecoderCase_Case (_,_,loc) = decode in
-
+let dis_stmts_entry (env: Eval.Env.t) (tenv: TC.Env.t) (loc: l) (disassemble: unit rws): stmt list = 
     let env = Eval.Env.freeze env in
-    let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Eval.Env.readGlobals env) in
-    let lenv = LocalEnv.init env in
-    let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
+    let lenv = LocalEnv.init env tenv in
+    let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (LocalEnv.readGlobals lenv) in
+    let ((),lenv',stmts) = disassemble env lenv in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
     let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
@@ -1333,6 +1333,11 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     end;
     stmts'
 
+
+let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt list =
+    let DecoderCase_Case (_,_,loc) = decode in
+    let tenv = TC.Env.mkEnv TC.env0 in
+    dis_stmts_entry env tenv loc (dis_decode_case loc decode op)
 
 let retrieveDisassembly (env: Eval.Env.t) (opcode: string): stmt list =
     let decoder = Eval.Env.getDecoder env (Ident "A64") in
