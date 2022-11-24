@@ -518,11 +518,13 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           )
         )
     | Stmt_While(c, b, loc) ->
-        repeat (
-          let* g = eval_expr loc c in
-          let+ () = branch_ g (eval_stmts b) (unit) in
-          g
-        )
+        let* g = eval_expr loc c in
+        branch_ g (
+          repeat (
+            eval_stmts b >>>
+            eval_expr loc c
+          )
+        ) (unit)
     | Stmt_Repeat(b, c, loc) ->
         repeat (
           let* () = eval_stmts b in

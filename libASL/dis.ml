@@ -23,6 +23,7 @@ let rec print_stmts (d: int) (xs: stmt list) =
       Printf.printf "%srepeat {\n" (string d " ");
       print_stmts (d+2) b;
       Printf.printf "%s} until %s\n" (string d " ") (Asl_utils.pp_expr c);
+      print_stmts d xs
   | Stmt_If(c,l,[],r,loc)::xs ->
       Printf.printf "%sif %s then {\n" (string d " ") (Asl_utils.pp_expr c);
       print_stmts (d+2) l;
@@ -271,6 +272,7 @@ let push_throw (res: 'a resid): 'a resid =
 
 let push_branch (loc: l) (res: 'a resid) (c: expr) (l: 'a resid) (r: 'a resid) =
   match l, r with
+  | Open [], Open [] -> res
   | Open l, Open r -> push res [AST.Stmt_If (lift_expr loc c,l,[],r,loc)]
   | _ -> map_open (fun s -> Branch(contains_open l || contains_open r,s,c,l,r)) res
 
@@ -284,7 +286,7 @@ let rec resid_to_stmts (loc: l) (r: 'a -> stmt list) (res: 'a resid): stmt list 
 let pp_resid r =
   match r with
   | Open s -> Printf.printf "Open \n"; print_stmts 2 s
-  | Return (s,v) -> Printf.printf "Return \n"
+  | Return (s,v) -> Printf.printf "Return \n" ; print_stmts 2 s
   | Throw s -> Printf.printf "Throw \n"
   | Branch _ -> Printf.printf "Branch \n"
 
@@ -370,11 +372,7 @@ let assign_stashed (loc: l) (s: stashed) (v: value): stmt list =
         in ()
     | SIdent (i,_), _ -> 
         out := AST.Stmt_Assign(LExpr_Var i, to_expr loc v, loc)::!out
-    | SVal v, v' ->
-        if v != v' then
-          Printf.printf "assignment with different values %s %s\n" (pp_value v) (pp_value v')
-        else 
-          Printf.printf "return of single value %s\n" (pp_value v)
+    | SVal v, v' -> ()
     | _ -> failwith "assignStashed: unknown case"
   in
   loop s v;
@@ -526,6 +524,8 @@ module Env : sig
 
     val dump : t -> unit
 
+    val pushState : l -> t -> t -> unit
+
 end = struct
   type t = {
     (* Shared across instructions *)
@@ -551,6 +551,13 @@ end = struct
     (* Shared within scope *)
     mutable residual     : value resid;
   }
+
+  (*
+  type delta = {
+    mutable locals       : scope list;
+    mutable globals      : scope;
+    mutable residual     : value resid;
+  }*)
 
   let addEnum (env: t) (x: ident) (vs: value list): unit =
     env.enums    <- Bindings.add x vs env.enums
@@ -618,7 +625,7 @@ end = struct
 
   let inner_residual (loc: l) (env: t): stmt list =
     match !(env.returnSyms) with
-    | Some r -> resid_to_stmts loc (fun k -> Printf.printf "returning\n"; assign_stashed loc r k) env.residual
+    | Some r -> resid_to_stmts loc (fun k -> assign_stashed loc r k) env.residual
     | None -> resid_to_stmts loc (fun _ -> Printf.printf"something is wrong\n" ;  []) env.residual
 
   let stmts (env: t): stmt list =
@@ -644,6 +651,7 @@ end = struct
 
 
   let dump (env: t) : unit =
+    Printf.printf "Dumping STATE:\n";
     let dump bs = Bindings.iter (fun k v ->
       Printf.printf "%s %s\n" (pprint_ident k) (pp_stashed v)
     ) bs
@@ -651,7 +659,9 @@ end = struct
     Printf.printf "globals\n";
     dump (env.globals.bs);
     Printf.printf "locals\n";
-    List.iter (fun ls -> dump ls.bs) env.locals
+    List.iter (fun ls -> dump ls.bs) env.locals;
+    pp_resid env.residual;
+    Printf.printf "Done STATE\n"
 
 
   (** *)
@@ -709,6 +719,8 @@ end = struct
     updateGlobals child;
     (r, residual Unknown child)
 
+  (* TODO: rather than refs, can we pull the shared items out? *)
+
   (** Create an environment for a callee and return 
       their result along with a residual program *)
   let funScope (k: t -> 'a) (parent: t): 'a * value =
@@ -720,22 +732,23 @@ end = struct
       records      = parent.records;
       typedefs     = parent.typedefs;
       globalnames  = parent.globalnames;
-      globals      = parent.globals;
       constants    = parent.constants;
       impdefs      = parent.impdefs;
-      numSymbols   = parent.numSymbols;
-      decls        = parent.decls;
 
       (* changes *)
+      globals      = parent.globals;
+      decls        = parent.decls;
+      numSymbols   = parent.numSymbols;
       locals       = [empty_scope ()];
       residual     = Open [];
       returnSyms   = ref None;
     } in
     (* Run the child *)
     let r = k child in
-    (* TODO: rather than refs, can we pull the shared items out? *)
-    (* copy out: numSymbols, new decls, etc. *)
+    parent.numSymbols <- child.numSymbols;
+    (* inline the residual code *)
     push (inner_residual Unknown child) parent;
+    (* *)
     match !(child.returnSyms) with
     | Some v -> 
         (r, value_of_stashed v)
@@ -753,20 +766,46 @@ end = struct
       records      = parent.records;
       typedefs     = parent.typedefs;
       globalnames  = parent.globalnames;
+      constants    = parent.constants;
+      impdefs      = parent.impdefs;
+
+      (* changes *)
       globals      = parent.globals;
+      decls        = parent.decls;
+      numSymbols   = parent.numSymbols;
+      locals       = empty_scope () :: parent.locals;
+      residual     = Open [];
+      returnSyms   = parent.returnSyms;
+    } in
+    let r = k child in
+    parent.numSymbols <- child.numSymbols;
+    push (inner_residual Unknown child) parent;
+    r
+
+  (*
+  let speculate (k: t -> 'a) (parent: t): ('a * delta) =
+    let child = {
+      decoders     = parent.decoders;
+      instructions = parent.instructions;
+      functions    = parent.functions;
+      enums        = parent.enums;
+      records      = parent.records;
+      typedefs     = parent.typedefs;
+      globalnames  = parent.globalnames;
       constants    = parent.constants;
       impdefs      = parent.impdefs;
       numSymbols   = parent.numSymbols;
-      decls        = parent.decls;
-      returnSyms   = parent.returnSyms;
 
       (* changes *)
-      locals       = empty_scope () :: parent.locals;
+      globals      = { bs = parent.globals.bs };
+      decls        = parent.decls;
+      locals       = List.map (fun x -> { bs = x.bs }) parent.locals;
       residual     = Open [];
+      returnSyms   = parent.returnSyms;
     } in
     let r = k child in
-    push (inner_residual Unknown child) parent;
-    r
+    let d = { locals = child.locals ; globals = child.globals ; residual = child.residual } in
+    (r,d)*)
 
   let copy (env: t): t = {
       decoders     = env.decoders;
@@ -899,8 +938,12 @@ end = struct
         List.iter2 (fun s i -> s.bs <- i.bs) orig.locals e2.locals;
         orig.globals.bs <- e2.globals.bs;
     | _ -> ());
-    if e1.residual <> Open [] || e2.residual <> Open [] then
-      orig.residual <- push_branch loc orig.residual e e1.residual e2.residual
+    orig.residual <- push_branch loc orig.residual e e1.residual e2.residual
+
+  let pushState (loc: l) (orig: t) (e: t): unit =
+    orig.globals.bs <- e.globals.bs;
+    List.iter2 (fun s b -> s.bs <- b.bs) orig.locals e.locals;
+    push (inner_residual loc e) orig
 
   let sameVars (l: t) (r: t): bool =
     let merge l r =
@@ -1052,7 +1095,11 @@ end
   let reset: unit eff = 
     fun e -> Some () (* TODO: needed? *)
   let scope (b: unit eff): unit eff = 
-    fun e -> Env.innerScope b e
+    fun e -> 
+      let r = Env.innerScope b e in
+      match r with
+      | Some () -> Some ()
+      | None -> None
 
   (* State Reads - TODO: Merge this structure with env *)
   let getGlobalConst (x: ident) (env: Env.t) =
@@ -1113,7 +1160,9 @@ end
       | (Right exp) -> 
           let te = Env.copy e in
           let fe = Env.copy e in
-          let r = (match t te, f fe with
+          let tr = t te in
+          let fr = f fe in
+          let r = (match tr, fr with
           | Some v1, Some v2 -> Some (Env.mergeValue loc te fe v1 v2)
           | Some v, None | None, Some v -> Some v
           | _ -> None) in
@@ -1130,8 +1179,10 @@ end
         | Some c ->
           (match to_bool loc c with
           | Left true -> 
-              repeat b be
+              Env.pushState loc e be;
+              repeat b e
           | Left false -> 
+              Env.pushState loc e be;
               Some ()
           | Right exp -> 
               let e' = Env.copy e in
@@ -1158,11 +1209,9 @@ end
   let catch (b: 'a eff) (f: AST.l -> Primops.exc -> 'a eff): 'a eff = 
     fun e -> b e
   let return v: 'a eff = 
-    fun e -> 
-      Env.return Unknown v e; None
+    fun e -> Env.return Unknown v e; None
   let throw l x: 'a eff = 
-    fun e -> 
-      Env.throw l x e; None
+    fun e -> Env.throw l x e; None
   let error l s = 
     fun _ -> symerror l s
 
