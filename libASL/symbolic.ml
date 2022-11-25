@@ -8,9 +8,9 @@ module TC = Tcheck
 open Primops
 open Asl_utils
 
-exception SymbolicError of (AST.l * string)
+exception SymbolicError of (AST.l list * string)
 exception UnsupportedError of (AST.l * string)
-let symerror loc err = raise (SymbolicError (loc, err))
+let symerror loc err = raise (SymbolicError ([loc], err))
 let unsupported loc err = raise (UnsupportedError (loc, err))
 
 type 'a sym = ('a, expr) Either.t
@@ -49,7 +49,7 @@ and pp_expr (x: expr): string =
   | EAccess (e,CTuple i) -> pp_expr e ^ "(" ^ string_of_int i ^ ")"
   | EAccess (e,CField f) -> pp_expr e ^ "." ^ AST.pprint_ident f
   | EUnknown -> "UNINITIALIZED"
-and pp_int (x: Z.t sym): string = Either.fold ~left:prim_cvt_int_decstr ~right:pp_expr x
+and pp_int (x: Z.t sym): string = Either.fold ~left:prim_cvt_int_decstr ~right:(fun v -> "int:" ^ pp_expr v) x
 and pp_value (x: value): string =
   match x with
   | VInt  n -> pp_int n
@@ -57,10 +57,10 @@ and pp_value (x: value): string =
   | VReal (Left n)    -> prim_cvt_real_str n
   | VBits (Left n)    -> prim_cvt_bits_str (Z.of_int n.n) n
   | VString (Left n)  -> "\"" ^ n ^ "\""
-  | VBool (Right n)   -> pp_expr n
-  | VReal (Right n)   -> pp_expr n
-  | VBits (Right n)   -> pp_expr n.v
-  | VString (Right n) -> pp_expr n
+  | VBool (Right n)   -> "bool:" ^ pp_expr n
+  | VReal (Right n)   -> "real:" ^ pp_expr n
+  | VBits (Right n)   -> "bits:" ^ pp_expr n.v
+  | VString (Right n) -> "str:" ^ pp_expr n
   | VMask   m         -> "todo: mask"
   | VExc (loc, exc)   ->
       let msg = (match exc with
@@ -90,10 +90,12 @@ let rec to_expr (loc: AST.l) (v: value): AST.expr =
   | VBits (Left n)    -> AST.Expr_LitBits(Z.format ("%0" ^ string_of_int n.n ^ "b") n.v)
   | VString (Left n)  -> AST.Expr_LitString n
   | VInt  n           -> lift_int  loc n
-  | VBool (Right n)   -> lift_expr loc  n
-  | VReal (Right n)   -> lift_expr loc  n
-  | VBits (Right n)   -> lift_expr loc  n.v
-  | VString (Right n) -> lift_expr loc  n
+  | VBool (Right n)   -> lift_expr loc n
+  | VReal (Right n)   -> lift_expr loc n
+  | VBits (Right n)   -> lift_expr loc n.v
+  | VString (Right n) -> lift_expr loc n
+  | VRAM (Left n)     -> unsupported loc @@ "concrete RAM"
+  | VRAM (Right n)    -> lift_expr loc n
   | _ -> unsupported loc @@ "casting unhandled value type to expression: " ^ pp_value v
 and lift_int (loc: AST.l) (i: Z.t sym): AST.expr =
   match i with
@@ -108,7 +110,7 @@ and lift_expr (loc: AST.l) (e: expr): AST.expr =
   | EAccess (e,CArray i) -> AST.Expr_Array (lift_expr loc e,lift_int loc i)
   | EAccess (e,CTuple _) -> unsupported loc @@ "need temporaries to extract from a tuple"
   | EAccess (e,CField f) -> AST.Expr_Field (lift_expr loc e,f)
-  | EUnknown -> unsupported loc @@ "unknown expression"
+  | EUnknown -> AST.Expr_Unknown (Type_Constructor (Ident "boolean"))
 
 (* Conversion from basic values *)
 
@@ -126,7 +128,7 @@ let rec from_concrete (loc: AST.l) (v: Value.value) : value =
   | Value.VTuple ts      -> VTuple  (List.map (from_concrete loc) ts)
   | Value.VRecord fs     -> VRecord (Bindings.map (from_concrete loc) fs)
   | Value.VArray (a,v)   -> VArray  (ImmutableArray.map (from_concrete loc) a, from_concrete loc v)
-  | Value.VUninitialized -> unsupported loc "from_concrete: insufficient information to build symbolic"
+  | Value.VUninitialized _ -> unsupported loc "from_concrete: insufficient information to build symbolic"
 
 let rec to_concrete (loc: AST.l) (v: value): Value.value =
   match v with
@@ -141,7 +143,7 @@ let rec to_concrete (loc: AST.l) (v: value): Value.value =
   | VTuple (vs)      -> Value.VTuple (List.map (to_concrete loc) vs)
   | VRecord (vs)     -> Value.VRecord (Bindings.map (to_concrete loc) vs)
   | VArray (vs, d)   -> Value.VArray (ImmutableArray.map (to_concrete loc) vs, to_concrete loc d)
-  | _                -> unsupported Unknown "to_concrete: cannot coerce expression value to concrete value"
+  | _                -> unsupported loc "to_concrete: cannot coerce expression value to concrete value"
 
 let rec map_expr (f: expr -> expr) (v: value): value =
   match v with
@@ -353,6 +355,16 @@ let sym_int_to_bits (x: Z.t sym) (lo: Z.t sym) (wd: Z.t sym): vbits =
   | Left x', Left lo', Left wd' -> Left (prim_extract_int x' lo' wd')
   | _ -> vcall wd "extract_bits" [] [VInt x; VInt lo; VInt wd]
 
+let sym_zeros_bits (x: Z.t sym): vbits =
+  match x with
+  | Left x' -> Left (prim_zeros_bits x')
+  | _ -> vcall x "zeros_bits" [VInt x] []
+
+let sym_ones_bits (x: Z.t sym): vbits =
+  match x with
+  | Left x' -> Left (prim_ones_bits x')
+  | _ -> vcall x "ones_bits" [VInt x] []
+
 (* Real *)
 
 let sym_eq_real (x: real sym) (y: real sym): bool sym =
@@ -543,6 +555,7 @@ module SymbolicValue : Abstract_interface.Value = struct
   let new_array = sym_new_array
 
   (* Unknown *)
+  let unknown_boolean _   = VBool (Right EUnknown)
   let unknown_integer _   = VInt (Right EUnknown)
   let unknown_real    _   = VReal (Right EUnknown)
   let unknown_string  _   = VString (Right EUnknown)

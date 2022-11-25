@@ -88,6 +88,9 @@ module Env : sig
     val nestTop             : (t -> 'a) -> (t -> 'a)
     val nest                : (t -> 'a) -> (t -> 'a)
 
+    val copy                : t -> t
+
+    val compare             : t -> t -> bool
     val addLocalVar         : AST.l -> t -> ident -> value -> unit
     val addLocalConst       : AST.l -> t -> ident -> value -> unit
 
@@ -117,12 +120,15 @@ module Env : sig
 
     val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
     val addInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list) -> unit
+    val listInstructions    : t -> (encoding * (stmt list) option * bool * stmt list) list
 
     val getDecoder          : t -> ident -> decode_case
     val addDecoder          : t -> ident -> decode_case -> unit
 
     val setImpdef           : t -> string -> value -> unit
     val getImpdef           : AST.l -> t -> string -> value
+
+    val getGlobals          : t -> scope
 
 end = struct
     type t = {
@@ -139,6 +145,9 @@ end = struct
         mutable impdefs      : value ImpDefs.t;
         mutable locals       : scope list
     }
+
+    let getGlobals (env: t): scope =
+        env.globals
 
     let empty = {
         decoders     = Bindings.empty;
@@ -188,6 +197,53 @@ end = struct
             locals       = empty_scope () :: parent.locals;  (* only change *)
         } in
         k child
+
+    let copy (env: t): t =
+        {
+            decoders     = env.decoders;
+            instructions = env.instructions;
+            functions    = env.functions;
+            enums        = env.enums;
+            enumEqs      = env.enumEqs;
+            enumNeqs     = env.enumNeqs;
+            records      = env.records;
+            typedefs     = env.typedefs;
+            globals      = { bs = env.globals.bs };
+            constants    = env.constants;
+            impdefs      = env.impdefs;
+            locals       = List.map (fun x -> { bs = x.bs }) env.locals;
+        }
+
+
+    let compare (env1: t) (env2: t): bool =
+            Bindings.for_all (fun k v1 ->
+                match (Bindings.find_opt k env2.globals.bs) with
+                | Some v2 when v1 = v2 -> true
+                | None ->
+                    Printf.printf "%s not in second environment\n" (pprint_ident k);
+                    false
+                | Some v2 ->
+                    Printf.printf "%s has mismatched value: %s | %s\n"
+                        (pprint_ident k) (pp_value v1) (pp_value v2);
+                    false
+            ) env1.globals.bs
+            &&
+            Bindings.for_all (fun k v2 ->
+                match (Bindings.find_opt k env1.globals.bs) with
+                | Some v1 when v1 = v2 -> true
+                | None ->
+                    Printf.printf "%s not in first environment\n"
+                        (pprint_ident k);
+                    false
+                | Some v1 ->
+                    Printf.printf "%s has mismatched value: %s | %s\n"
+                        (pprint_ident k) (pp_value v2) (pp_value v1);
+                    false
+            ) env2.globals.bs
+
+    let listInstructions (env: t) =
+        List.map snd (Bindings.bindings env.instructions)
+
 
     let addLocalVar (loc: l) (env: t) (x: ident) (v: value): unit =
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident x) (pp_value v);
@@ -363,12 +419,13 @@ module Semantics = Abstract.Make(struct
   let new_array = Value.empty_array
 
   (* Unknown *)
+  let unknown_boolean _ = VUninitialized (Type_Constructor(Ident "boolean"))
   let unknown_integer _ = Value.eval_unknown_integer ()
   let unknown_string _ = Value.eval_unknown_string ()
   let unknown_real _ = Value.eval_unknown_real ()
   let unknown_bits l v = Value.eval_unknown_bits (Value.to_integer l v)
   let unknown_ram l v = Value.eval_unknown_ram (Value.to_integer l v)
-  let unknown_enum _ es = match es with e::_ -> e | _ -> VUninitialized
+  let unknown_enum _ es = match es with e::_ -> e | _ -> VUninitialized (Type_Constructor (Ident "integer"))
 
 end) (struct
   type value = Value.value
@@ -382,7 +439,7 @@ end) (struct
   (* State *)
   let reset = pure ()
   let scope = Env.nest
-  let call (b : unit eff) e =
+  let call _ (b : unit eff) e =
     try
       Env.nestTop b e;
       Value.VTuple []
@@ -427,13 +484,13 @@ end) (struct
   let getImpdef (loc: l) (s: string) (env: Env.t) = Env.getImpdef loc env s
 
   (* Control Flow *)
-  let branch c t f e = if Value.to_bool Unknown ( c ) then t e else f e
-  let rec repeat b e =
+  let branch l c t f e = if Value.to_bool l ( c ) then t e else f e
+  let rec repeat l b e =
     let c = b e in
-    if Value.to_bool Unknown c then repeat b e else ()
-  let return v _ = raise (Value.Return v)
+    if Value.to_bool l c then repeat l b e else ()
+  let return _ v _ = raise (Value.Return v)
   let throw l e _ = raise (Value.Throw (l,e))
-  let catch b f e = try b e with Value.Throw (l,x) -> f l x e
+  let catch _ b f e = try b e with Value.Throw (l,x) -> f l x e
   let error l s e = raise (Value.EvalError (l,s))
 end)
 

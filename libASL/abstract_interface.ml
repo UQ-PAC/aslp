@@ -62,6 +62,7 @@ module type Value = sig
   val new_array : t -> t
 
   (* Unknown *)
+  val unknown_boolean : AST.l -> t
   val unknown_integer : AST.l -> t
   val unknown_real    : AST.l -> t
   val unknown_string  : AST.l -> t
@@ -112,11 +113,11 @@ module type Effect = sig
   val setVar         : AST.l     -> AST.ident -> value        -> unit eff
 
   (* Control Flow *)
-  val branch    : value -> value eff -> value eff -> value eff
-  val repeat    : value eff -> unit eff
-  val call      : unit eff  -> value eff
-  val catch     : unit eff -> (AST.l -> Primops.exc -> unit eff) -> unit eff
-  val return    : value -> 'a eff
+  val branch    : AST.l -> value -> value eff -> value eff -> value eff
+  val repeat    : AST.l -> value eff -> unit eff
+  val call      : AST.l -> unit eff  -> value eff
+  val catch     : AST.l -> value eff -> (AST.l -> Primops.exc -> value eff) -> value eff
+  val return    : AST.l -> value -> 'a eff
   val throw     : AST.l -> Primops.exc -> 'a eff
   val error     : AST.l -> string -> 'a eff
 end

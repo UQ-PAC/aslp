@@ -31,7 +31,7 @@ type value =
     | VRecord of (value Bindings.t)
     | VArray  of (value ImmutableArray.t * value)
     | VRAM    of ram
-    | VUninitialized (* initial value of scalars with no explicit initialization *)
+    | VUninitialized of AST.ty (* initial value of scalars with no explicit initialization *)
 
 
 (****************************************************************)
@@ -75,7 +75,7 @@ let rec pp_value (x: value): string =
         let vs = List.map (fun (i, v) -> string_of_int i ^":"^ pp_value v) (ImmutableArray.bindings a) in
         "[" ^ String.concat ", " vs ^ "]"
     | VRAM _ -> "RAM"
-    | VUninitialized -> "UNINITIALIZED"
+    | VUninitialized _ -> "UNINITIALIZED"
     )
 
 

@@ -75,7 +75,8 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let loc = mkLoc fname cmd in
         let (x, e) = LoadASL.read_impdef tcenv loc cmd in
         let v = Eval.eval_expr loc cpu.env e in
-        Eval.Env.setImpdef cpu.env x v
+        Eval.Env.setImpdef cpu.env x v;
+        Dis.Env.setImpdef cpu.dis x (Symbolic.from_concrete Unknown v)
     | [":set"; flag] when Utils.startswith flag "+" ->
         (match List.assoc_opt (Utils.stringDrop 1 flag) flags with
         | None -> Printf.printf "Unknown flag %s\n" flag;
@@ -86,6 +87,23 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         | None -> Printf.printf "Unknown flag %s\n" flag;
         | Some f -> f := false
         )
+    | [":coverage"; iset; instr] ->
+        let open Testing in
+        let encodings = get_opcodes opt_verbose iset instr cpu.env in
+        List.iter (fun (enc, fields, opt_opcodes) ->
+            Printf.printf "\nENCODING: %s\n" enc;
+            match opt_opcodes with
+            | None -> Printf.printf "(encoding unused)\n";
+            | Some opcodes ->
+                List.iter (fun (op, valid) ->
+                    let fs = fields_of_opcode fields op in
+                    Printf.printf "%s: %s --> " (hex_of_int op) (pp_enc_fields fs);
+                    if valid then
+                        let result = op_test_opcode cpu.env cpu.dis iset op in
+                        Printf.printf "%s\n" (pp_opresult (fun _ -> "OK") result)
+                    else Printf.printf "(invalid)\n";
+                ) opcodes
+        ) encodings;
     | [":project"; prj] ->
         let inchan = open_in prj in
         (try
@@ -135,7 +153,7 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
             )
         with
         | Symbolic.SymbolicError(loc, msg) ->
-            Printf.printf "  Symbolic Error %s : %s\n" (pp_loc loc) msg;
+            Printf.printf "  %s: Symbolic error: %s\n" (String.concat "\n" (List.map pp_loc loc)) msg;
             Printexc.print_backtrace stdout
         | Symbolic.UnsupportedError(loc, msg) ->
             Printf.printf "  Unsupported Error %s : %s\n" (pp_loc loc) msg;
@@ -183,6 +201,8 @@ let main () =
                 LoadASL.read_spec filename !opt_verbose
             end else if Utils.endswith filename ".asl" then begin
                 LoadASL.read_file filename false !opt_verbose
+            end else if Utils.endswith filename ".prj" then begin
+                [] (* ignore project files here and process later *)
             end else begin
                 failwith ("Unrecognized file suffix on "^filename)
             end
@@ -209,7 +229,11 @@ let main () =
 
         LNoise.history_load ~filename:"asl_history" |> ignore;
         LNoise.history_set ~max_length:100 |> ignore;
-        repl (TC.Env.mkEnv TC.env0) (Cpu.mkCPU env dis)
+
+        let prj_files = List.filter (fun f -> Utils.endswith f ".prj") !opt_filenames in
+        let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env dis in
+        List.iter (fun f -> process_command tcenv cpu "<args>" (":project " ^ f)) prj_files;
+        repl tcenv cpu
     end
 
 let _ =ignore(main ())

@@ -16,6 +16,14 @@ open Symbolic
 let rec string n s =
   if n = 0 then "" else s ^ string (n - 1) s
 
+let pp_exc x = match x with
+  | Primops.Exc_ConstrainedUnpredictable -> "Constrained Unpredictable"
+  | Primops.Exc_ExceptionTaken -> "Exception Taken"
+  | Primops.Exc_ImpDefined s -> "Imp Defined " ^ s
+  | Primops.Exc_SEE s -> "See " ^ s
+  | Primops.Exc_Undefined -> "Undefined"
+  | Primops.Exc_Unpredictable -> "Unpredictable" 
+ 
 let rec print_stmts (d: int) (xs: stmt list) =
   match xs with
   | [] -> ()
@@ -27,8 +35,10 @@ let rec print_stmts (d: int) (xs: stmt list) =
   | Stmt_If(c,l,[],r,loc)::xs ->
       Printf.printf "%sif %s then {\n" (string d " ") (Asl_utils.pp_expr c);
       print_stmts (d+2) l;
-      Printf.printf "%s} else {\n" (string d " ");
-      print_stmts (d+2) r;
+      (if r <> [] then begin
+        Printf.printf "%s} else {\n" (string d " ");
+        print_stmts (d+2) r;
+      end);
       Printf.printf "%s}\n" (string d " ");
       print_stmts d xs
   | x::xs ->
@@ -166,12 +176,15 @@ let b' : Z.t Symbolic.sym -> vbits = fun n -> Right {n=n; v=ECall (FIdent (f,0),
 | ("eor_bits",          [VInt n], [VBits _       ; VBits _           ])     -> Some (VBits  (b' n))
 | ("not_bits",          [VInt n], [VBits (Left x)             ])     -> Some (VBits   (Left(prim_not_bits x)))
 | ("not_bits",          [VInt n], [VBits _                    ])     -> Some (VBits   (b' n))
-| ("zeros_bits",        [VInt (Left n)], [                    ])     -> Some (VBits   (Left(prim_zeros_bits n)))
-| ("ones_bits",         [VInt (Left n)], [                    ])     -> Some (VBits   (Left(prim_ones_bits n)))
+
+
 | ("replicate_bits",    [_; _  ], [VBits (Left x); VInt (Left y)     ])     -> Some (VBits   (Left(prim_replicate_bits x y)))
 | ("replicate_bits",    [VInt m; VInt n], [VBits _       ; VInt _            ])     -> Some (VBits   (b' (sym_mul_int m n)))
-| ("append_bits",       [VInt m; VInt n], [VBits (Left x); VBits (Left y)]) -> Some (VBits   (Left(prim_append_bits x y)))
-| ("append_bits",       [VInt m; VInt n], [VBits _       ; VBits _       ]) -> Some (VBits   (b' (sym_add_int m n)))
+
+| ("ones_bits",         [VInt n], [                    ])     -> Some (VBits   (sym_ones_bits n))
+| ("zeros_bits",        [VInt n], [                    ])     -> Some (VBits   (sym_zeros_bits n))
+| ("append_bits",       [VInt m; VInt n], [VBits x; VBits y]) -> Some (VBits (sym_append_bits x y))
+
 | ("eq_str",            [      ], [VString (Left x); VString (Left y)])     -> Some (VBool   (Left(prim_eq_str x y)))
 | ("eq_str",            [      ], [VString _       ; VString _       ])     -> Some (VBool   (f'))
 | ("ne_str",            [      ], [VString (Left x); VString (Left y)])     -> Some (VBool   (Left(prim_ne_str x y)))
@@ -196,6 +209,7 @@ let b' : Z.t Symbolic.sym -> vbits = fun n -> Right {n=n; v=ECall (FIdent (f,0),
 | ("is_unpred_exc",     [      ], [VExc (_, ex)        ])     -> Some (VBool  (Left (prim_is_unpred_exc ex)))
 | _ -> None
 )
+
 
 (****************************************************************
  * Flags to control behaviour (mostly for debugging)
@@ -261,8 +275,18 @@ let map_open (f: stmt list -> 'a resid) (res: 'a resid): 'a resid =
   in
   let (_,out) = loop res in out
 
+let prefix (ps: stmt list) (res: 'a resid): 'a resid =
+  match res with
+  | Open s -> Open (ps @ s)
+  | Return (s,r) -> Return (ps@s,r)
+  | Throw s -> Throw (ps @ s)
+  | Branch (b,s,e,l,r) -> Branch (b,ps@s,e,l,r)
+
 let push (res: 'a resid) (ps: stmt list): 'a resid =
   map_open (fun s -> Open (s @ ps)) res
+
+let push_res (res: 'a resid) (b: 'a resid): 'a resid =
+  map_open (fun s -> prefix s b) res
 
 let push_return (res: 'a resid) (a: 'a): 'a resid =
   map_open (fun s -> Return (s, a)) res
@@ -270,11 +294,20 @@ let push_return (res: 'a resid) (a: 'a): 'a resid =
 let push_throw (res: 'a resid): 'a resid =
   map_open (fun s -> Throw s) res
 
+let pp_resid r =
+  match r with
+  | Open s -> Printf.printf "Open \n"; print_stmts 2 s
+  | Return (s,v) -> Printf.printf "Return \n" ; print_stmts 2 s
+  | Throw s -> Printf.printf "Throw \n"
+  | Branch _ -> Printf.printf "Branch \n"
+
 let push_branch (loc: l) (res: 'a resid) (c: expr) (l: 'a resid) (r: 'a resid) =
   match l, r with
   | Open [], Open [] -> res
-  | Open l, Open r -> push res [AST.Stmt_If (lift_expr loc c,l,[],r,loc)]
-  | _ -> map_open (fun s -> Branch(contains_open l || contains_open r,s,c,l,r)) res
+  | Open l, Open r -> 
+      push res [AST.Stmt_If (lift_expr loc c,l,[],r,loc)]
+  | _ -> 
+      map_open (fun s -> Branch(contains_open l || contains_open r,s,c,l,r)) res
 
 let rec resid_to_stmts (loc: l) (r: 'a -> stmt list) (res: 'a resid): stmt list =
   match res with
@@ -282,13 +315,6 @@ let rec resid_to_stmts (loc: l) (r: 'a -> stmt list) (res: 'a resid): stmt list 
   | Return (s,v) -> s @ (r v)
   | Throw s -> s @ [AST.Stmt_Assert (bool_expr false,loc)]
   | Branch (_,s,c,ls,rs) -> s @ [AST.Stmt_If (lift_expr loc c,resid_to_stmts loc r ls,[],resid_to_stmts loc r rs,loc)]
-
-let pp_resid r =
-  match r with
-  | Open s -> Printf.printf "Open \n"; print_stmts 2 s
-  | Return (s,v) -> Printf.printf "Return \n" ; print_stmts 2 s
-  | Throw s -> Printf.printf "Throw \n"
-  | Branch _ -> Printf.printf "Branch \n"
 
 (****************************************************************)
 (** {2 Stashed Value}                                           *)
@@ -409,7 +435,8 @@ let assign_stashed2 (loc: l) (s: stashed) (v: stashed): stmt list =
           let load = copy_scalar_type (EVar j) v in
           out := AST.Stmt_Assign(LExpr_Var i, to_expr loc load, loc)::!out
     | SIdent (i,_), SVal v -> 
-        out := AST.Stmt_Assign(LExpr_Var i, to_expr loc v, loc)::!out
+        if not (is_unknown v) then
+          out := AST.Stmt_Assign(LExpr_Var i, to_expr loc v, loc)::!out
     | SVal _, _ -> ()
     | _ -> failwith "assignStashed: unknown case"
   in
@@ -475,8 +502,8 @@ module Env : sig
     val empty               : unit -> t
     val copy                : t -> t
 
-    val instScope           : (t -> 'a) -> (t -> 'a * prog)
-    val funScope            : (t -> 'a) -> (t -> 'a * value)
+    val instScope           : AST.l -> (t -> 'a) -> (t -> 'a * prog)
+    val funScope            : AST.l -> (t -> 'a) -> (t -> 'a * value)
     val innerScope          : (t -> 'a) -> (t -> 'a)
 
     val addLocalVar         : AST.l -> t -> ident -> value -> unit
@@ -647,7 +674,8 @@ end = struct
         let upd k v1 v2 = Some (assignLExpr loc (LExpr_Array(x,int_expr k)) v1 v2 env) in
         let _ = Symbolic.array_merge upd os od vs d in
         ()
-    | _ -> if v != o then push [AST.Stmt_Assign(x, to_expr loc v, loc)] env
+    | _ -> 
+        if v != o then push [AST.Stmt_Assign(x, to_expr loc v, loc)] env
 
 
   let dump (env: t) : unit =
@@ -662,14 +690,6 @@ end = struct
     List.iter (fun ls -> dump ls.bs) env.locals;
     pp_resid env.residual;
     Printf.printf "Done STATE\n"
-
-
-  (** *)
-  let updateGlobals (env: t): unit =
-    Bindings.iter (fun k v ->
-      let prev = get_scope k env.globalnames in
-      assignLExpr Unknown (LExpr_Var k) (value_of_stashed prev) (value_of_stashed v) env
-    ) env.globals.bs
 
 (****************************************************************
  * Scopes
@@ -695,7 +715,7 @@ end = struct
   }
 
   (** Setup structures that are shared across an instruction *)
-  let instScope (k: t -> 'a) (parent: t): 'a * prog =
+  let instScope l (k: t -> 'a) (parent: t): 'a * prog =
     let child = {
       decoders     = parent.decoders;
       instructions = parent.instructions;
@@ -716,14 +736,13 @@ end = struct
       returnSyms   = ref None;
     } in
     let r = k child in
-    updateGlobals child;
-    (r, residual Unknown child)
+    (r, residual l child)
 
   (* TODO: rather than refs, can we pull the shared items out? *)
 
   (** Create an environment for a callee and return 
       their result along with a residual program *)
-  let funScope (k: t -> 'a) (parent: t): 'a * value =
+  let funScope l (k: t -> 'a) (parent: t): 'a * value =
     let child = {
       decoders     = parent.decoders;
       instructions = parent.instructions;
@@ -747,7 +766,7 @@ end = struct
     let r = k child in
     parent.numSymbols <- child.numSymbols;
     (* inline the residual code *)
-    push (inner_residual Unknown child) parent;
+    push (inner_residual l child) parent;
     (* *)
     match !(child.returnSyms) with
     | Some v -> 
@@ -779,7 +798,7 @@ end = struct
     } in
     let r = k child in
     parent.numSymbols <- child.numSymbols;
-    push (inner_residual Unknown child) parent;
+    parent.residual <- push_res parent.residual child.residual;
     r
 
   (*
@@ -835,19 +854,38 @@ end = struct
     env.decls := !(env.decls) @ [Stmt_VarDeclsNoInit(to_type loc v, [n], loc)];
     n
 
+  let rec stashGlobal (loc: l) (v: value) (env: t): value =
+    match v with
+    | VTuple vs ->
+        unsupported loc "stashGlobal: can't expand tuple assignment"
+    | VRecord vs ->
+        let upd k v = (stashGlobal loc v env) in
+        VRecord (Bindings.mapi upd vs)
+    | VArray (vs,d) ->
+        let upd k v = (stashGlobal loc v env) in
+        VArray (Primops.ImmutableArray.mapi upd vs,d)
+    | _ -> 
+        let i = newTemp loc v env in
+        push [AST.Stmt_Assign(LExpr_Var i, to_expr loc v, loc)] env;
+        copy_scalar_type (EVar i) v
+
   (** Load a global constant, no special handling due to constant *)
   let getGlobalConst (x: ident) (env: t) : value =  
     get_scope_val x env.constants
+
+  let getGlobal (loc: l) (x: ident) (env: t): value =
+    if mem_scope x env.globals then get_scope_val x env.globals
+    else if mem_scope x env.globalnames then 
+      let v = get_scope_val x env.globalnames in
+      stashGlobal loc v env
+    else if mem_scope x env.constants then get_scope_val x env.constants
+    else symerror loc @@ "getGlobal: Couldn't find " ^ pprint_ident x
 
   (** Get any variable, prefering recently defined locals to globals *)
   let getVar (loc: l) (env: t) (x: ident): value =
     match find_scope env.locals x with
     | Some bs -> get_scope_val x bs
-    | None ->
-        if mem_scope x env.globals then get_scope_val x env.globals
-        else if mem_scope x env.globalnames then get_scope_val x env.globalnames
-        else if mem_scope x env.constants then get_scope_val x env.constants
-        else symerror loc @@ "getVar: Couldn't find " ^ pprint_ident x
+    | None -> getGlobal loc x env
 
   (* Add a global constant *)
   let addGlobalConst (env: t) (x: ident) (v: value): unit =
@@ -880,11 +918,12 @@ end = struct
 
   (* Set a global variable and add effects to the residual program *)
   let setGlobalVar (loc: l) (env: t) (x: ident) (v: value): unit =
-    (*let prev = (match get_scope_opt x env.globals with
+    let prev = (match get_scope_opt x env.globals with
     | Some v -> v
     | None -> get_scope x env.globalnames)
     in
-    assignLExpr loc (LExpr_Var x) prev v env; *)
+    (* walk for a reference to this global *)
+    assignLExpr loc (LExpr_Var x) (value_of_stashed prev) v env; 
     set_scope x (stashed_of_value v) env.globals
 
   (* Set a variable, either local or global *)
@@ -916,7 +955,8 @@ end = struct
     let merge l r =
       Bindings.merge (fun k v1 v2 ->
           match v1, v2 with
-          | Some v1, Some v2 -> Some (joinStashed loc e1 e2 v1 v2)
+          | Some v1, Some v2 -> 
+              Some (joinStashed loc e1 e2 v1 v2)
           | Some v, None -> Some v
           | None, Some v -> Some v
           | _ -> None) l.bs r.bs
@@ -943,7 +983,7 @@ end = struct
   let pushState (loc: l) (orig: t) (e: t): unit =
     orig.globals.bs <- e.globals.bs;
     List.iter2 (fun s b -> s.bs <- b.bs) orig.locals e.locals;
-    push (inner_residual loc e) orig
+    orig.residual <- push_res orig.residual e.residual
 
   let sameVars (l: t) (r: t): bool =
     let merge l r =
@@ -962,7 +1002,9 @@ end = struct
 
   (* End disassembly due to a throw, we consider these unreachable *)
   let throw (loc: l) (x: Primops.exc) (env: t): unit =
-    env.residual <- push_throw env.residual
+    match x with
+    | Exc_SEE _ -> raise (Value.Throw (loc,x))
+    | _ -> env.residual <- push_throw env.residual
 
   (* Exit a function by updating the return symbols and closing the residual program *)
   let return (loc: l) (v: value) (env: t): unit =
@@ -970,6 +1012,7 @@ end = struct
     | Some s -> Some (merge_stashed_value (fun v -> newTemp loc v env) s v)
     | None -> Some (stashed_of_value v));
     env.residual <- push_return env.residual v
+
 end
 
 (****************************************************************)
@@ -1058,6 +1101,7 @@ struct
   let new_array = sym_new_array
 
   (* Unknown *)
+  let unknown_boolean _   = VBool (Right EUnknown)
   let unknown_integer _   = VInt (Right EUnknown)
   let unknown_real    _   = VReal (Right EUnknown)
   let unknown_string  _   = VString (Right EUnknown)
@@ -1151,8 +1195,7 @@ end
     Some (Env.setVar loc env x v)
 
   (* Branching *)
-  let branch (c: value) (t: value eff) (f: value eff) = 
-    let loc = Unknown in 
+  let branch (loc: l) (c: value) (t: value eff) (f: value eff) = 
     fun e ->
       match to_bool loc c with
       | (Left true) -> t e
@@ -1170,8 +1213,7 @@ end
           r
 
   (* Iteration *)
-  let rec repeat (b: value eff): unit eff =
-    let loc = Unknown in
+  let rec repeat (loc: l) (b: value eff): unit eff =
     fun e ->
       let rec loop e =
         let be = Env.copy e in
@@ -1180,7 +1222,7 @@ end
           (match to_bool loc c with
           | Left true -> 
               Env.pushState loc e be;
-              repeat b e
+              repeat loc b e
           | Left false -> 
               Env.pushState loc e be;
               Some ()
@@ -1202,23 +1244,30 @@ end
           )
         | None -> None)
       in
-      loop e
+      let r = loop e in
+      r
 
-  let call (b : unit eff): value eff =
-    fun e -> let (r,v) = Env.funScope b e in Some v
-  let catch (b: 'a eff) (f: AST.l -> Primops.exc -> 'a eff): 'a eff = 
-    fun e -> b e
-  let return v: 'a eff = 
-    fun e -> Env.return Unknown v e; None
+  let call l (b : unit eff): value eff =
+    fun e -> 
+      try
+        let (r,v) = Env.funScope l b e in 
+        Some v
+      with
+        SymbolicError (loc, msg) -> raise @@ SymbolicError (l::loc, msg)
+  let catch _ b f = 
+    fun e -> try b e with Value.Throw (l,x) -> f l x e
+  let return l v: 'a eff = 
+    fun e -> Env.return l v e; None
   let throw l x: 'a eff = 
     fun e -> Env.throw l x e; None
   let error l s = 
-    fun _ -> symerror l s
+    fun e -> Env.throw l Exc_ExceptionTaken e; None
+      (*symerror l s*)
 
 end)
 
 let eval_decode_case (loc: AST.l) (env: Env.t) (d: AST.decode_case) (v: value): prog =
-  let (_,res) = Env.instScope (Disem.eval_decode_case loc d v) env in
+  let (_,res) = Env.instScope loc (Disem.eval_decode_case loc d v) env in
   res
 
 let build_evaluation_environment (defs: AST.declaration list): Env.t =
@@ -1228,7 +1277,7 @@ let build_evaluation_environment (defs: AST.declaration list): Env.t =
     e
   with
   | SymbolicError (loc, msg) -> 
-      Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
+      Printf.printf "  %s: Evaluation error: %s\n" (String.concat "\n" (List.map pp_loc loc)) msg;
       exit 1;
 
 (****************************************************************

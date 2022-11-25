@@ -103,28 +103,31 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
   let vtrue = mk_bool true
   let vfalse = mk_bool false
 
-  let branch_ (c: value) (t: unit eff) (f: unit eff): unit eff =
-    branch c (t >> fun _ -> V.unit) (f >> fun _ -> V.unit) >>> pure ()
+  let branch_ (loc: l) (c: value) (t: unit eff) (f: unit eff): unit eff =
+    branch loc c (t >> fun _ -> V.unit) (f >> fun _ -> V.unit) >>> pure ()
 
-  let short_and (x: value eff) (y: value eff): value eff =
-    let* c = x in branch c y (pure vfalse)
+  let catch_ loc (b: unit eff) (f: AST.l -> Primops.exc -> unit eff): unit eff =
+    catch loc (b >> fun _ -> V.unit) (fun l e -> f l e >> fun _ -> V.unit) >>> pure ()
 
-  let short_or (x: value eff) (y: value eff): value eff =
-    let* c = x in branch c (pure vtrue) y
+  let short_and loc (x: value eff) (y: value eff): value eff =
+    let* c = x in branch loc c y (pure vfalse)
 
-  let short_imp (x: value eff) (y: value eff): value eff =
-    let* c = x in branch c y (pure vtrue)
+  let short_or loc (x: value eff) (y: value eff): value eff =
+    let* c = x in branch loc c (pure vtrue) y
 
-  let rec for_all2 p l1 l2 =
+  let short_imp loc (x: value eff) (y: value eff): value eff =
+    let* c = x in branch loc c y (pure vtrue)
+
+  let rec for_all2 loc p l1 l2 =
     match (l1, l2) with
     | ([], []) -> pure vtrue
-    | (a1::l1, a2::l2) -> short_and (p a1 a2) (for_all2 p l1 l2)
+    | (a1::l1, a2::l2) -> short_and loc (p a1 a2) (for_all2 loc p l1 l2)
     | (_, _) -> invalid_arg "for_all2"
 
-  let rec exists p = function
+  let rec exists loc p = function
     | [] -> pure vfalse
     | [a] -> p a
-    | a::l -> short_or (p a) (exists p l)
+    | a::l -> short_or loc (p a) (exists loc p l)
 
   let mk_formal_in (a,b) = Formal_In(a,b)
 
@@ -201,9 +204,9 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | Pat_Tuple(ps) ->
         let vs = to_tuple loc v in
         assert (List.length vs = List.length ps);
-        for_all2 (eval_pattern loc) vs ps
+        for_all2 loc (eval_pattern loc) vs ps
     | Pat_Set(ps) ->
-        exists (eval_pattern loc v) ps
+        exists loc (eval_pattern loc v) ps
     | Pat_Single(e) ->
         eval_expr loc e >> eq loc v
     | Pat_Range(lo, hi) ->
@@ -232,7 +235,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         | [] -> eval_expr loc d
         | E_Elsif_Cond (cond, b)::xs' ->
             let* g = eval_expr loc cond in
-            branch g (* then *)
+            branch loc g (* then *)
               (eval_expr loc b)
             (* else *)
               (eval_if xs' d)
@@ -268,19 +271,19 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
          *)
         if name_of_FIdent f = "and_bool" then begin
           match (tes, es) with
-          | ([], [x; y]) -> short_and (eval_expr loc x) (eval_expr loc y)
+          | ([], [x; y]) -> short_and loc (eval_expr loc x) (eval_expr loc y)
           | _ ->
               error loc @@ "malformed and_bool expression "
                    ^ Utils.to_string (PP.pp_expr x)
         end else if name_of_FIdent f = "or_bool" then begin
           match (tes, es) with
-          | ([], [x; y]) -> short_or (eval_expr loc x) (eval_expr loc y)
+          | ([], [x; y]) -> short_or loc (eval_expr loc x) (eval_expr loc y)
           | _ ->
               error loc @@ "malformed or_bool expression "
                    ^ Utils.to_string (PP.pp_expr x)
         end else if name_of_FIdent f = "implies_bool" then begin
           match (tes, es) with
-          | ([], [x; y]) -> short_imp (eval_expr loc x) (eval_expr loc y)
+          | ([], [x; y]) -> short_imp loc (eval_expr loc x) (eval_expr loc y)
           | _ ->
               error loc @@ "malformed imp_bool expression "
                    ^ Utils.to_string (PP.pp_expr x)
@@ -421,12 +424,12 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         eval_proccall loc f tvs vs
     | Stmt_FunReturn(e, loc) ->
         let* v = eval_expr loc e in
-        return v
+        return loc v
     | Stmt_ProcReturn(loc) ->
-        return V.unit
+        return loc V.unit
     | Stmt_Assert(e, loc) ->
         let* v = eval_expr loc e in
-        branch_ v (* then *)
+        branch_ loc v (* then *)
           unit
         (* else *)
           (error loc "assertion failure")
@@ -463,7 +466,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           | [] -> eval_stmts d
           | (S_Elsif_Cond(c, s) :: css') ->
               let* g = eval_expr loc c in
-              branch_ g (* then *)
+              branch_ loc g (* then *)
                 (eval_stmts s)
               (* else *)
                 (eval css' d)
@@ -478,16 +481,16 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
               | Some s -> eval_stmts s
               )
           | (Alt_Alt(ps, None, s) :: alts') ->
-              let* g = exists (eval_pattern loc v) ps in
-              branch_ g (* then *)
+              let* g = exists loc (eval_pattern loc v) ps in
+              branch_ loc g (* then *)
                 (eval_stmts s)
               (* else *)
                 (eval v alts')
           | (Alt_Alt(ps, Some c, s) :: alts') ->
-              let c1 = exists (eval_pattern loc v) ps in
+              let c1 = exists loc (eval_pattern loc v) ps in
               let c2 = eval_expr loc c in
-              let* g = short_and c1 c2 in
-              branch_ g (* then *)
+              let* g = short_and loc c1 c2 in
+              branch_ loc g (* then *)
                 (eval_stmts s)
               (* else *)
                 (eval v alts')
@@ -500,13 +503,13 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         let* stop'  = eval_expr loc stop in
         scope ( (* Scope to avoid naming collision on the index variable *)
           let* index  = addLocalVar loc v start' in
-          repeat (
+          repeat loc (
             let* i = getVar loc v in
             let c = (match dir with
             | Direction_Up   -> leq_int loc i stop'
             | Direction_Down -> leq_int loc stop' i
             ) in
-            let* () = branch_ c (* then *)
+            let* () = branch_ loc c (* then *)
               (eval_stmts b >>>
               let i' = (match dir with
               | Direction_Up   -> add_int loc i (mk_int 1)
@@ -519,19 +522,19 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         )
     | Stmt_While(c, b, loc) ->
         let* g = eval_expr loc c in
-        branch_ g (
-          repeat (
+        branch_ loc g (
+          repeat loc (
             eval_stmts b >>>
             eval_expr loc c
           )
         ) (unit)
     | Stmt_Repeat(b, c, loc) ->
-        repeat (
+        repeat loc (
           let* () = eval_stmts b in
           eval_expr loc c
         )
     | Stmt_Try(tb, ev, catchers, odefault, loc) ->
-        catch (eval_stmts tb) (fun l ex -> scope (
+        catch_ loc (eval_stmts tb) (fun l ex -> scope (
           let rec eval cs =
             match cs with
             | [] ->
@@ -540,7 +543,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
                 | Some s -> eval_stmts s)
             | (Catcher_Guarded(c, b) :: cs') ->
                 let* c = eval_expr loc c in
-                branch_ c (eval_stmts b) (eval cs')
+                branch_ loc c (eval_stmts b) (eval cs')
           in
           addLocalVar loc ev (from_exc l ex) >>>
           eval catchers) )
@@ -555,7 +558,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           let* (rty, targs, args, loc, b) = getFun loc f in
           assert (List.length targs = List.length tvs);
           assert (List.length args  = List.length vs);
-          call (
+          call loc (
             traverse2 (addLocalVar loc) targs tvs >>>
             traverse2 (addLocalVar loc) (List.map TC.sformal_var args) vs >>>
             eval_stmts b
@@ -583,10 +586,10 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     assert (List.length args  = List.length es');
     (* Exploting lack of return to hand the reference values back to caller *)
     assert (rty = None);
-    let* rs = call (
+    let* rs = call loc (
       traverse2 (addLocalVar loc) targs tvs >>>
       traverse2 (addLocalVar loc) (List.map TC.sformal_var args) vs >>>
-      catch (eval_stmts b)
+      catch_ loc (eval_stmts b)
         (fun l e -> (* TODO: We will fail to capture the result and update reference variables if b throws *)
           if List.exists (function Formal_InOut _ -> true | _ -> false) args then
             error loc "Exception thrown in setter with reference args"
@@ -597,7 +600,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
         | Formal_In _ -> pure V.unit
         | Formal_InOut (_,arg) -> getVar loc arg
       ) args in
-      return (from_tuple rs)
+      return loc (from_tuple rs)
     ) in
     let upd r e = if is_unit r then unit else let* lexpr = expr_to_lexpr loc e in eval_lexpr loc lexpr r in
     let out = to_tuple loc rs in
@@ -616,7 +619,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
           (match alts with
           | (alt::alts') ->
               let* g = eval_decode_alt loc alt vs op in
-              branch_ g unit (eval alts')
+              branch_ loc g unit (eval alts')
           | [] -> error loc "unmatched decode pattern"
           )
         in
@@ -624,16 +627,23 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
 
   (** Evaluate instruction decode case alternative *)
   and eval_decode_alt (loc: l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): value eff =
-    let* g = for_all2 (fun a b -> pure (eval_decode_pattern loc a b)) ps vs in
-    branch g (* then *) begin
+    let* g = for_all2 loc (fun a b -> pure (eval_decode_pattern loc a b)) ps vs in
+    branch loc g (* then *) begin
       match b with
       | DecoderBody_UNPRED loc -> throw loc Exc_Unpredictable
       | DecoderBody_UNALLOC loc -> throw loc Exc_Undefined
       | DecoderBody_NOP loc -> pure (vtrue)
       | DecoderBody_Encoding (enc, l) ->
           let* (enc, opost, cond, exec) = getInstruction loc enc in
-          let* g = eval_encoding enc op in
-          branch g (* then *) begin
+          (* Look for another encoding if a SEE exception is thrown *)
+          let* g =
+            catch loc (eval_encoding enc op)
+              (fun l e ->
+                match e with
+                | Exc_SEE _ -> pure vfalse
+                | _ -> throw l e)
+          in
+          branch loc g (* then *) begin
             traverse eval_stmt (match opost with Some p -> p | None -> []) >>>
             (* todo: should evaluate ConditionHolds to decide whether to execute body *)
             traverse eval_stmt exec >>>
@@ -657,15 +667,15 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | Opcode_Bits b -> eq      loc op (from_bitsLit b)
     | Opcode_Mask m -> in_mask loc op (from_maskLit m)
     ) in
-    branch ok (* then *) begin
+    branch loc ok (* then *) begin
       traverse (function (IField_Field (f, lo, wd)) ->
         let v = extract_bits_int loc op lo wd in
         addLocalVar loc f v
       ) fields >>>
       let* g = eval_expr loc guard in
-      branch g (* then *) begin
+      branch loc g (* then *) begin
         traverse (fun (i, b) ->
-          branch (eq loc (extract_bits_int loc op i 1) (from_bitsLit b))
+          branch loc (eq loc (extract_bits_int loc op i 1) (from_bitsLit b))
             (throw loc Exc_Unpredictable)
             (pure V.unit)
         ) unpreds >>>
@@ -684,6 +694,7 @@ module Make (V: Value) (I: Effect with type value = V.t) =  struct
     | Type_Constructor(Ident "integer") -> pure (unknown_integer loc)
     | Type_Constructor(Ident "real")    -> pure (unknown_real loc)
     | Type_Constructor(Ident "string")  -> pure (unknown_string loc)
+    | Type_Constructor(Ident "boolean") -> pure (unknown_boolean loc)
     | Type_Constructor(tc) ->
         let* es = getEnum tc in
         (match es with

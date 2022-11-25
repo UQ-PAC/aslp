@@ -1,0 +1,15 @@
+:set impdef "Has MTE extension" = FALSE
+:set impdef "Has Nested Virtualization" = FALSE
+:set impdef "Has Implicit Error Synchronization Barrier" = TRUE
+
+:set impdef "Maximum Physical Address Size" = 52
+:set impdef "Maximum Virtual Address Size"  = 56
+
+:set impdef "OS Double Lock is implemented" = TRUE
+:set impdef "Has MPAM extension" = FALSE
+
+:set impdef "Has Small Page Table extension" = FALSE
+
+:set impdef "Has large 52-bit VA support" = FALSE
+:set impdef "Has large 52-bit PA/IPA support" = FALSE
+:set impdef "Reserved Intermediate Physical Address size value" = FALSE
