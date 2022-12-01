@@ -12,7 +12,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container: 
-      image: ghcr.io/katrinafyi/pac-environment:latest
+      image: ghcr.io/uq-pac/asli-base:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.github_token }}
