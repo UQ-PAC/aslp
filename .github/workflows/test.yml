@@ -31,7 +31,7 @@ jobs:
 
       - name: Opam install
         run: |
-          opam init
+          opam init --disable-sandboxing
           eval `opam env`
           opam install . --deps-only --with-test
 
