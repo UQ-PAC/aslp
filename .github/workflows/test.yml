@@ -19,34 +19,29 @@ jobs:
     permissions:
       contents: read
       packages: read
+    env:
+      OPAMROOT: /home/opam/.opam
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      # - name: Use OCaml
-      #   uses: ocaml/setup-ocaml@v2
-      #   with:
-      #     ocaml-compiler: 4.09.0
-      #    dune-cache: true
-
-      - name: Extract encodings
-        run: tar xzf encodings.tar.gz
         
+      - name: Extract encodings
+        run: tar xzf encodings.tar.gz 
       
       - name: opam install
         run: |
-          eval `opam env --root /home/opam/.opam --set-root`
+          eval `opam env`
           opam install . --deps-only --with-test
 
       - name: Build
         run: |
-          eval `opam env --root /home/opam/.opam --set-root`
+          eval `opam env`
           dune build
 
       - name: Test
         id: test
         run: |
-          eval `opam env --root /home/opam/.opam --set-root`
+          eval `opam env`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
           ./coverage.sh test
 
