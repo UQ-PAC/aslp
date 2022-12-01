@@ -13,6 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     container: 
       image: ghcr.io/katrinafyi/pac-environment:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.github_token }}
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
