@@ -29,21 +29,25 @@ jobs:
       #     ocaml-compiler: 4.09.0
       #    dune-cache: true
 
-      - name: Opam install
+      - name: Extract encodings
+        run: tar xzf encodings.tar.gz
+        
+      
+      - name: opam install
         run: |
-          #opam init --disable-sandboxing
           eval `opam env --root /home/opam/.opam --set-root`
           opam install . --deps-only --with-test
 
-      - name: Extract encodings
-        run: tar xzf encodings.tar.gz
+      - name: Build
+        run: |
+          eval `opam env --root /home/opam/.opam --set-root`
+          dune build
 
-      - name: Build and test
+      - name: Test
         id: test
         run: |
-          eval `opam config env`
+          eval `opam env --root /home/opam/.opam --set-root`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
-          dune build
           ./coverage.sh test
 
       - name: Upload new coverage results
