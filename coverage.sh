@@ -33,7 +33,7 @@ for inst in $INSTRUCTION_GROUPS; do
     new="$COVERAGE_TEMP/$fname"
     echo "::group::$inst"
     echo "$new"
-    echo ":coverage A64 $inst" | time dune exec asli $ASL_FILES > "$new"
+    time echo ":coverage A64 $inst" | dune exec asli $ASL_FILES > "$new"
     old="$COVERAGE_DIR/$fname"
 
     if [[ $MODE == update ]]; then
