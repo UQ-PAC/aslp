@@ -32,8 +32,7 @@ jobs:
       - name: Opam install
         run: |
           #opam init --disable-sandboxing
-          opam switch 4.09
-          eval `opam env`
+          eval `opam env --root /home/opam/.opam --set-root`
           opam install . --deps-only --with-test
 
       - name: Extract encodings
