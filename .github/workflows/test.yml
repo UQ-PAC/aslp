@@ -11,15 +11,17 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    container: 
+      image: ghcr.io/katrinafyi/pac-environment:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Use OCaml
-        uses: ocaml/setup-ocaml@v2
-        with:
-          ocaml-compiler: 4.09.0
-          dune-cache: true
+      # - name: Use OCaml
+      #   uses: ocaml/setup-ocaml@v2
+      #   with:
+      #     ocaml-compiler: 4.09.0
+      #    dune-cache: true
 
       - name: Opam install
         run: opam install . --deps-only --with-test
