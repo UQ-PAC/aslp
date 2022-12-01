@@ -30,7 +30,10 @@ jobs:
       #    dune-cache: true
 
       - name: Opam install
-        run: opam install . --deps-only --with-test
+        run: |
+          opam init
+          eval `opam env`
+          opam install . --deps-only --with-test
 
       - name: Extract encodings
         run: tar xzf encodings.tar.gz
