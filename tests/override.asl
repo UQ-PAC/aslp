@@ -351,3 +351,16 @@ AArch64.MemSingle[bits(64) vaddress, integer size, AccType acctype, boolean wasa
     address.paddress.NS = '1';
 
     _Mem[address, size, access] = value;
+
+
+bits(size) MemAtomicCompareAndSwap(bits(64) address, bits(size) expectedvalue,
+                                   bits(size) newvalue, AccType ldacctype, AccType stacctype)
+    bits(size) oldvalue = Mem[address, size DIV 8, ldacctype];
+    if BigEndian() then
+        oldvalue = BigEndianReverse(oldvalue);
+
+    if oldvalue == expectedvalue then
+        if BigEndian() then
+            newvalue = BigEndianReverse(newvalue);
+        Mem[address, size DIV 8, stacctype] = newvalue;
+    return oldvalue;
