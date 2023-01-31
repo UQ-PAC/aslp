@@ -4,7 +4,7 @@
  (modes exe byte)
  (modules asli)
  (flags (-cclib -lstdc++))
- (libraries libASL linenoise pprint))
+ (libraries libASL linenoise pprint pcre))
 
 (executable
  (name testlexer)

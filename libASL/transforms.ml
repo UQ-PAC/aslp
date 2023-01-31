@@ -1294,6 +1294,7 @@ module CommonSubExprElim = struct
       | "or_bits"            -> Type_Bits(num)
       | "eor_bits"           -> Type_Bits(num)
       | "not_bits"           -> Type_Bits(num)
+      | "neg_bits"           -> Type_Bits(num)
       | "zeros_bits"         -> Type_Bits(num)
       | "ones_bits"          -> Type_Bits(num)
       | "replicate_bits"     -> Type_Bits(num)

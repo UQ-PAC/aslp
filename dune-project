@@ -22,6 +22,7 @@
     "pprint"
     "zarith"
     ("z3"        (>= "4.8.17"))
+    "pcre"
     ("alcotest"  :with-test)
   )
 )

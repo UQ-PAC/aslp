@@ -90,6 +90,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                 List.iter (fun (op, valid) ->
                     let fs = fields_of_opcode fields op in
                     Printf.printf "%s: %s --> " (hex_of_int op) (pp_enc_fields fs);
+                    flush stdout;
                     if valid then
                         let result = op_test_opcode cpu.env iset op in
                         Printf.printf "%s\n" (pp_opresult (fun _ -> "OK") result)
