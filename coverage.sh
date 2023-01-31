@@ -3,8 +3,8 @@
 # performs regression testing based on :coverage of particular groups of instructions
 
 INSTRUCTION_GROUPS="aarch64_integer.+ aarch64_branch.+"
-INSTRUCTION_GROUPS+=' aarch64_vector_arithmetic_unary_\(not\|rbit\|rev\|shift\|cnt\|clsz\)'
-INSTRUCTION_GROUPS+=' aarch64_vector_arithmetic_binary_.*_int.*'
+INSTRUCTION_GROUPS+=' aarch64_vector_arithmetic_unary(?!.*_(fp|float))'
+INSTRUCTION_GROUPS+=' aarch64_vector_arithmetic_binary(?!.*_(fp|float|complex|r?sqrt|bf|recp))'
 INSTRUCTION_GROUPS+=' aarch64_memory_.+_general.*'
 INSTRUCTION_GROUPS+=' aarch64_memory_atomicops_.*'
 ASL_FILES="prelude.asl ./mra_tools/arch/regs.asl ./mra_tools/types.asl ./mra_tools/arch/arch.asl ./mra_tools/arch/arch_instrs.asl ./mra_tools/arch/arch_decode.asl ./mra_tools/support/aes.asl ./mra_tools/support/barriers.asl ./mra_tools/support/debug.asl ./mra_tools/support/feature.asl ./mra_tools/support/hints.asl ./mra_tools/support/interrupts.asl ./mra_tools/support/memory.asl ./mra_tools/support/stubs.asl ./mra_tools/support/fetchdecode.asl"
