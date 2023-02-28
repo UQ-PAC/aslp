@@ -328,7 +328,7 @@ end
 
 type ram = {
     mutable contents: Bytes.t Pages.t;
-    mutable default:  char
+    mutable default:  char Option.t
 }
 
 let logPageSize = 16
@@ -339,18 +339,23 @@ let pageIndexOfAddr  (a: bigint): bigint = Z.shift_right a logPageSize
 let pageOffsetOfAddr (a: bigint): bigint = Z.logand      a pageMask
 
 let init_ram (d: char): ram =
-    { contents = Pages.empty; default = d }
+    { contents = Pages.empty; default = Some d }
 
 let clear_ram (mem: ram) (d: char): unit =
     mem.contents <- Pages.empty;
-    mem.default  <- d
+    mem.default  <- Some d
+
+let defaultByte_ram (mem: ram) (addr: bigint): char = 
+    match mem.default with 
+    | None -> Char.chr Z.(to_int ((extract addr 0 8) lxor (extract addr 8 8)))
+    | Some c -> c
 
 let readByte_ram (mem: ram) (addr: bigint): char =
     let index  = pageIndexOfAddr  addr in
     let offset = pageOffsetOfAddr addr in
     (match Pages.find_opt index mem.contents with
     | Some bs -> Bytes.get bs (Z.to_int offset)
-    | None    -> mem.default
+    | None    -> defaultByte_ram mem addr
     )
 
 let writeByte_ram (mem: ram) (addr: bigint) (v: char): unit =
@@ -360,7 +365,7 @@ let writeByte_ram (mem: ram) (addr: bigint) (v: char): unit =
     | Some bs ->
             bs
     | None ->
-            let bs = Bytes.make pageSize mem.default in
+            let bs = Bytes.init pageSize (fun i -> defaultByte_ram mem Z.(~$i + addr)) in
             mem.contents <- Pages.add index bs mem.contents;
             bs
     ) in

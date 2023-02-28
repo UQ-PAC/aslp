@@ -76,6 +76,13 @@ let get_scope_opt (k: ident) (s: scope): value option =
 let set_scope (k: ident) (v: value) (s: scope): unit =
     s.bs <- Bindings.add k v s.bs
 
+let copy_scope (s: scope): scope =
+    let copy_ram = function
+        | VRAM x -> VRAM { contents = x.contents; default = x.default }
+        | x -> x
+    in
+    { bs = Bindings.map copy_ram s.bs }
+
 
 (****************************************************************)
 (** {2 Mutable bindings}                                        *)
@@ -237,10 +244,10 @@ end = struct
             enumNeqs     = env.enumNeqs;
             records      = env.records;
             typedefs     = env.typedefs;
-            globals      = { bs = env.globals.bs };
+            globals      = copy_scope env.globals;
             constants    = env.constants;
             impdefs      = env.impdefs;
-            locals       = List.map (fun x -> { bs = x.bs }) env.locals;
+            locals       = List.map copy_scope env.locals;
             returnSymbols= env.returnSymbols;
             numSymbols   = env.numSymbols;
             localPrefixes= env.localPrefixes;
@@ -482,7 +489,7 @@ let initializeGlobals (env: Env.t): unit =
     let g = Env.getGlobals env in
     g.bs <- Bindings.map (eval_uninitialized_to_defaults env) g.bs
 
-let initializeRegisters (env: Env.t) (xs: bigint list): unit =
+let initializeRegistersAndMemory (env: Env.t) (xs: bigint list): unit =
     let d = VBits {n=64; v=Z.zero} in
     let vals = List.mapi (fun i v -> (i, VBits {n=64; v})) xs in
     let arr = List.fold_left
@@ -490,7 +497,10 @@ let initializeRegisters (env: Env.t) (xs: bigint list): unit =
         ImmutableArray.empty
         vals
     in
-    Env.setVar Unknown env (Ident "_R") (VArray (arr, d))
+    Env.setVar Unknown env (Ident "_R") (VArray (arr, d));
+    let ram = Primops.init_ram (char_of_int 0) in
+    ram.default <- None;
+    Env.setVar Unknown env (Ident "__Memory") (VRAM ram)
 
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =
