@@ -164,10 +164,6 @@ end = struct
         mutable constants    : scope;
         mutable impdefs      : value ImpDefs.t;
         mutable locals       : scope list;
-        mutable returnSymbols: AST.expr list;
-        mutable numSymbols   : int;
-        mutable localPrefixes: string list;
-        mutable implicitLevels: ((ident * value) list) list;
         frozen : bool
     }
 
@@ -184,10 +180,6 @@ end = struct
         constants    = empty_scope ();
         impdefs      = ImpDefs.empty;
         locals       = [empty_scope ()];
-        returnSymbols= [];
-        numSymbols   = 0;
-        localPrefixes= [];
-        implicitLevels = [];
         frozen = false;
     }
 
@@ -205,10 +197,6 @@ end = struct
             constants    = parent.constants;
             impdefs      = parent.impdefs;
             locals       = [empty_scope ()];  (* only change *)
-            returnSymbols= parent.returnSymbols;
-            numSymbols   = parent.numSymbols;
-            localPrefixes= parent.localPrefixes;
-            implicitLevels = parent.implicitLevels;
             frozen       = parent.frozen;
         } in
         k child
@@ -227,10 +215,6 @@ end = struct
             constants    = parent.constants;
             impdefs      = parent.impdefs;
             locals       = empty_scope () :: parent.locals;  (* only change *)
-            returnSymbols= parent.returnSymbols;
-            numSymbols   = parent.numSymbols;
-            localPrefixes= parent.localPrefixes;
-            implicitLevels = parent.implicitLevels;
             frozen       = parent.frozen;
         } in
         k child
@@ -249,10 +233,6 @@ end = struct
             constants    = env.constants;
             impdefs      = env.impdefs;
             locals       = List.map copy_scope env.locals;
-            returnSymbols= env.returnSymbols;
-            numSymbols   = env.numSymbols;
-            localPrefixes= env.localPrefixes;
-            implicitLevels = env.implicitLevels;
             frozen       = false; (* copies are unfrozen by default. *)
         }
 

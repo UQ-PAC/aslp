@@ -262,6 +262,7 @@ module GlobalEnv : sig
     val getGlobalVar        : t -> AST.ident -> AST.ty option
     val addConstant         : t -> AST.ident -> AST.expr -> unit
     val getConstant         : t -> AST.ident -> AST.expr option
+    val set                 : t -> t -> unit
 end = struct
     type t = {
         mutable types       : typedef Bindings.t;
@@ -361,6 +362,17 @@ end = struct
     let addConstant (env: t) (v: AST.ident) (e: AST.expr): unit =
         let e' = subst_fun_expr (getConstant env) e in
         env.constants <- Bindings.add v e' env.constants
+
+    let set (env: t) (other: t) =
+        env.types       <- other.types      ;
+        env.functions   <- other.functions  ;
+        env.setters     <- other.setters    ;
+        env.operators1  <- other.operators1 ;
+        env.operators2  <- other.operators2 ;
+        env.encodings   <- other.encodings  ;
+        env.globals     <- other.globals    ;
+        env.constants   <- other.constants  ;
+
 end
 
 let subst_consts_expr (env: GlobalEnv.t) (e: AST.expr): AST.expr =

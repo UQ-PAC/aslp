@@ -7,7 +7,6 @@
 
 type cpu = {
     env      : Eval.Env.t;
-    denv     : Dis.env;
     reset    : unit -> unit;
     step     : unit -> unit;
     getPC    : unit -> Primops.bigint;
@@ -17,7 +16,7 @@ type cpu = {
     sem      : string -> Primops.bigint -> unit;
 }
 
-val mkCPU : Eval.Env.t -> Dis.env -> cpu
+val mkCPU : Eval.Env.t -> cpu
 
 (****************************************************************
  * End

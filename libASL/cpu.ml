@@ -11,7 +11,6 @@ open Asl_utils
 
 type cpu = {
     env      : Eval.Env.t;
-    denv     : Dis.env;
     reset    : unit -> unit;
     step     : unit -> unit;
     getPC    : unit -> Primops.bigint;
@@ -21,7 +20,7 @@ type cpu = {
     sem      : string -> Primops.bigint -> unit;
 }
 
-let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
+let mkCPU (env : Eval.Env.t): cpu =
     let loc = AST.Unknown in
 
     let reset (_ : unit): unit =
@@ -51,6 +50,7 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
     and sem (iset: string) (opcode: Primops.bigint): unit =
         let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
         let decoder = Eval.Env.getDecoder env (Ident iset) in
+        let denv = Dis.build_env env in
         List.iter
             (fun s -> Printf.printf "%s\n" (pp_stmt s))
             (Dis.dis_decode_entry env denv decoder op)
@@ -58,7 +58,6 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
     in
     {
         env      = env;
-        denv     = denv;
         reset    = reset;
         step     = step;
         getPC    = getPC;

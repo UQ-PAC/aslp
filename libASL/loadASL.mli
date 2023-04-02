@@ -24,6 +24,9 @@ val read_impdef : TC.Env.t -> AST.l -> string -> (string * AST.expr)
 val read_expr   : TC.Env.t -> AST.l -> string -> AST.expr
 val read_stmt   : TC.Env.t -> string -> AST.stmt
 
+val write_marshal : string -> Eval.Env.t -> unit
+val read_marshal  : string -> Eval.Env.t
+
 (****************************************************************
  * End
  ****************************************************************)

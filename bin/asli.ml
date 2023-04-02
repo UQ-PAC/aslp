@@ -187,11 +187,13 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                         Printf.printf "%c " (String.get op' 1);
                 ) opcodes
         ) encodings;
+    | [":stash" ; file] ->
+        LoadASL.write_marshal file cpu.env
     | [":sem"; iset; opcode] ->
-        let cpu' = Cpu.mkCPU cpu.env cpu.denv in
+        let cpu = Cpu.mkCPU cpu.env in
         let op = Z.of_string opcode in
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
-        cpu'.sem iset op
+        cpu.sem iset op
     | ":dump" :: iset :: opcode :: rest ->
         let fname = 
             (match rest with 
@@ -199,11 +201,12 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             | [x] -> x 
             | _ -> invalid_arg "expected at most 3 arguments to :dump")
         in
-        let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env) cpu.denv in
+        let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env)  in
         let op = Z.of_string opcode in
         let bits = VBits (Primops.prim_cvt_int_bits (Z.of_int 32) op) in
         let decoder = Eval.Env.getDecoder cpu'.env (Ident iset) in
-        let stmts = Dis.dis_decode_entry cpu'.env cpu.denv decoder bits in
+        let denv = Dis.build_env cpu'.env in
+        let stmts = Dis.dis_decode_entry cpu'.env denv decoder bits in
         let chan = open_out_bin fname in
         Printf.printf "Dumping instruction semantics for %s %s" iset (Z.format "%x" op);
         Printf.printf " to file %s\n" fname;
@@ -314,7 +317,13 @@ let _ =
 
 let main () =
     if !opt_print_version then Printf.printf "%s\n" version
-    else begin
+    else if List.exists (fun f -> Utils.endswith f ".cpu") !opt_filenames then begin
+        let file = List.find (fun f -> Utils.endswith f ".cpu") !opt_filenames in
+        let env = LoadASL.read_marshal file in
+        let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env in
+        Dis.debug_level := !opt_debug_level;
+        repl tcenv cpu
+    end else begin
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
         let t  = LoadASL.read_file !opt_prelude true !opt_verbose in
@@ -345,9 +354,8 @@ let main () =
         LNoise.history_load ~filename:"asl_history" |> ignore;
         LNoise.history_set ~max_length:100 |> ignore;
         
-        let denv = Dis.build_env env in
         let prj_files = List.filter (fun f -> Utils.endswith f ".prj") !opt_filenames in
-        let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env denv in
+        let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env in
         List.iter (fun f -> process_command tcenv cpu "<args>" (":project " ^ f)) prj_files;
         repl tcenv cpu
     end

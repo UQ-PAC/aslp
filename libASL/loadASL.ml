@@ -163,6 +163,18 @@ let read_stmt (tcenv: TC.Env.t) (s: string): AST.stmt =
     let s = Parser.stmt_command_start lexer lexbuf in
     TC.tc_stmt tcenv s
 
+let write_marshal (file: string) (env: Eval.Env.t): unit = 
+  let f = open_out file in
+  Marshal.to_channel f (env,Tcheck.env0) [];
+  close_out f
+ 
+let read_marshal (file: string) : (Eval.Env.t) =
+  let f = open_in file in
+  let (env,tenv) = Marshal.from_channel f in
+  Tcheck.GlobalEnv.set Tcheck.env0 tenv;
+  close_in f;
+  env
+
 (****************************************************************
  * End
  ****************************************************************)
