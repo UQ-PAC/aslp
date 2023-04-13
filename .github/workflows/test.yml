@@ -42,7 +42,7 @@ jobs:
         run: |
           eval `opam env`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
-          ./coverage.sh test
+          scripts/coverage.sh test
 
       - name: Upload new coverage results
         if: always()
