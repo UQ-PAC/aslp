@@ -6,6 +6,15 @@
  (flags (-cclib -lstdc++))
  (libraries libASL linenoise pprint pcre))
 
+
+(executable
+ (name daemon)
+ (public_name daemon)
+ (modes exe byte)
+ (modules daemon)
+ (flags (-cclib -lstdc++))
+ (libraries libASL resources yojson redis-sync linenoise pprint pcre))
+
 (executable
  (name testlexer)
  (modes exe)

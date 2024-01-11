@@ -26,6 +26,8 @@ depends: [
   "z3" {>= "4.8.7"}
   "pcre"
   "alcotest" {with-test}
+  "Yojson"
+  "redis-sync"
 ]
 build: [
   ["dune" "subst"] {pinned}

@@ -24,6 +24,8 @@
     ("z3"        (>= "4.8.7"))
     "pcre"
     ("alcotest"  :with-test)
+    "Yojson"
+    "redis-sync"
   )
 )
 
