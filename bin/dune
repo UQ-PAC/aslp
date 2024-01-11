@@ -6,6 +6,13 @@
  (flags (-cclib -lstdc++))
  (libraries libASL linenoise pprint pcre))
 
+(executable
+ (name client)
+ (public_name client)
+ (modules client)
+ (flags (-cclib -lstdc++))
+ (libraries yojson redis-sync))
+
 
 (executable
  (name daemon)

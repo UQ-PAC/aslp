@@ -42,6 +42,7 @@ let get_reply (jsonin: string) : string =
    match (eval_instr jsonin) with 
   | exception e ->  Yojson.Safe.to_string  (`Assoc [("instruction", `String jsonin); ("error", `String (Printexc.to_string e))])
   | x -> Yojson.Safe.to_string (`Assoc [("instruction", `String jsonin); ("semantics", `String x)] )
+  | _ ->  Yojson.Safe.to_string  (`Assoc [("instruction", `String jsonin); ("error", `String "unknown")])
 
 (*let () = ignore (List.map (fun (f: string) -> print_endline (eval_instr f)) (tl (to_list Sys.argv))) *)
 
@@ -58,10 +59,10 @@ end)
 
 let channel_prefix = "aslp" 
 
-let get_semantics_withcache (host: string) (port: int) (opcode: string) : option string = 
+let get_semantics_withcache (host: string) (port: int) (opcode: string) : string option = 
   let open Redis_sync.Client in
   let cache_conn = connect {host=host; port=port} in
-  match (SemCache.get cache_conn msg) with
+  match (SemCache.get cache_conn opcode) with
     | Some d -> Some d
     | None -> 
       match eval_instr opcode with
@@ -106,5 +107,10 @@ let subscribe_sync host port =
   done
 
 let () = 
-  subscribe_sync "localhost" 6379
+  match Array.to_list Sys.argv with 
+    | [_; "disas"; opcode] -> (match (get_semantics_withcache "0.0.0.0" 6379 opcode) with 
+      | Some x -> print_endline x
+      | None -> print_endline "Error")
+    | [_; "serve"] -> subscribe_sync "0.0.0.0" 6379
+    | _ -> print_endline "usage:\n\tdaemon disas opcode\n\tdaemon serve"
   (*ignore (List.map (fun (f: string) -> print_endline (eval_instr f)) (tl (to_list Sys.argv))) *)
