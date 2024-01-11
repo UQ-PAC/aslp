@@ -84,28 +84,31 @@ let declare_var_getters (decls: declaration list) =
   in
   List.map declare decls
 
-let parse_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declaration list =
-    let inchan = open_in filename in
-    let lexbuf = Lexing.from_channel inchan in
-    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
-    let t =
-        report_parse_error
+let parse_lexed(lexbuf: lexbuf) (filename: string) (iPrelude: bool) (verbose: bool): AST.declaration list = 
+    let t =report_parse_error
           (fun _ -> print_endline (pp_loc (Range (lexbuf.lex_start_p, lexbuf.lex_curr_p))); exit 1)
           (fun _ ->
             (* Apply offside rule to raw token stream *)
             let lexer = offside_token Lexer.token in
 
-            (* Run the parser on this line of input. *)
             if verbose then Printf.printf "- Parsing %s\n" filename;
-            Parser.declarations_start lexer lexbuf)
-    in
-    close_in inchan;
+            Parser.declarations_start lexer lexbuf) in
     declare_var_getters t
 
-let read_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declaration list =
-    if verbose then Printf.printf "Processing %s\n" filename;
-    let t = parse_file filename isPrelude verbose in
+let parse_text (text : string) (name: string) (isPrelude: bool) (verbose: bool): AST.declaration list =
+    let lexbuf = Lexing.from_string text in
+    parse_lexed lexbuf name isPrelude verbose
 
+let parse_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declaration list =
+    let inchan = open_in filename in
+    let lexbuf = Lexing.from_channel inchan in
+    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
+    (* Run the parser on this line of input. *)
+    let t = (parse_lexed lexbuf filename isPrelude verbose) in 
+    close_in inchan; 
+    t
+
+let read_parsed (t: AST.declaration list) (filename: string) (isPrelude: bool) (verbose: bool): AST.declaration list =
     if false then PPrint.ToChannel.pretty 1.0 60 stdout (PP.pp_declarations t);
     if verbose then Printf.printf "  - Got %d declarations from %s\n" (List.length t) filename;
 
@@ -122,6 +125,15 @@ let read_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declara
     if verbose then Printf.printf "Finished %s\n" filename;
     flush stdout;
     t'
+
+let read_text(text : string) (name: string) (isPrelude: bool) (verbose: bool): AST.declaration list =
+    let parsed = parse_text text name isPrelude verbose in
+    read_parsed parsed name isPrelude verbose
+
+let read_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declaration list =
+    if verbose then Printf.printf "Processing %s\n" filename;
+    let t = parse_file filename isPrelude verbose in
+    read_parsed t filename isPrelude verbose
 
 let read_spec (filename : string) (verbose: bool): AST.declaration list =
     let r: AST.declaration list list ref = ref [] in
