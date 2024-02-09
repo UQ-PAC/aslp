@@ -40,6 +40,7 @@ let help_msg = [
     {|:elf <file>                    Load an ELF file|};
     {|:opcode <instr-set> <int>      Decode and execute opcode|};
     {|:sem <instr-set> <int>         Decode and print opcode semantics|};
+    {|:ast <instr-set> <int> [file]  Decode and write opcode semantics to stdout or a file, in a structured ast format|};
     {|:project <file>                Execute ASLi commands in <file>|};
     {|:q :quit                       Exit the interpreter|};
     {|:run                           Execute instructions|};
@@ -195,6 +196,15 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let op = Z.of_string opcode in
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
         cpu'.sem iset op
+    | ":ast" :: iset :: opcode :: rest when List.length rest <= 1 ->
+        let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_string opcode)) in
+        let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
+        let chan_opt = Option.map open_out (List.nth_opt rest 0) in
+        let chan = Option.value chan_opt ~default:stdout in
+        List.iter
+            (fun s -> Printf.fprintf chan "%s\n" (Utils.to_string (PP.pp_raw_stmt s)))
+            (Dis.dis_decode_entry cpu.env cpu.denv decoder op);
+        Option.iter close_out chan_opt
     | ":dump" :: iset :: opcode :: rest ->
         let fname = 
             (match rest with 
