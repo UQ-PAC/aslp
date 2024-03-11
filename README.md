@@ -237,6 +237,16 @@ If an exception occurs somewhere else in the process, that will be reported as w
 
 Enjoy!
 
+## Publication
+
+- Lam, K., & Coughlin, N. (2023).
+Lift-off: Trustworthy ARMv8 semantics from formal specifications.
+In A. Nadel & K. Y. Rozier (Eds.), 
+_Proceedings of the 23rd Conference on Formal Methods in Computer-Aided Design – FMCAD 2023_
+(pp. 274–283). 
+TU Wien Academic Press.
+[10.34727/2023/isbn.978-3-85448-060-0_36](https://doi.org/10.34727/2023/isbn.978-3-85448-060-0_36)
+
 ## License and contribution
 
 The software is provided under the [BSD-3-Clause licence](https://spdx.org/licenses/BSD-3-Clause.html).
