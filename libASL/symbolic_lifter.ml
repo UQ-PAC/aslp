@@ -161,7 +161,7 @@ let unsupported f = IdentSet.mem f unsupported_set
 
 let get_inlining_frontier =
   (* Collect all functions dis will not inline *)
-  let l1 = IdentSet.of_list (List.map (fun (f,i) -> FIdent (f,i)) Dis.no_inline) in
+  let l1 = IdentSet.of_list (Dis_config.impure_prims) in
   let l2 = IdentSet.of_list (List.map (fun (f,i) -> FIdent (f,i)) Dis.no_inline_pure) in
   (* Collect all prims *)
   let l3 = IdentSet.of_list (List.map (fun f -> FIdent (f,0)) Value.prims_pure) in

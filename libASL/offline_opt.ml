@@ -1,9 +1,18 @@
 open Asl_utils
 open Asl_ast
 
+let trim_gen f =
+  let prefix = "gen_" in
+  match f with
+  | FIdent(f, i) when String.starts_with ~prefix f ->
+      Some ( FIdent (String.sub f 4 (String.length f - 4), i) )
+  | _ -> None
+
 (* Utility functions to match runtime expressions *)
 let is_memory_load f =
-  f = FIdent ("gen_Mem.read", 0)
+  match trim_gen f with
+  | Some f -> f = Dis_config.mem_read_prim
+  | _ -> false
 let is_var_load f =
   f = Offline_transform.rt_gen_load
 let is_var_store f =
@@ -24,17 +33,13 @@ let is_slice f =
   f = FIdent ("gen_slice", 0)
 
 let is_gen_call f =
-  let prefix = "gen_" in
-  match f with
-  | FIdent(f, _) when String.starts_with ~prefix f -> true
+  match trim_gen f with
+  | Some _ -> true
   | _ -> false
 
 let is_pure_expr f =
-  let prefix = "gen_" in
-  match f with
-  | FIdent(f, 0) when String.starts_with ~prefix f ->
-      let f' = String.sub f 4 (String.length f - 4) in
-      List.mem f' Offline_transform.pure_prims
+  match trim_gen f with
+  | Some (FIdent (f, 0)) -> List.mem f Offline_transform.pure_prims
   | _ -> false
 
 let is_var_decl f =

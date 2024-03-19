@@ -469,3 +469,83 @@ bits(N) FPToFixedJS_impl(bits(M) op, FPCRType fpcr, boolean Is64)
 (bits(N), bit) FPToFixedJS(bits(M) op, FPCRType fpcr, boolean Is64)
     bits(N + 1) res = FPToFixedJS_impl(op, fpcr, Is64);
     return (res[N:1], res[0]);
+
+// Memory primitive
+bits(size*8) Memory[bits(64) address, integer size, AccType acctype]
+  return AArch64.MemSingle[address, size, acctype, TRUE];
+
+Memory[bits(64) address, integer size, AccType acctype] = bits(size*8) value
+  AArch64.MemSingle[address, size, acctype, TRUE] = value;
+
+// Remove alignment checks
+bits(size*8) Mem[bits(64) address, integer size, AccType acctype]
+    assert size IN {1, 2, 4, 8, 16};
+    bits(size*8) value;
+    boolean iswrite = FALSE;
+
+    aligned = TRUE; //AArch64.CheckAlignment(address, size, acctype, iswrite);
+    if size != 16 || !(acctype IN {AccType_VEC, AccType_VECSTREAM}) then
+        atomic = aligned;
+    else
+        // 128-bit SIMD&FP loads are treated as a pair of 64-bit single-copy atomic accesses
+        // 64-bit aligned.
+        atomic = TRUE; //address == Align(address, 8);
+
+    if !atomic then
+        assert size > 1;
+        value[7:0] = Memory[address, 1, acctype];
+
+        // For subsequent bytes it is CONSTRAINED UNPREDICTABLE whether an unaligned Device memory
+        // access will generate an Alignment Fault, as to get this far means the first byte did
+        // not, so we must be changing to a new translation page.
+        if !aligned then
+            c = ConstrainUnpredictable(Unpredictable_DEVPAGE2);
+            assert c IN {Constraint_FAULT, Constraint_NONE};
+            if c == Constraint_NONE then aligned = TRUE;
+
+        for i = 1 to size-1
+            value[8*i+7:8*i] = Memory[address+i, 1, acctype];
+    elsif size == 16 && acctype IN {AccType_VEC, AccType_VECSTREAM} then
+        value[63:0]   = Memory[address,   8, acctype];
+        value[127:64] = Memory[address+8, 8, acctype];
+    else
+        value = Memory[address, size, acctype];
+
+    if (HaveNV2Ext() && acctype == AccType_NV2REGISTER && SCTLR_EL2.EE == '1') || BigEndian() then
+        value = BigEndianReverse(value);
+    return value;
+
+Mem[bits(64) address, integer size, AccType acctype] = bits(size*8) value
+    boolean iswrite = TRUE;
+
+    if (HaveNV2Ext() && acctype == AccType_NV2REGISTER && SCTLR_EL2.EE == '1') || BigEndian() then
+        value = BigEndianReverse(value);
+
+    aligned = TRUE; // AArch64.CheckAlignment(address, size, acctype, iswrite);
+    if size != 16 || !(acctype IN {AccType_VEC, AccType_VECSTREAM}) then
+        atomic = aligned;
+    else
+        // 128-bit SIMD&FP stores are treated as a pair of 64-bit single-copy atomic accesses
+        // 64-bit aligned.
+        atomic = TRUE; // address == Align(address, 8);
+
+    if !atomic then
+        assert size > 1;
+        Memory[address, 1, acctype] = value[7:0];
+
+        // For subsequent bytes it is CONSTRAINED UNPREDICTABLE whether an unaligned Device memory
+        // access will generate an Alignment Fault, as to get this far means the first byte did
+        // not, so we must be changing to a new translation page.
+        if !aligned then
+            c = ConstrainUnpredictable(Unpredictable_DEVPAGE2);
+            assert c IN {Constraint_FAULT, Constraint_NONE};
+            if c == Constraint_NONE then aligned = TRUE;
+
+        for i = 1 to size-1
+            Memory[address+i, 1, acctype] = value[8*i+7:8*i];
+    elsif size == 16 && acctype IN {AccType_VEC, AccType_VECSTREAM} then
+        Memory[address,   8, acctype] = value[63:0];
+        Memory[address+8, 8, acctype] = value[127:64];
+    else
+        Memory[address, size, acctype] = value;
+    return;

@@ -67,47 +67,6 @@ let () = Printexc.register_printer
         Some ("LibASL.Value.EvalError(\"" ^ e ^ "\") at " ^ pp_loc loc)
     | _ -> None)
 
-(* Don't inline these functions, as we assume their behaviours conform to some spec *)
-let no_inline = [
-  "FPConvert",0;
-  "FPRoundInt",0;
-  "FPRoundIntN",0;
-  "FPToFixed",0;
-  "FixedToFP",0;
-  "FPCompare",0;
-  "FPCompareEQ",0;
-  "FPCompareGE",0;
-  "FPCompareGT",0;
-  "FPToFixedJS_impl",0;
-  "FPSqrt",0;
-  "FPAdd",0;
-  "FPMul",0;
-  "FPDiv",0;
-  "FPMulAdd",0;
-  "FPMulAddH",0;
-  "FPMulX",0;
-  "FPMax",0;
-  "FPMin",0;
-  "FPMaxNum",0;
-  "FPMinNum",0;
-  "FPSub",0;
-  "FPRecpX",0;
-  "FPRecipStepFused",0;
-  "FPRSqrtStepFused",0;
-  "FPRoundBase",0;
-  "FPConvertBF",0;
-  "BFRound",0;
-  "BFAdd",0;
-  "BFMul",0;
-  "FPRecipEstimate",0;
-  "Mem.read",0;
-  "Mem.set",0;
-  "AtomicStart",0;
-  "AtomicEnd",0;
-  "AArch64.MemTag.read",0;
-  "AArch64.MemTag.set",0;
-]
-
 let no_inline_pure = [
   "LSL",0;
   "LSR",0;
@@ -890,11 +849,10 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_LitString(s) -> DisEnv.pure (Val (from_stringLit s))
     )
 
-and no_inline_pure_ids = List.map (fun (x,y) -> FIdent(x,y))
+and no_inline_pure_ids = List.map (fun (x,y) -> FIdent (x,y))
   no_inline_pure
 
-and no_inline_ids = List.map (fun (x,y) -> FIdent (x,y))
-  no_inline
+and no_inline_ids = Dis_config.impure_prims
 
 (** Disassemble call to function *)
 and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
@@ -1189,7 +1147,7 @@ and stmt_append (xs: stmt list) (ys: stmt list): stmt list =
 and duplicate_up_to (stmts: AST.stmt list) : (AST.stmt list * AST.stmt list) =
   match stmts with
   (* Don't duplicate AtomicEnd, as they are linked with an AtomicStart *)
-  | Stmt_TCall(FIdent("AtomicEnd", 0), _, _, _)::rest ->
+  | Stmt_TCall(f, _, _, _)::rest when f = Dis_config.atomic_end_prim ->
       ([], stmts)
   | r::rest -> (match duplicate_up_to rest with (f,s) -> (r::f,s))
   | [] -> ([],[])

@@ -183,13 +183,9 @@ let pure_prims =
     "sdiv_bits";
   ]
 
-(* Prims that will always produce runtime *)
-let impure_prims =
-  List.map fst Dis.no_inline
-
 let prim_ops (f: ident) (targs: taint list) (args: taint list): taint option =
   if List.mem (name_of_FIdent f) pure_prims then Some (join_taint_l (targs @ args))
-  else if List.mem (name_of_FIdent f) impure_prims then Some RunTime
+  else if List.mem f Dis_config.impure_prims then Some RunTime
   else None
 
 (* Transfer function for a call, pulling a primop def or looking up registered fn signature.
@@ -821,7 +817,7 @@ and gen_expr loc e : (taint * expr) wrm =
           let@ lo = lt_expr loc lo in
           let@ wd = lt_expr loc wd in
           gen_slice_expr e lo wd
-      | Expr_TApply(f,tes,es) -> 
+      | Expr_TApply(f,tes,es) ->
           gen_prim loc f tes es
 
       (* State loads *)

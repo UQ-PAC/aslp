@@ -23,7 +23,7 @@
    lexer lexersupport loadASL monad primops rws symbolic tcheck testing transforms utils value visitor res
    symbolic_lifter decoder_program call_graph req_analysis
    offline_transform ocaml_backend dis_tc
-   offline_opt
+   offline_opt dis_config
    )
  (libraries pprint zarith z3 str pcre  dune-site))
 
