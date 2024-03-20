@@ -15,7 +15,10 @@ get_target_property(LLVM_CONFIG llvm-config LOCATION)
 
 message(STATUS "llvm-config: ${LLVM_CONFIG}")
 
-add_library(offlineasl-lib builder.cpp)
+file(GLOB SOURCES aarch64_*.cpp)
+
+
+add_library(offlineasl-lib aslp_lifter.cpp decode_tests.cpp ${SOURCES})
 target_include_directories(offlineasl-lib PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/.")
 
 target_compile_options(offlineasl-lib PRIVATE -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-but-set-variable)
@@ -47,4 +50,12 @@ set_target_properties(
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib
   ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib
 )
+
+
+add_custom_target(clean-gen ALL)
+add_custom_command(
+     TARGET clean-gen
+     COMMAND bash -c "rm -rfv aarch64_*.cpp aslp_lifter.cpp aslp_lifter.hpp decode_tests.cpp"
+     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+     VERBATIM)
 

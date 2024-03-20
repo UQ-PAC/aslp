@@ -71,7 +71,7 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
         let run_gen_backend : gen_function =
             match backend with
             | Ocaml -> Ocaml_backend.run
-            | Cpp -> failwith "cpp backend not yet implemented" in
+            | Cpp -> Cpp_backend.run in
 
         (* Build backend program *)
         run_gen_backend decoder_id decoder_fnsig tests instrs dir
