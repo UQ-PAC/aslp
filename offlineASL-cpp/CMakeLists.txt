@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
+project(offlineasl)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -13,13 +15,13 @@ get_target_property(LLVM_CONFIG llvm-config LOCATION)
 
 message(STATUS "llvm-config: ${LLVM_CONFIG}")
 
-add_library(offlineasl a.cpp)
-target_include_directories(offlineasl PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/.")
+add_library(offlineasl-lib builder.cpp)
+target_include_directories(offlineasl-lib PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/.")
 
-target_compile_options(offlineasl PRIVATE -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-but-set-variable)
+target_compile_options(offlineasl-lib PRIVATE -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-but-set-variable)
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
-  target_compile_options(offlineasl PRIVATE -g -O0 -fsanitize=address)
-  target_link_options(offlineasl PRIVATE -g -O0 -fsanitize=address)    
+  target_compile_options(offlineasl-lib PRIVATE -g -O0 -fsanitize=address)
+  target_link_options(offlineasl-lib PRIVATE -g -O0 -fsanitize=address)    
 ENDIF()
 
 execute_process(COMMAND "${LLVM_CONFIG}" --libs support core irreader bitwriter
@@ -27,13 +29,13 @@ execute_process(COMMAND "${LLVM_CONFIG}" --libs support core irreader bitwriter
                 OUTPUT_VARIABLE llvm_libs OUTPUT_STRIP_TRAILING_WHITESPACE)
 message(STATUS "llvm_libs: ${llvm_libs}")
 separate_arguments(llvm_libs UNIX_COMMAND "${llvm_libs}")
-# target_link_libraries(offlineasl PRIVATE "${lib_files}")
-target_link_options(offlineasl PUBLIC "${llvm_libs}")
-target_link_directories(offlineasl PUBLIC ${LLVM_LIBRARY_DIR})
-target_include_directories(offlineasl PUBLIC ${LLVM_INCLUDE_DIRS})
+# target_link_libraries(offlineasl-lib PRIVATE "${lib_files}")
+target_link_options(offlineasl-lib PUBLIC "${llvm_libs}")
+target_link_directories(offlineasl-lib PUBLIC ${LLVM_LIBRARY_DIR})
+target_include_directories(offlineasl-lib PUBLIC ${LLVM_INCLUDE_DIRS})
 
 add_executable(offlineasl-bin main.cpp)
-target_link_libraries(offlineasl-bin PRIVATE bridge)
+target_link_libraries(offlineasl-bin PRIVATE offlineasl-lib)
 
 install(TARGETS offlineasl-bin DESTINATION bin)
 
