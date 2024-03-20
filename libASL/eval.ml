@@ -128,9 +128,9 @@ module Env : sig
     val getVar              : AST.l -> t -> ident -> value
     val setVar              : AST.l -> t -> ident -> value -> unit
 
-    val getFun              : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)
-    val getFunOpt           : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) option
-    val addFun              : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) -> unit
+    val getFun              : AST.l -> t -> ident -> fun_sig
+    val getFunOpt           : AST.l -> t -> ident -> fun_sig option
+    val addFun              : AST.l -> t -> ident -> fun_sig -> unit
 
     val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
     val addInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list) -> unit

@@ -41,6 +41,8 @@ let help_msg = [
     {|:opcode <instr-set> <int>      Decode and execute opcode|};
     {|:sem <instr-set> <int>         Decode and print opcode semantics|};
     {|:ast <instr-set> <int> [file]  Decode and write opcode semantics to stdout or a file, in a structured ast format|};
+    {|:gen <instr-set> <regex>       Generate an offline lifter using the given backend|};
+    {|      [backend] [dir]|};
     {|:project <file>                Execute ASLi commands in <file>|};
     {|:q :quit                       Exit the interpreter|};
     {|:run                           Execute instructions|};
@@ -52,6 +54,12 @@ let help_msg = [
     {|:coverage <instr-set> <regex>  Runs differential testing of partial and concrete evaluation|};
     {|<expr>                         Execute ASL expression|};
     {|<stmt> ;                       Execute ASL statement|}
+]
+
+(** supported backends for :gen and their default output directories *)
+let gen_backends = [
+    ("ocaml", (Cpu.Ocaml, "offlineASL"));
+    ("cpp",   (Cpu.Cpp, "offlineASL-cpp"));
 ]
 
 let flags = [
@@ -205,10 +213,18 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             (fun s -> Printf.fprintf chan "%s\n" (Utils.to_string (PP.pp_raw_stmt s)))
             (Dis.dis_decode_entry cpu.env cpu.denv decoder op);
         Option.iter close_out chan_opt
-    | [":gen"; iset; id] ->
+    | ":gen" :: iset :: id :: rest when List.length rest <= 2 ->
+        let backend = Option.value List.(nth_opt rest 0) ~default:"ocaml" in
+        Printf.printf "Generating lifter for %s %s using %s backend\n" iset id backend;
+
+        let (backend, default_dir) = match List.assoc_opt backend gen_backends with
+            | Some x -> x
+            | None -> invalid_arg @@ Printf.sprintf "unknown backend %s (supported: %s)"
+                                     backend (String.concat ", " List.(map fst gen_backends)) in
+
+        let dir = Option.value List.(nth_opt rest 1) ~default:default_dir in
         let cpu' = Cpu.mkCPU cpu.env cpu.denv in
-        Printf.printf "Generating lifter for %s %s\n" iset id;
-        cpu'.gen iset id
+        cpu'.gen iset id backend dir
     | ":dump" :: iset :: opcode :: rest ->
         let fname = 
             (match rest with 
