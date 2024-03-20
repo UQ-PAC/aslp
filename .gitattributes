@@ -1,2 +1,4 @@
 *.asl   text eol=lf
 *.prj   text eol=lf
+*.t     linguist-vendored
+*.asl   linguist-vendored
