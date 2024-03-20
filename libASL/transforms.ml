@@ -5,6 +5,7 @@ open Visitor
 open Asl_visitor
 open Symbolic
 open Value
+open Dis_config
 
 let infer_type (e: expr): ty option =
   match e with
@@ -330,7 +331,7 @@ module StatefulIntToBits = struct
 
   (** Compute the bitvector width needed to represent an interval *)
   let width_of_interval  ?(force_signed=false) ((u,l): interval): int * bool =
-    if not force_signed && Z.geq l Z.zero then 
+    if not force_signed && Z.geq l Z.zero then
       let i = max (Z.log2up (Z.succ u)) 1 in
       (i,false)
     else
@@ -438,11 +439,11 @@ module StatefulIntToBits = struct
       let w = width old + 1 in
       if w = width abs then e
       else sym_sign_extend (width abs - w) w e
-    else if width abs = width old then e 
+    else if width abs = width old then e
     else if not (signed abs) then sym_zero_extend (width abs - width old) (width old) e
     else sym_sign_extend (width abs - width old) (width old) e
 
-  let is_power_of_2 n = 
+  let is_power_of_2 n =
     n <> 0 && 0 = Int.logand n (n-1)
 
   let is_pos (_,abs) =
@@ -470,7 +471,7 @@ module StatefulIntToBits = struct
         (sym_of_expr (Expr_LitBits (Z.format ("%0" ^ string_of_int (width w) ^ "b") a)),w)
 
     (* Assume variables have been declared at this point *)
-    | Expr_Var i -> 
+    | Expr_Var i ->
         (match Bindings.find_opt i (snd vars) with
         | Some v -> (sym_prim wrapper_ident [] [Exp e], v)
         | _ -> failwith @@ "bv_of_int_expr: Unknown identifier: " ^ (pprint_ident i))
@@ -521,7 +522,7 @@ module StatefulIntToBits = struct
         let digits = Z.log2 (Z.of_string d) in
         let n = bv_of_int_expr vars n in
         if width (snd n) <= digits then n
-        else 
+        else
           let f = sym_slice Unknown (fst n) 0 digits in
           let w = abs_of_uwidth digits in
           (f,w)
@@ -536,16 +537,16 @@ module StatefulIntToBits = struct
         (f,w)
 
     (* TODO: Somewhat haphazard translation from old approach *)
-    | Expr_TApply (FIdent ("shl_int", 0), [], [x; y]) -> 
+    | Expr_TApply (FIdent ("shl_int", 0), [], [x; y]) ->
         let x = bv_of_int_expr vars x in
         let y = force_signed (bv_of_int_expr vars y) in
         (match fst y with
         | Val (VBits bv) ->
-            let yshift = Z.to_int (Primops.prim_cvt_bits_sint bv) in 
+            let yshift = Z.to_int (Primops.prim_cvt_bits_sint bv) in
             let size = width (snd x) + yshift in
             let abs = if signed (snd x) then abs_of_width size else abs_of_uwidth size in
             (sym_append_bits Unknown (width (snd x)) yshift (fst x) (sym_zeros yshift),abs)
-        | _ -> 
+        | _ ->
             let (u,_) = interval (snd y) in
             (* in worst case, could shift upper bound on y, adding y bits *)
             let size = width (snd x) + (Z.to_int (Z.max u Z.zero)) in
@@ -556,7 +557,7 @@ module StatefulIntToBits = struct
         )
 
     (* TODO: Over-approximate range on result, could be a little closer *)
-    | Expr_TApply (FIdent ("shr_int", 0), [], [x; y]) -> 
+    | Expr_TApply (FIdent ("shr_int", 0), [], [x; y]) ->
         let x = force_signed (bv_of_int_expr vars x) in
         let y = force_signed (bv_of_int_expr vars y) in
         (sym_prim (FIdent ("asr_bits", 0)) [sym_of_abs (snd x); sym_of_abs (snd y)] [fst x;fst y],snd x)
@@ -601,14 +602,14 @@ module StatefulIntToBits = struct
           let l = int_of_expr l in
           let w = int_of_expr w in
           (match bv_of_int_expr_opt vars x with
-          | Some (e,a) -> 
+          | Some (e,a) ->
               if width a = l + w && l = 0 then sym_expr e else
               let x = if width a <= l + w then extend (l+w,signed a,interval a) (e,a) else e in
               sym_expr @@ sym_slice Unknown x l w
           | None -> e)
 
       (* Other translation from int to bit *)
-      | Expr_TApply (FIdent ("cvt_int_bits", 0), [t], [e;_]) -> 
+      | Expr_TApply (FIdent ("cvt_int_bits", 0), [t], [e;_]) ->
           let (e,a) = force_signed (bv_of_int_expr vars e) in
           let w = int_of_expr t in
           if w < width a then
@@ -667,13 +668,13 @@ module StatefulIntToBits = struct
       (* these functions take bits as first argument and integer as second. just coerce second to bits. *)
       (* TODO: primitive implementations of these expressions expect the shift amount to be signed,
                but a negative shift is invalid anyway. Can't it just be unsigned? *)
-      | Expr_TApply (FIdent ("LSL", 0), [size], [x; n]) -> 
+      | Expr_TApply (FIdent ("LSL", 0), [size], [x; n]) ->
           let (n,w) = force_signed (bv_of_int_expr vars n) in
           expr_prim' "lsl_bits" [size; expr_of_abs w] [x;sym_expr n]
-      | Expr_TApply (FIdent ("LSR", 0), [size], [x; n]) -> 
+      | Expr_TApply (FIdent ("LSR", 0), [size], [x; n]) ->
           let (n,w) = force_signed (bv_of_int_expr vars n) in
           expr_prim' "lsr_bits" [size; expr_of_abs w] [x;sym_expr n]
-      | Expr_TApply (FIdent ("ASR", 0), [size], [x; n]) -> 
+      | Expr_TApply (FIdent ("ASR", 0), [size], [x; n]) ->
           let (n,w) = force_signed (bv_of_int_expr vars n) in
           expr_prim' "asr_bits" [size; expr_of_abs w] [x;sym_expr n]
 
@@ -708,12 +709,12 @@ module StatefulIntToBits = struct
   (** Declare a new variable with an initial abstract rep *)
   let assign (v: ident) (i: abs) ((f,vars): state): state =
     match Bindings.find_opt v vars with
-    | Some j -> 
+    | Some j ->
         (* Entry doesn't change, nothing to do *)
         if i = j then (f,vars)
         (* Same width and sign, but redecl resets range, not a real change *)
         else if width i = width j && signed i = signed j then (f,Bindings.add v i vars)
-        else 
+        else
           (* Merge width and sign, but keep new range for range analysis *)
           let (w,s,_) = merge_abs i j in
           let m = (w,s,interval i) in
@@ -726,7 +727,7 @@ module StatefulIntToBits = struct
 
   (** Merge two states at a control flow join *)
   let merge (f1,vars1) (f2,vars2) =
-    (f1 || f2, Bindings.merge (fun k l r -> 
+    (f1 || f2, Bindings.merge (fun k l r ->
       match l, r with
       | Some l, Some r -> Some (merge_abs l r)
       | Some l, None
@@ -744,7 +745,7 @@ module StatefulIntToBits = struct
     | _ -> None
 
   (** Statement list walk to establish variable widths and visit all expressions *)
-  (* 
+  (*
      TODO: This won't respect local scopes within If stmts
   *)
   let rec walk enum_types changed (vars: abs Bindings.t) (s: stmt list): (state * stmt list) =
@@ -957,7 +958,7 @@ module IntToBits = struct
     let e' = bits_coerce_of_expr e in
     e', bits_size_of_sym e'
 
-  let is_power_of_2 n = 
+  let is_power_of_2 n =
     n <> 0 && 0 = Int.logand n (n-1)
 
   (** Transform integer expressions into bit-vector expressions while
@@ -966,7 +967,7 @@ module IntToBits = struct
   class bits_coerce_widening = object (self)
     inherit Asl_visitor.nopAslVisitor
 
-    val no_int_conversion = List.map (fun f -> FIdent (f, 0)) 
+    val no_int_conversion = List.map (fun f -> FIdent (f, 0))
       []
 
     (** Visits an expression, coercing integer expressions into bit-vector
@@ -983,12 +984,12 @@ module IntToBits = struct
         SkipChildren
 
         (* match two function calls deep to find truncated division. *)
-      | Expr_TApply (FIdent ("round_tozero_real",0), [], 
-          [Expr_TApply (FIdent ("divide_real",0), [], args)]) -> 
+      | Expr_TApply (FIdent ("round_tozero_real",0), [],
+          [Expr_TApply (FIdent ("divide_real",0), [], args)]) ->
 
-        ChangeDoChildrenPost (Expr_Tuple args, fun e' -> 
-          match e' with 
-          | Expr_Tuple [x; y] -> 
+        ChangeDoChildrenPost (Expr_Tuple args, fun e' ->
+          match e' with
+          | Expr_Tuple [x; y] ->
             let (x,xsize) = bits_with_size_of_expr x in
             let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize + 1 in
@@ -996,11 +997,11 @@ module IntToBits = struct
             sym_expr @@ sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_int size] [ex x; ex y]
           | _ -> failwith "expected tuple in round divide real case."
         )
-        
+
 
       | Expr_TApply (fn, tes, es) ->
         ChangeDoChildrenPost (e, fun e' ->
-          let unsupported () = 
+          let unsupported () =
             failwith @@ "unsupported integer function: " ^ pp_expr e'
           in
           match e' with
@@ -1010,7 +1011,7 @@ module IntToBits = struct
             (* seemingly unnecessary slices allow inferring the size of 'e'.
                without this, it is impossible in some cases (e.g. if 'e' is a bare variable). *)
             sym_expr @@ sym_slice Unknown (bits_coerce_of_expr e) 0 (int_of_expr t)
-          | Expr_TApply (FIdent ("cvt_int_bits", 0), [t], [e;_]) -> 
+          | Expr_TApply (FIdent ("cvt_int_bits", 0), [t], [e;_]) ->
             let e' = bits_coerce_of_expr e in
             sym_expr @@ bits_sign_extend (int_of_expr t) e'
           | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
@@ -1078,21 +1079,21 @@ module IntToBits = struct
             let ex x = sym_expr (bits_sign_extend size x) in
             expr_prim' "neg_bits" [expr_of_int size] [ex x]
 
-          | Expr_TApply (FIdent ("shl_int", 0), [], [x; y]) -> 
+          | Expr_TApply (FIdent ("shl_int", 0), [], [x; y]) ->
             let (x,xsize) = bits_with_size_of_expr x in
             let (y,ysize) = bits_with_size_of_expr y in
             (* in worst case, could shift by 2^(ysize-1)-1 bits, assuming y >= 0. *)
             let size = xsize + Int.shift_left 2 (ysize - 1) - 1 in
             let ex x = sym_expr (bits_sign_extend size x) in
-            (match y with 
-            | Val (VBits bv) -> 
+            (match y with
+            | Val (VBits bv) ->
               (* if shift is statically known, simply append zeros. *)
-              let yshift = Z.to_int (Primops.prim_cvt_bits_sint bv) in 
+              let yshift = Z.to_int (Primops.prim_cvt_bits_sint bv) in
               sym_expr @@ sym_append_bits Unknown xsize yshift x (sym_zeros yshift)
             | _ -> expr_prim' "lsl_bits" [expr_of_int size; expr_of_int ysize] [ex x;sym_expr y]
             )
 
-          | Expr_TApply (FIdent ("shr_int", 0), [], [x; y]) -> 
+          | Expr_TApply (FIdent ("shr_int", 0), [], [x; y]) ->
             let (x,xsize) = bits_with_size_of_expr x in
             let (y,ysize) = bits_with_size_of_expr y in
             let size = xsize in
@@ -1100,13 +1101,13 @@ module IntToBits = struct
             expr_prim' "asr_bits" [expr_of_int size; expr_of_int ysize] [ex x;sym_expr y]
 
             (* these functions take bits as first argument and integer as second. just coerce second to bits. *)
-          | Expr_TApply (FIdent ("LSL", 0), [size], [x; n]) -> 
+          | Expr_TApply (FIdent ("LSL", 0), [size], [x; n]) ->
             let (n,nsize) = bits_with_size_of_expr n in
             expr_prim' "lsl_bits" [size; expr_of_int nsize] [x;sym_expr n]
-          | Expr_TApply (FIdent ("LSR", 0), [size], [x; n]) -> 
+          | Expr_TApply (FIdent ("LSR", 0), [size], [x; n]) ->
             let (n,nsize) = bits_with_size_of_expr n in
             expr_prim' "lsr_bits" [size; expr_of_int nsize] [x;sym_expr n]
-          | Expr_TApply (FIdent ("ASR", 0), [size], [x; n]) -> 
+          | Expr_TApply (FIdent ("ASR", 0), [size], [x; n]) ->
             let (n,nsize) = bits_with_size_of_expr n in
             expr_prim' "asr_bits" [size; expr_of_int nsize] [x;sym_expr n]
 
@@ -1118,7 +1119,7 @@ module IntToBits = struct
 
             (* very carefully coerce a signed integer to a "real" by just using its signed representation *)
             (* this will only work for particular operations. *)
-          | Expr_TApply (FIdent ("cvt_int_real", 0), [], [x]) -> 
+          | Expr_TApply (FIdent ("cvt_int_real", 0), [], [x]) ->
             x
 
           | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
@@ -1192,7 +1193,7 @@ module CopyProp = struct
       match e with
       | Expr_Field (l, f) -> let (l',c) = get_expr_ac l in (l',c@[Field f])
       | Expr_Array (l, Expr_LitInt i) -> let (l',c) = get_expr_ac l in (l',c@[Index (VInt (Z.of_string i))])
-      | _ -> (e, []) 
+      | _ -> (e, [])
   let rec get_lexpr_ac (le: lexpr): (lexpr * access_chain list)  =
     match le with
     | LExpr_Field (l, f) -> let (l',c) = get_lexpr_ac l in (l',c@[Field f])
@@ -1213,11 +1214,11 @@ module CopyProp = struct
       match expr with
       | Expr_Var _
       | Expr_Field _
-      | Expr_Array _ -> 
+      | Expr_Array _ ->
           let (lv,lc) = get_lexpr_ac cl in
           let (v,c) = get_expr_ac expr in
           (match lv, v with
-          | LExpr_Var lv, Expr_Var v -> 
+          | LExpr_Var lv, Expr_Var v ->
               (* Clobber if they are the same base variables and lc is a prefix of c *)
               clobbered <- clobbered || (lv = v && overlaps lc c);
               SkipChildren
@@ -1241,8 +1242,8 @@ module CopyProp = struct
     val mutable clobbered = false
     method! vexpr expr =
       match expr with
-      | Expr_TApply (f,_,_) -> 
-          clobbered <- clobbered || (name_of_FIdent f = "Mem.read");
+      | Expr_TApply (f,_,_) ->
+          clobbered <- clobbered || (f = mem_read_prim);
           DoChildren
       | _ -> DoChildren
     method result = clobbered
@@ -1254,7 +1255,7 @@ module CopyProp = struct
     visitor#result
 
   let remove (i: ident) (copies: st): st =
-    try 
+    try
       Bindings.remove i copies
     with _ -> copies
 
@@ -1269,7 +1270,7 @@ module CopyProp = struct
     | Expr_Var v -> true
     | Expr_Field (e,_) -> candidateExpr e
     | Expr_Array (e,_) -> candidateExpr e
-    | Expr_TApply (f,_,_) -> (name_of_FIdent f = "Mem.read")
+    | Expr_TApply (f,_,_) -> (f = mem_read_prim)
     | _ -> false
 
   let candidateIdent (i: ident) =
@@ -1289,11 +1290,11 @@ module CopyProp = struct
   let rec copyProp' (xs: stmt list) (copies: st): (stmt list * st) =
     List.fold_left (fun (acc, copies) stmt ->
       match stmt with
-      | Stmt_VarDeclsNoInit(ty, vs, loc) -> 
+      | Stmt_VarDeclsNoInit(ty, vs, loc) ->
           (* Clear any redefinitions *)
           (acc@[stmt], removeAll vs copies)
 
-      | Stmt_ConstDecl(_, v, e, loc) 
+      | Stmt_ConstDecl(_, v, e, loc)
       | Stmt_VarDecl(_, v, e, loc) ->
           (* Introduce propagations for local decls *)
           let stmt = subst_stmt copies stmt in
@@ -1321,17 +1322,19 @@ module CopyProp = struct
           (* Statements that shouldn't clobber *)
           (acc@[subst_stmt copies stmt], copies)
 
-      | Stmt_TCall (FIdent("Mem.set", 0), _, _, _) ->
+      | Stmt_TCall (f, _, _, _) when f = mem_set_prim ->
           (acc@[subst_stmt copies stmt], removeMemory copies)
 
-      | Stmt_TCall (FIdent("AtomicStart", 0), _, _, _)
-      | Stmt_TCall (FIdent("AtomicEnd", 0), _, _, _) ->
+      | Stmt_TCall (f, _, _, _) when f = atomic_start_prim ->
           (acc@[stmt],removeMemory copies)
 
-      | _ -> 
+      | Stmt_TCall (f, _, _, _) when f = atomic_end_prim ->
+          (acc@[stmt],removeMemory copies)
+
+      | _ ->
           (* Over-approximate all other situations for soundness *)
           if debug_cp then Printf.printf "Over-approx: %s\n" (pp_stmt stmt);
-          (acc@[stmt],Bindings.empty)) 
+          (acc@[stmt],Bindings.empty))
     ([], copies) xs
 
   let copyProp (xs: stmt list): stmt list =
@@ -1340,7 +1343,7 @@ module CopyProp = struct
 
 end
 
-module RedundantSlice = struct 
+module RedundantSlice = struct
 
   let non_const e =
     match  e with
@@ -1370,24 +1373,24 @@ module RedundantSlice = struct
   class expression_walk (vartypes: ty Bindings.t) = object (self)
     inherit Asl_visitor.nopAslVisitor
 
-    (** map of variable name to type. 
+    (** map of variable name to type.
       a value of "Clobbered" means that variable is declared multiple times with different types
       and we should not remove any of its slices. *)
     val mutable lvartypes : ty_option Bindings.t = Bindings.empty;
 
     method update_lvar_types (s: stmt): unit =
-      match s with 
-      | Stmt_VarDecl(ty,id,_,l) 
+      match s with
+      | Stmt_VarDecl(ty,id,_,l)
       | Stmt_ConstDecl(ty,id,_,l) ->
         (match Bindings.find_opt id lvartypes with
         | Some (Just ty') -> if ty = ty' then () else lvartypes <- Bindings.add id (Clobbered) lvartypes
         | Some (Clobbered) -> ()
         | None -> lvartypes <- Bindings.add id (Just ty) lvartypes)
-      | Stmt_VarDeclsNoInit(ty,ids,l) -> 
+      | Stmt_VarDeclsNoInit(ty,ids,l) ->
         List.iter (fun id -> self#update_lvar_types (Stmt_VarDecl(ty,id,Expr_LitInt("ignored"),l))) ids
       | _ -> ()
 
-    method var_type (id: ident): ty option = 
+    method var_type (id: ident): ty option =
       Option.map bits_type_of_reg_type
         (match Bindings.find_opt id lvartypes with
         | Some (Just x) -> Some x
@@ -1398,12 +1401,12 @@ module RedundantSlice = struct
       | Expr_Var id -> self#var_type id
       | _ -> None
 
-    method array_val_type (id: ident): ty option = 
+    method array_val_type (id: ident): ty option =
       match self#var_type id with
       | Some (Type_Array(_ix,ty)) -> Some ty
       | _ -> None
 
-    method! vstmt (s: stmt): stmt visitAction = 
+    method! vstmt (s: stmt): stmt visitAction =
       ChangeDoChildrenPost(s, fun s -> self#update_lvar_types s; s)
 
     method! vexpr (e: expr): expr visitAction =
@@ -1417,16 +1420,16 @@ module RedundantSlice = struct
               Expr_Slices(e, [Slice_LoWd (Expr_LitInt "0", w)])
           | _ -> e)
       | Expr_Slices(e', [Slice_LoWd (Expr_LitInt "0", wd)]) ->
-          let try_match (opt: ty option): expr = 
+          let try_match (opt: ty option): expr =
             match opt with
             | Some(Type_Bits(num)) when num = wd -> e'
             | _ -> e
           in
           (match e' with
-          (* note: no fall-through from var_type case to infer_type case, 
+          (* note: no fall-through from var_type case to infer_type case,
              but infer_type only works for builtins anyway. *)
-          | Expr_Var id -> try_match (self#var_type id) 
-          | Expr_Array (Expr_Var id, _) -> try_match (self#array_val_type id) 
+          | Expr_Var id -> try_match (self#var_type id)
+          | Expr_Array (Expr_Var id, _) -> try_match (self#array_val_type id)
           | _ -> try_match (infer_type e'))
       | _ -> e)
   end
@@ -1452,20 +1455,20 @@ module CommonSubExprElim = struct
     val mutable exprs: expr list = ([]: expr list);
     val mutable cand_exprs: expr list = ([]: expr list);
 
-    method! vexpr (e: expr): expr visitAction = 
+    method! vexpr (e: expr): expr visitAction =
       let () = match e with
       (* For now, only gather TApply's that we've seen more than once
          See eval_prim in value.ml for the list of what that covers. *)
       | Expr_TApply(_) ->
-        if (List.mem e cand_exprs) && not (List.mem e exprs) then 
+        if (List.mem e cand_exprs) && not (List.mem e exprs) then
           exprs <- e :: exprs
         else cand_exprs <- e :: cand_exprs;
       | _ ->
         ()
       in
       DoChildren
-    
-    method get_info: expr list = 
+
+    method get_info: expr list =
       exprs
   end
 
@@ -1474,8 +1477,8 @@ module CommonSubExprElim = struct
 
     val mutable candidates: (expr * ident) list = []
     val mutable do_replace: bool = true
-    
-    method! vexpr (e: expr): expr visitAction = 
+
+    method! vexpr (e: expr): expr visitAction =
       let valid_replacement (e: expr): ident option =
         let found = List.filter (fun a -> fst a = e) candidates in
         if List.length found = 1 then
@@ -1491,8 +1494,8 @@ module CommonSubExprElim = struct
         DoChildren
       in
       result
-      
-    method! vstmt (s: stmt): stmt visitAction = 
+
+    method! vstmt (s: stmt): stmt visitAction =
       let () = match s with
       | Stmt_ConstDecl(_, Ident(n), _, Unknown) when (Str.string_match (Str.regexp "Cse") n 0) ->
         do_replace <- false
@@ -1502,18 +1505,18 @@ module CommonSubExprElim = struct
 
     method add (name: ident) (value: expr) =
       candidates <- (value, name)::candidates
-  end 
+  end
 
-  let infer_cse_expr_type (e: expr): ty = 
+  let infer_cse_expr_type (e: expr): ty =
     match infer_type e with
     | Some t -> t
     | None -> raise (CSEError ("Can't infer type of strange expr: " ^ (pp_expr e)))
-  
+
   let insert_into_stmts (xs: stmt list) (x: stmt): (stmt list) =
-    let rec move_after_stmts (head: stmt list) (tail: stmt list) (targets: IdentSet.t) (found: IdentSet.t) = 
-      if IdentSet.subset targets found then 
+    let rec move_after_stmts (head: stmt list) (tail: stmt list) (targets: IdentSet.t) (found: IdentSet.t) =
+      if IdentSet.subset targets found then
         (head, tail)
-      else 
+      else
         match tail with
           | [] -> raise (CSEError "Couldn't find all vars from CSE target!")
           | next::all ->
@@ -1524,7 +1527,7 @@ module CommonSubExprElim = struct
             move_after_stmts (head @ [next]) all targets newfound
     in
 
-    let targets = IdentSet.filter (fun a -> 
+    let targets = IdentSet.filter (fun a ->
       match a with
       | Ident(s) ->
         (* make sure we're not looking for the actual name of our CSE value *)
@@ -1534,12 +1537,12 @@ module CommonSubExprElim = struct
     let lists = move_after_stmts [] xs targets (IdentSet.empty) in
 
     (fst lists) @ [x] @ (snd lists)
-  
-  let apply_knowledge (xs: stmt list) (knowledge: expr list) (repl): (stmt list) = 
-    let rec add_exprs_num (xs: stmt list) (k: expr list) (id: int) = 
+
+  let apply_knowledge (xs: stmt list) (knowledge: expr list) (repl): (stmt list) =
+    let rec add_exprs_num (xs: stmt list) (k: expr list) (id: int) =
       match k with
       | [] -> xs
-      | head::tail -> 
+      | head::tail ->
         let new_var_name = "Cse" ^ string_of_int id ^ "__5" in
         (* It would be nice to infer the type of the new CSE value *)
         let new_stmt = Stmt_ConstDecl(infer_cse_expr_type head, Ident(new_var_name), head, Unknown) in
@@ -1551,12 +1554,12 @@ module CommonSubExprElim = struct
     in
     add_exprs_num xs knowledge 0
 
-  let rec gain_info_pass (xs: stmt list) (knowledge: expr list) (n: int): (expr list) = 
+  let rec gain_info_pass (xs: stmt list) (knowledge: expr list) (n: int): (expr list) =
     if (n >= List.length xs) then knowledge else (
       gain_info_pass xs knowledge (n+1)
     )
-  
-  let do_transform (xs: stmt list): stmt list = 
+
+  let do_transform (xs: stmt list): stmt list =
     let expression_visitor = new gather_expressions in
     let expression_replacer = new replace_all_instances in
 
@@ -1600,7 +1603,7 @@ module CaseSimp = struct
     match stmt with
     | Stmt_If (e, [t], [], [f], loc) ->
         (match valid_guard e, valid_body t with
-        | Some (w, x, b), Some (r, c) -> 
+        | Some (w, x, b), Some (r, c) ->
             (match match_inner f x r with
             | Some res -> Some (x, r, w, loc, StringMap.add b c res)
             | _ -> None)
@@ -1612,10 +1615,10 @@ module CaseSimp = struct
 
   (* Guesses for the possible mapping from key to value. This is incredibly dumb. *)
   let fn_guess = [
-    (fun x y -> x = y), 
+    (fun x y -> x = y),
     (fun r x _ loc -> Stmt_Assign(LExpr_Var r, x, loc));
-    (fun x y -> "0" ^ x = y), 
-    (fun r x w loc -> 
+    (fun x y -> "0" ^ x = y),
+    (fun r x w loc ->
       let nw = expr_of_int (w + 1) in
       Stmt_Assign(LExpr_Var r, expr_prim' "ZeroExtend" [expr_of_int w; nw] [x; nw], loc));
   ]
@@ -1634,7 +1637,7 @@ module CaseSimp = struct
 
   end
 
-  let do_transform (xs: stmt list): stmt list = 
+  let do_transform (xs: stmt list): stmt list =
     let stmt_visitor = new visit_if in
     let xs = visit_stmts stmt_visitor xs in
     xs
@@ -1653,7 +1656,7 @@ module RemoveTempBVs = struct
     method !vexpr e =
       match e with
       | Expr_TApply (FIdent("ZeroExtend", 0), [m;Expr_LitInt n], (Expr_TApply(FIdent("Ones", 0), [zw], ones)::xs)) ->
-          let ne = Expr_TApply (FIdent("LSR", 0), [Expr_LitInt n], [Expr_TApply(FIdent("Ones", 0), [Expr_LitInt n], [Expr_LitInt n]); 
+          let ne = Expr_TApply (FIdent("LSR", 0), [Expr_LitInt n], [Expr_TApply(FIdent("Ones", 0), [Expr_LitInt n], [Expr_LitInt n]);
             Expr_TApply (FIdent ("sub_int", 0), [], [Expr_LitInt n; m])]) in
           if debug then Printf.printf "RemoveTempBVs: Changing '%s' to '%s'\n" (pp_expr e) (pp_expr ne);
           ChangeDoChildrenPost(ne, fun e -> e)
@@ -1676,7 +1679,7 @@ module RemoveRegisters = struct
       | _ -> DoChildren
   end
 
-  let run = 
+  let run =
     let v = new type_walker in
     visit_stmts v
 

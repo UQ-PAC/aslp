@@ -154,10 +154,10 @@ let f_gen_array_store a i e =
   push_stmt (Stmt_Assign(LExpr_Array(to_lexpr a, expr_of_z i), e, loc))
 
 (* Memory ops *)
-let f_gen_Mem_set w x _ y z =
-  push_stmt (Stmt_TCall (FIdent ("Mem.set", 0), [expr_of_z w], [x; expr_of_z w; y; z], Unknown))
-let f_gen_Mem_read w x _ y =
-  (Expr_TApply (FIdent ("Mem.read", 0), [expr_of_z w], [x; expr_of_z w; y]))
+let f_gen_Memory_set w x _ y z =
+  push_stmt (Stmt_TCall (FIdent ("Memory.set", 0), [expr_of_z w], [x; expr_of_z w; y; z], Unknown))
+let f_gen_Memory_read w x _ y =
+  (Expr_TApply (FIdent ("Memory.read", 0), [expr_of_z w], [x; expr_of_z w; y]))
 let f_AtomicStart () =
   push_stmt (Stmt_TCall (FIdent ("AtomicStart", 0), [], [], Unknown))
 let f_AtomicEnd () =
