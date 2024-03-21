@@ -51,7 +51,7 @@ let name_of_ident v =
 let prefixed_name_of_ident st v =
   let name = name_of_ident v in
   match v with
-  | FIdent (f,_) when not (List.mem f st.fns) -> "super::" ^ name
+  | FIdent (f,_) when not (List.mem f st.fns) -> "iface." ^ name
   | _ -> name
 
 let rec name_of_lexpr l =
@@ -119,7 +119,8 @@ let rec prints_expr e st =
       Printf.sprintf "List.nth (%s) (%s)" (prints_expr a st) (prints_expr i st)
 
   (* Int Expressions *)
-  | Expr_LitInt i -> i ^ "LL"
+  | Expr_LitInt i ->
+      Printf.sprintf "iface.bigint_lit(\"%s\")" i
   | Expr_TApply(FIdent("add_int", 0), [], [a;b]) ->
       Printf.sprintf "(%s) + (%s)" (prints_expr a st) (prints_expr b st)
   | Expr_TApply(FIdent("sub_int", 0), [], [a;b]) ->
@@ -132,12 +133,12 @@ let rec prints_expr e st =
   (* Other operations *)
   | Expr_LitBits b ->
       let len = String.length b in
-      Printf.sprintf "super::bigint_lit(%dU, \"%s\")" len b
+      Printf.sprintf "iface.bits_lit(%dU, \"%s\")" len b
   | Expr_Slices(e,[Slice_LoWd(i,w)]) ->
       let e = prints_expr e st in
       let i = prints_expr i st in
       let w = prints_expr w st in
-      Printf.sprintf "super::extract_bits(%s, /*lo*/ %s, /*wd*/ %s)" e i w
+      Printf.sprintf "iface.extract_bits(%s, /*lo*/ %s, /*wd*/ %s)" e i w
   | Expr_TApply(f, targs, args) ->
       let f = prefixed_name_of_ident st f in
       (* let args = List.map (fun e -> prints_expr e st) (targs @ args) in *)
@@ -153,9 +154,9 @@ let rec prints_expr e st =
 and default_value t st =
   match t with
   | Type_Bits w ->
-      Printf.sprintf "super::bigint_zero(%s)" (prints_expr w st)
+      Printf.sprintf "iface.bits_zero(%s)" (prints_expr w st)
   | Type_Constructor (Ident "boolean") -> "true"
-  | Type_Constructor (Ident "integer") -> "0LL"
+  | Type_Constructor (Ident "integer") -> "iface.bigint_zero()"
   | Type_Constructor (Ident "rt_label") -> "rt_label{}"
   | Type_Constructor (Ident "rt_expr") -> "rt_expr{}"
   | Type_Array(Index_Range(lo, hi),ty) ->
@@ -350,7 +351,7 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
 
 let init_st oc = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ; fns = []; } 
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
-let global_deps = stdlib_deps @ ["aslp_lifter_base.hpp"]
+let global_deps = stdlib_deps @ ["aslp_lifter_decl.hpp"]
 
 (* Write an instruction file, containing just the behaviour of one instructions *)
 let write_instr_file fn fnsig dir =
@@ -396,7 +397,7 @@ let write_decoder_file fn fnsig deps otherfns dir =
   m 
 
 let write_header_file fn fnsig deps tests dir =
-  let m = "aslp_lifter_base" in
+  let m = "aslp_lifter_decl" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
   let st = init_st oc in
@@ -410,9 +411,12 @@ let write_header_file fn fnsig deps tests dir =
   write_line " {\n" st;
 
   inc_depth st;
-  write_line ("using super = lifter_interface" ^ template_args ^ ";\n") st;
+  write_line ("public: using interface = lifter_interface" ^ template_args ^ ";\n") st;
+  write_line "private: interface& iface;\n" st;
+  write_line "public:\n" st;
+  write_line "aslp_lifter(interface& iface) : iface{iface} { }\n" st;
   List.iter
-    (fun t -> write_line ("using typename super::" ^ t ^ ";\n") st)
+    (fun t -> write_line ("using typename interface::" ^ t ^ ";\n") st)
     typenames;
   List.iter
     (fun f -> write_line (void_str ^ " " ^ name_of_ident f ^ "(bits);\n") st)
