@@ -390,7 +390,7 @@ let write_decoder_file fn fnsig deps otherfns dir =
   let st = { st with fns = otherfns } in
   let deps' = List.map (fun x -> x^".hpp") deps in
   write_line "#pragma once\n" st;
-  write_preamble (stdlib_deps@deps') st;
+  write_preamble (global_deps@deps') st;
   write_fn fn fnsig st;
   write_epilogue fn st;
   close_out oc;
@@ -406,9 +406,7 @@ let write_header_file fn fnsig deps tests dir =
 
   let void_str = prints_ret_type None in
   write_line template_header st;
-  write_line "class aslp_lifter : lifter_interface" st;
-  write_line template_args st;
-  write_line " {\n" st;
+  write_line "class aslp_lifter {\n" st;
 
   inc_depth st;
   write_line ("public: using interface = lifter_interface" ^ template_args ^ ";\n") st;

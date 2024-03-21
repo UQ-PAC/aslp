@@ -55,7 +55,7 @@ set_target_properties(
 add_custom_target(clean-gen ALL)
 add_custom_command(
      TARGET clean-gen
-     COMMAND bash -c "rm -rfv aarch64_*.cpp aslp_lifter.cpp aslp_lifter.hpp decode_tests.cpp"
+     COMMAND bash -c "rm -fv aarch64_*.{c,h}pp aslp_lifter*.{h,c}pp decode_tests.{h,c}pp"
      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
      VERBATIM)
 
