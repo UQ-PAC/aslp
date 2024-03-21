@@ -1,0 +1,8 @@
+aslp_lifter.hpp
+aslp_lifter.cpp
+aslp_lifter_decl.hpp
+aslp_lifter_decl.cpp
+aarch64_*.cpp
+aarch64_*.hpp
+decode_tests.hpp
+decode_tests.cpp
