@@ -10,6 +10,7 @@ type st = {
   mutable skip_seq : bool;
   oc : out_channel;
   mutable ref_vars : IdentSet.t;
+  fns : string list; (* defined instruction functions *)
 }
 
 let inc_depth st =
@@ -38,10 +39,7 @@ let replace s =
       if c = '.' then acc ^ "_"
       else if c = '#' then acc ^ "HASH"
       else acc ^ (String.make 1 c)) "" s in
-  if Str.string_match gen_regex s 0 then
-    "super::" ^ s
-  else
-    s
+  s
 
 let name_of_ident v =
   let s = (match v with
@@ -49,6 +47,12 @@ let name_of_ident v =
   | FIdent (n,0) -> "f_" ^ n
   | FIdent (n,i) -> "f_" ^ n ^ "_" ^ (string_of_int i)) in
   replace s
+
+let prefixed_name_of_ident st v =
+  let name = name_of_ident v in
+  match v with
+  | FIdent (f,_) when not (List.mem f st.fns) -> "super::" ^ name
+  | _ -> name
 
 let rec name_of_lexpr l =
   match l with
@@ -128,17 +132,17 @@ let rec prints_expr e st =
   (* Other operations *)
   | Expr_LitBits b ->
       let len = String.length b in
-      Printf.sprintf "llvm::APInt{%dU, \"%s\", 2}" len b
+      Printf.sprintf "super::bigint_lit(%dU, \"%s\")" len b
   | Expr_Slices(e,[Slice_LoWd(i,w)]) ->
       let e = prints_expr e st in
       let i = prints_expr i st in
       let w = prints_expr w st in
-      Printf.sprintf "extract_bits(%s, /*lo*/ %s, /*wd*/ %s)" e i w
+      Printf.sprintf "super::extract_bits(%s, /*lo*/ %s, /*wd*/ %s)" e i w
   | Expr_TApply(f, targs, args) ->
-      let f = name_of_ident f in
+      let f = prefixed_name_of_ident st f in
       (* let args = List.map (fun e -> prints_expr e st) (targs @ args) in *)
       let args = List.map (fun e -> prints_expr e st) ([] @ args) in
-      f ^ " (" ^ (String.concat ", " args) ^ ")"
+      f ^ "(" ^ (String.concat ", " args) ^ ")"
 
   | Expr_LitString s -> "\"" ^ s ^ "\""
   | Expr_Tuple(es) -> "std::make_tuple(" ^ (String.concat "," (List.map (fun e -> prints_expr e st) es)) ^ ")"
@@ -149,7 +153,7 @@ let rec prints_expr e st =
 and default_value t st =
   match t with
   | Type_Bits w ->
-      Printf.sprintf "llvm::APInt::getZero(%s)" (prints_expr w st)
+      Printf.sprintf "super::bigint_zero(%s)" (prints_expr w st)
   | Type_Constructor (Ident "boolean") -> "true"
   | Type_Constructor (Ident "integer") -> "0LL"
   | Type_Constructor (Ident "rt_label") -> "rt_label{}"
@@ -186,7 +190,7 @@ let write_unsupported st =
   write_line {|throw std::runtime_error{"unsupported"}|} st
 
 let write_call f targs args st =
-  let f = name_of_ident f in
+  let f = prefixed_name_of_ident st f in
   let args = targs @ args in
   let call = f ^ " (" ^ (String.concat ", " args) ^ ")" in
   write_line call st
@@ -312,18 +316,31 @@ and write_stmts s st =
       dec_depth st;
       assert (not st.skip_seq)
 
-let build_args targs args =
+let build_args prefix targs args =
   if List.length targs = 0 && List.length args = 0 then "()"
   else String.concat " "
     (List.map
-      (fun s -> "bits " ^ name_of_ident s)
+      (fun s -> prefix ^ "bits " ^ name_of_ident s)
       (targs@args))
+
+let typenames = ["bits"; "bigint"; "rt_expr"; "rt_lexpr"; "rt_label"]
+let typenames_upper = List.map String.uppercase_ascii typenames
+let template_header =
+  let ts =
+    String.concat ", " @@ List.map (fun x -> "typename "^x) typenames_upper in
+  "template <" ^ ts ^ ">\n"
+let template_args = 
+  let ts = String.concat ", " typenames_upper in
+  "<" ^ ts ^ ">"
 
 let write_fn name (ret_tyo,_,targs,args,_,body) st =
   clear_ref_vars st;
-  let args = build_args targs args in
+  let classname = "aslp_lifter" ^ template_args ^ "::" in
+  let args = build_args classname targs args in
   let ret = prints_ret_type ret_tyo in
-  Printf.fprintf st.oc "%s aslp_lifter::%s(%s) {\n" ret (name_of_ident name) args;
+
+  write_line template_header st;
+  Printf.fprintf st.oc "%s %s%s(%s) {\n" ret classname (name_of_ident name) args;
   write_stmts body st;
   Printf.fprintf st.oc "\n} // %s\n\n" (name_of_ident name)
 
@@ -331,16 +348,17 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
  * Directory Setup
  ****************************************************************)
 
-let init_st oc = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty } 
-let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "aslp_lifter_base.hpp"]
-let global_deps = stdlib_deps @ ["aslp_lifter.hpp"]
+let init_st oc = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ; fns = []; } 
+let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
+let global_deps = stdlib_deps @ ["aslp_lifter_base.hpp"]
 
 (* Write an instruction file, containing just the behaviour of one instructions *)
 let write_instr_file fn fnsig dir =
   let m = name_of_FIdent fn in
-  let path = dir ^ "/" ^ m ^ ".cpp" in
+  let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
   let st = init_st oc in
+  write_line "#pragma once\n" st;
   write_preamble global_deps st;
   write_fn fn fnsig st;
   write_epilogue () st;
@@ -350,29 +368,35 @@ let write_instr_file fn fnsig dir =
 (* Write the test file, containing all decode tests *)
 let write_test_file tests dir =
   let m = "decode_tests" in
-  let path = dir ^ "/" ^ m ^ ".cpp" in
+  let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
   let st = init_st oc in
+  write_line "#pragma once\n" st;
   write_preamble global_deps st;
   Bindings.iter (fun i s -> write_fn i s st) tests;
   write_epilogue () st;
   close_out oc;
-  m
+
+  let names = List.map name_of_FIdent @@ List.map fst @@ Bindings.bindings tests in
+  (m, names)
 
 (* Write the decoder file - should depend on all of the above *)
-let write_decoder_file fn fnsig deps dir =
+let write_decoder_file fn fnsig deps otherfns dir =
   let m = "aslp_lifter" in
-  let path = dir ^ "/" ^ m ^ ".cpp" in
+  let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
   let st = init_st oc in
-  write_preamble global_deps st;
+  let st = { st with fns = otherfns } in
+  let deps' = List.map (fun x -> x^".hpp") deps in
+  write_line "#pragma once\n" st;
+  write_preamble (stdlib_deps@deps') st;
   write_fn fn fnsig st;
   write_epilogue fn st;
   close_out oc;
   m 
 
 let write_header_file fn fnsig deps tests dir =
-  let m = "aslp_lifter" in
+  let m = "aslp_lifter_base" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
   let st = init_st oc in
@@ -380,14 +404,22 @@ let write_header_file fn fnsig deps tests dir =
   write_preamble stdlib_deps st;
 
   let void_str = prints_ret_type None in
-  write_line "class aslp_lifter : public aslp_lifter_base {\n" st;
+  write_line template_header st;
+  write_line "class aslp_lifter : lifter_interface" st;
+  write_line template_args st;
+  write_line " {\n" st;
+
   inc_depth st;
-  write_line "using super = aslp_lifter_base;\n" st;
+  write_line ("using super = lifter_interface" ^ template_args ^ ";\n") st;
+  List.iter
+    (fun t -> write_line ("using typename super::" ^ t ^ ";\n") st)
+    typenames;
   List.iter
     (fun f -> write_line (void_str ^ " " ^ name_of_ident f ^ "(bits);\n") st)
     (fn :: List.map (fun x -> FIdent(x,0)) deps);
   Bindings.iter
-    (fun k (ret,_,_,_,_,_) -> write_line (prints_ret_type ret ^ " " ^ name_of_ident k ^ "(bits);\n") st) tests;
+    (fun k (ret,_,_,_,_,_) -> write_line (prints_ret_type ret ^ " " ^ name_of_ident k ^ "(bits);\n") st)
+    tests;
   dec_depth st;
   write_line "};\n" st;
 
@@ -399,8 +431,8 @@ let write_header_file fn fnsig deps tests dir =
 (* Write all of the above, expecting Utils.ml to already be present in dir *)
 let run dfn dfnsig tests fns dir =
   let files = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig dir)::acc) fns [] in
-  let _test_files = write_test_file tests dir in
-  let _decoder = write_decoder_file dfn dfnsig files dir in
+  let test_file,tfns = write_test_file tests dir in
+  let _decoder = write_decoder_file dfn dfnsig files (files@tfns) dir in
   let _header = write_header_file dfn dfnsig files tests dir in
   (* write_dune_file (decoder::files@global_deps) dir *)
   ()

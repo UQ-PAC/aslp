@@ -18,13 +18,13 @@ message(STATUS "llvm-config: ${LLVM_CONFIG}")
 file(GLOB SOURCES aarch64_*.cpp)
 
 
-add_library(offlineasl-lib aslp_lifter.cpp decode_tests.cpp ${SOURCES})
-target_include_directories(offlineasl-lib PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/.")
+add_library(offlineasl-lib INTERFACE)
+target_include_directories(offlineasl-lib INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/.")
 
-target_compile_options(offlineasl-lib PRIVATE -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-but-set-variable)
+target_compile_options(offlineasl-lib INTERFACE -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-but-set-variable)
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
-  target_compile_options(offlineasl-lib PRIVATE -g -O0 -fsanitize=address)
-  target_link_options(offlineasl-lib PRIVATE -g -O0 -fsanitize=address)    
+  target_compile_options(offlineasl-lib INTERFACE -g -O0 -fsanitize=address)
+  target_link_options(offlineasl-lib INTERFACE -g -O0 -fsanitize=address)    
 ENDIF()
 
 execute_process(COMMAND "${LLVM_CONFIG}" --libs support core irreader bitwriter
@@ -33,9 +33,9 @@ execute_process(COMMAND "${LLVM_CONFIG}" --libs support core irreader bitwriter
 message(STATUS "llvm_libs: ${llvm_libs}")
 separate_arguments(llvm_libs UNIX_COMMAND "${llvm_libs}")
 # target_link_libraries(offlineasl-lib PRIVATE "${lib_files}")
-target_link_options(offlineasl-lib PUBLIC "${llvm_libs}")
-target_link_directories(offlineasl-lib PUBLIC ${LLVM_LIBRARY_DIR})
-target_include_directories(offlineasl-lib PUBLIC ${LLVM_INCLUDE_DIRS})
+target_link_options(offlineasl-lib INTERFACE "${llvm_libs}")
+target_link_directories(offlineasl-lib INTERFACE ${LLVM_LIBRARY_DIR})
+target_include_directories(offlineasl-lib INTERFACE ${LLVM_INCLUDE_DIRS})
 
 add_executable(offlineasl-bin main.cpp)
 target_link_libraries(offlineasl-bin PRIVATE offlineasl-lib)
