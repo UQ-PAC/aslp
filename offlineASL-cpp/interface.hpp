@@ -22,6 +22,8 @@ public:
   using rt_label = RT_LABEL;
 
 protected:
+  virtual bigint bigint_lit(unsigned width, std::string_view str) = 0;
+  virtual bigint bigint_zero(unsigned width) = 0;
   virtual bits extract_bits(const bits &val, bigint lo, bigint wd) = 0;
 
   virtual bool f_eq_bits(const bits &x, const bits &y) = 0;
