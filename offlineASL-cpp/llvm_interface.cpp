@@ -1,6 +1,7 @@
 #include <llvm/ADT/APInt.h>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/Instructions.h>
 
-#include "aslp_lifter_base.hpp"
 #include "interface.hpp"
 
 namespace aslp {

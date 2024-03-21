@@ -1,8 +1,6 @@
 #pragma once
 
-#include <llvm/IR/Instruction.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/MC/MCExpr.h>
+#include <string_view>
 
 namespace aslp {
 
@@ -22,8 +20,10 @@ public:
   using rt_label = RT_LABEL;
 
 protected:
-  virtual bigint bigint_lit(unsigned width, std::string_view str) = 0;
-  virtual bigint bigint_zero(unsigned width) = 0;
+  virtual bigint bits_lit(unsigned width, std::string_view str) = 0;
+  virtual bigint bits_zero(unsigned width) = 0;
+  virtual bits bigint_lit(std::string_view str) = 0;
+  virtual bits bigint_zero() = 0;
   virtual bits extract_bits(const bits &val, bigint lo, bigint wd) = 0;
 
   virtual bool f_eq_bits(const bits &x, const bits &y) = 0;
@@ -140,18 +140,5 @@ protected:
   virtual rt_expr f_gen_FPToFixedJS_impl(rt_expr x, rt_expr fpcr,
                                          rt_expr is64) = 0; // from override.asl
 };
-
-namespace llvm_detail {
-using bits = llvm::APInt;
-using bigint = long long;
-using rt_expr = llvm::Value *;
-using rt_lexpr = llvm::AllocaInst *;
-using rt_label = llvm::BasicBlock *;
-
-using lifter_interface_llvm =
-    lifter_interface<bits, bigint, rt_expr, rt_lexpr, rt_label>;
-} // namespace llvm_detail
-
-using llvm_detail::lifter_interface_llvm;
 
 } // namespace aslp
