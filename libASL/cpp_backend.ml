@@ -152,8 +152,8 @@ and default_value t st =
       Printf.sprintf "llvm::APInt::getZero(%s)" (prints_expr w st)
   | Type_Constructor (Ident "boolean") -> "true"
   | Type_Constructor (Ident "integer") -> "0LL"
-  | Type_Constructor (Ident "rt_label") -> "(/*rt_label*/ static_cast<llvm::BasicBlock *>(nullptr))"
-  | Type_Constructor (Ident "rt_expr") -> "(/*rt_expr*/ 0)"
+  | Type_Constructor (Ident "rt_label") -> "rt_label{}"
+  | Type_Constructor (Ident "rt_expr") -> "rt_expr{}"
   | Type_Array(Index_Range(lo, hi),ty) ->
       let lo = prints_expr lo st in
       let hi = prints_expr hi st in
