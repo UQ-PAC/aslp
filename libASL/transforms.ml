@@ -6,6 +6,9 @@ open Asl_visitor
 open Symbolic
 open Value
 
+
+module StringMap = Utils.StringMap
+
 (* TODO: Central definition of prims in result + sanity test pass *)
 let pure_prims =
   (List.map (fun f -> FIdent(f,0)) Value.prims_pure) @
@@ -1584,7 +1587,6 @@ end
 
 (* A brute force match for total value mappings, implemented as a series of chained ifs *)
 module CaseSimp = struct
-  module StringMap = Map.Make(String);;
 
   (* Match a 'X = BV_CONSTANT' comparison, returning X and BV_CONSTANT *)
   let valid_guard e =

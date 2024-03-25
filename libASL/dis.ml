@@ -17,11 +17,7 @@ open Value
 
 open Symbolic
 
-module StringCmp = struct
-    type t = string
-    let compare (x: string) (y: string): int = String.compare x y
-end
-module StringMap = Map.Make(StringCmp)
+module StringMap = Utils.StringMap
 
 
 let debug_level = ref 0
