@@ -54,8 +54,8 @@ let server addr port =
   flush stdout;
   let callback _conn req body =
     let uri = req |> Request.uri in
-    let meth = req |> Request.meth |> Code.string_of_method in
-    let headers = req |> Request.headers |> Header.to_string in
+    let _meth = req |> Request.meth |> Code.string_of_method in
+    let _headers = req |> Request.headers |> Header.to_string in
     let body' = body |> Cohttp_lwt.Body.to_string in
     let resp' =
       match (Request.meth req, Uri.get_query_param uri "opcode") with
@@ -80,6 +80,6 @@ let speclist =
 let () = Arg.parse speclist ignore "usage: aslp-server --host HOSTNAME --port PORT"
 
 let () =
-  let address = Unix.(ADDR_INET (inet_addr_of_string !addr_opt, !port_opt)) in
+  let _address = Unix.(ADDR_INET (inet_addr_of_string !addr_opt, !port_opt)) in
   Lwt_main.run (server !addr_opt !port_opt)
 
