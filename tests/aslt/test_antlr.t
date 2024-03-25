@@ -86,6 +86,278 @@ tests building and running of the antlr grammar. requires java
   (stmt (assignment_stmt Stmt_Assert ( (expr Expr_TApply ( (ident " and_bool.0 ") , [ ] , [ (expr Expr_TApply ( (ident " sle_bits.0 ") , [ (targs (expr (integer 9))) ] , [ (expr (bits '000000000')) ; (expr Expr_Var ( (ident " Cse3__5 ") )) ] )) ; (expr Expr_TApply ( (ident " sle_bits.0 ") , [ (targs (expr (integer 13))) ] , [ (expr Expr_TApply ( (ident " ZeroExtend.0 ") , [ (targs (expr (integer 12))) ; (targs (expr (integer 13))) ] , [ (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 12))) ] , [ (expr Expr_TApply ( (ident " ZeroExtend.0 ") , [ (targs (expr (integer 11))) ; (targs (expr (integer 12))) ] , [ (expr Expr_TApply ( (ident " mul_bits.0 ") , [ (targs (expr (integer 11))) ] , [ (expr Expr_Var ( (ident " Cse0__5 ") )) ; (expr (bits '00000001000')) ] )) ; (expr (integer 12)) ] )) ; (expr (bits '000000001000')) ] )) ; (expr (integer 13)) ] )) ; (expr (bits '0000010000000')) ] )) ] )) ))) ;
   (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__4 ") )) , (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 8))) ; (targs (expr (integer 56))) ] , [ (expr Expr_Slices ( (expr Expr_TApply ( (ident " lsr_bits.0 ") , [ (targs (expr (integer 128))) ; (targs (expr (integer 12))) ] , [ (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) ; (expr Expr_TApply ( (ident " ZeroExtend.0 ") , [ (targs (expr (integer 11))) ; (targs (expr (integer 12))) ] , [ (expr Expr_TApply ( (ident " mul_bits.0 ") , [ (targs (expr (integer 11))) ] , [ (expr Expr_Var ( (ident " Cse0__5 ") )) ; (expr (bits '00000001000')) ] )) ; (expr (integer 12)) ] )) ] )) , [ (slice Slice_LoWd ( (expr (integer 0)) , (expr (integer 8)) )) ] )) ; (expr Expr_Slices ( (expr Expr_Var ( (ident " result__4 ") )) , [ (slice Slice_LoWd ( (expr (integer 0)) , (expr (integer 56)) )) ] )) ] )) ))) ]) , [ ] ,
   (stmts [ ]) )))
-  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Array ( (lexpr LExpr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , (expr Expr_TApply ( (ident " ZeroExtend.0 ") , [ (targs (expr (integer 64))) ; (targs (expr (integer 128))) ] , [ (expr Expr_Var ( (ident " result__4 ") )) ; (expr (integer 128)) ] )) ))) <EOF>)
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Array ( (lexpr LExpr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , (expr Expr_TApply ( (ident " ZeroExtend.0 ") , [ (targs (expr (integer 64))) ; (targs (expr (integer 128))) ] , [ (expr Expr_Var ( (ident " result__4 ") )) ; (expr (integer 128)) ] )) )))
+  (stmt (assignment_stmt Stmt_VarDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " result__5 ") , (expr (bits '0000')) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 0)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5 ") )) , (expr (bits '0001')) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 1)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 2)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 3)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 4)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 5)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 6)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 7)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (assignment_stmt Stmt_ConstDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " Exp14__5 ") , (expr Expr_Var ( (ident " result__5 ") )) )))
+  (stmt (assignment_stmt Stmt_VarDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " result__5_1 ") , (expr (bits '0000')) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 8)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_1 ") )) , (expr (bits '0001')) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 9)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_1 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_1 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 10)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_1 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_1 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 11)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_1 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_1 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 12)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_1 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_1 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 13)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_1 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_1 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 14)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_1 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_1 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 15)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_1 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_1 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (assignment_stmt Stmt_ConstDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " Exp26__5 ") , (expr Expr_Var ( (ident " result__5_1 ") )) )))
+  (stmt (assignment_stmt Stmt_VarDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " result__5_2 ") , (expr (bits '0000')) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 16)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_2 ") )) , (expr (bits '0001')) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 17)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_2 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_2 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 18)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_2 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_2 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 19)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_2 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_2 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 20)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_2 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_2 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 21)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_2 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_2 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 22)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_2 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_2 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 23)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_2 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_2 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (assignment_stmt Stmt_ConstDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " Exp37__5 ") , (expr Expr_Var ( (ident " result__5_2 ") )) )))
+  (stmt (assignment_stmt Stmt_VarDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " result__5_3 ") , (expr (bits '0000')) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 24)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_3 ") )) , (expr (bits '0001')) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 25)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_3 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_3 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 26)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_3 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_3 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 27)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_3 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_3 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 28)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_3 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_3 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 29)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_3 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_3 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 30)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_3 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_3 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 31)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_3 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_3 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (assignment_stmt Stmt_ConstDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " Exp48__5 ") , (expr Expr_Var ( (ident " result__5_3 ") )) )))
+  (stmt (assignment_stmt Stmt_VarDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " result__5_4 ") , (expr (bits '0000')) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 32)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_4 ") )) , (expr (bits '0001')) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 33)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_4 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_4 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 34)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_4 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_4 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 35)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_4 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_4 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 36)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_4 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_4 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 37)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_4 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_4 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 38)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_4 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_4 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 39)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_4 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_4 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (assignment_stmt Stmt_ConstDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " Exp59__5 ") , (expr Expr_Var ( (ident " result__5_4 ") )) )))
+  (stmt (assignment_stmt Stmt_VarDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " result__5_5 ") , (expr (bits '0000')) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 40)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_5 ") )) , (expr (bits '0001')) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 41)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 42)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 43)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 44)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 45)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 46)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 47)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_5 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_5 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (assignment_stmt Stmt_ConstDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " Exp70__5 ") , (expr Expr_Var ( (ident " result__5_5 ") )) )))
+  (stmt (assignment_stmt Stmt_VarDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " result__5_6 ") , (expr (bits '0000')) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 48)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_6 ") )) , (expr (bits '0001')) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 49)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_6 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_6 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 50)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_6 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_6 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 51)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_6 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_6 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 52)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_6 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_6 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 53)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_6 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_6 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 54)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_6 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_6 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 55)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_6 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_6 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (assignment_stmt Stmt_ConstDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " Exp81__5 ") , (expr Expr_Var ( (ident " result__5_6 ") )) )))
+  (stmt (assignment_stmt Stmt_VarDecl ( (type Type_Bits ( (expr (integer 4)) )) , (ident " result__5_7 ") , (expr (bits '0000')) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 56)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_7 ") )) , (expr (bits '0001')) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 57)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_7 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_7 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 58)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_7 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_7 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 59)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_7 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_7 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 60)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_7 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_7 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 61)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_7 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_7 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 62)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_7 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_7 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (conditional_stmt Stmt_If ( (expr Expr_TApply ( (ident " eq_bits.0 ") , [ (targs (expr (integer 1))) ] , [ (expr Expr_Slices ( (expr Expr_Array ( (expr Expr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , [ (slice Slice_LoWd ( (expr (integer 63)) , (expr (integer 1)) )) ] )) ; (expr (bits '1')) ] )) ,
+  (stmts [
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Var ( (ident " result__5_7 ") )) , (expr Expr_TApply ( (ident " add_bits.0 ") , [ (targs (expr (integer 4))) ] , [ (expr Expr_Var ( (ident " result__5_7 ") )) ; (expr (bits '0001')) ] )) ))) ]) , [ ] ,
+  (stmts [ ]) )))
+  (stmt (assignment_stmt Stmt_Assign ( (lexpr LExpr_Array ( (lexpr LExpr_Var ( (ident " _Z ") )) , (expr (integer 0)) )) , (expr Expr_TApply ( (ident " ZeroExtend.0 ") , [ (targs (expr (integer 64))) ; (targs (expr (integer 128))) ] , [ (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 8))) ; (targs (expr (integer 56))) ] , [ (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 4))) ; (targs (expr (integer 4))) ] , [ (expr (bits '0000')) ; (expr Expr_Var ( (ident " result__5_7 ") )) ] )) ; (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 8))) ; (targs (expr (integer 48))) ] , [ (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 4))) ; (targs (expr (integer 4))) ] , [ (expr (bits '0000')) ; (expr Expr_Var ( (ident " Exp81__5 ") )) ] )) ; (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 8))) ; (targs (expr (integer 40))) ] , [ (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 4))) ; (targs (expr (integer 4))) ] , [ (expr (bits '0000')) ; (expr Expr_Var ( (ident " Exp70__5 ") )) ] )) ; (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 8))) ; (targs (expr (integer 32))) ] , [ (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 4))) ; (targs (expr (integer 4))) ] , [ (expr (bits '0000')) ; (expr Expr_Var ( (ident " Exp59__5 ") )) ] )) ; (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 8))) ; (targs (expr (integer 24))) ] , [ (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 4))) ; (targs (expr (integer 4))) ] , [ (expr (bits '0000')) ; (expr Expr_Var ( (ident " Exp48__5 ") )) ] )) ; (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 8))) ; (targs (expr (integer 16))) ] , [ (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 4))) ; (targs (expr (integer 4))) ] , [ (expr (bits '0000')) ; (expr Expr_Var ( (ident " Exp37__5 ") )) ] )) ; (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 8))) ; (targs (expr (integer 8))) ] , [ (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 4))) ; (targs (expr (integer 4))) ] , [ (expr (bits '0000')) ; (expr Expr_Var ( (ident " Exp26__5 ") )) ] )) ; (expr Expr_TApply ( (ident " append_bits.0 ") , [ (targs (expr (integer 4))) ; (targs (expr (integer 4))) ] , [ (expr (bits '0000')) ; (expr Expr_Var ( (ident " Exp14__5 ") )) ] )) ] )) ] )) ] )) ] )) ] )) ] )) ] )) ; (expr (integer 128)) ] )) ))) <EOF>)
 
   $ cat antlr_err

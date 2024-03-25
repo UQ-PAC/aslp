@@ -22,3 +22,5 @@
 // tbl v0.8b, {v0.16b}, v0.8b
 0x0e000000
 
+// cnt v0.8b, v0.8b https://github.com/UQ-PAC/aslp/issues/43
+0x0e205800
