@@ -132,8 +132,8 @@ public:
   virtual rt_expr f_gen_FPCompareGT(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPAdd(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPSub(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
-  virtual rt_expr f_gen_FPMulAdda(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
-  virtual rt_expr f_gen_FPMulAddHa(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
+  virtual rt_expr f_gen_FPMulAdd(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
+  virtual rt_expr f_gen_FPMulAddH(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPMulX(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPMul(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPDiv(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
