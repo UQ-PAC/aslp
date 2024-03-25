@@ -15,9 +15,6 @@ get_target_property(LLVM_CONFIG llvm-config LOCATION)
 
 message(STATUS "llvm-config: ${LLVM_CONFIG}")
 
-file(GLOB SOURCES aarch64_*.cpp)
-
-
 add_library(offlineasl-lib INTERFACE)
 target_include_directories(offlineasl-lib INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/.")
 
@@ -52,10 +49,7 @@ set_target_properties(
 )
 
 
-add_custom_target(clean-gen ALL)
-add_custom_command(
-     TARGET clean-gen
-     COMMAND bash -c "rm -fv aarch64_*.{c,h}pp aslp_lifter*.{h,c}pp decode_tests.{h,c}pp"
-     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-     VERBATIM)
+# not working?
+file(GLOB GENERATED aarch64_*.cpp aarch64_*.hpp aslp_lifter.hpp decode_tests.hpp)
+set_directory_properties(ADDITIONAL_MAKE_CLEAN_FILES ${GENERATED})
 
