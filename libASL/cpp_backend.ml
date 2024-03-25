@@ -17,13 +17,26 @@ type st = {
 
   (* variables declared within semantics, i.e. non-global variables *)
   mutable genvars : ident list;
+
+  (* number of identifiers declared in each scope. *)
+  mutable genvardepth : int list;
 }
 
+let inc_vars st =
+  output_string st.oc " { ";
+  st.genvardepth <- (List.hd st.genvardepth + 1) :: List.tl st.genvardepth
+
 let inc_depth st =
-  st.depth <- st.depth + 2
+  st.depth <- st.depth + 2;
+  st.genvardepth <- 0 :: st.genvardepth
 
 let dec_depth st =
-  st.depth <- st.depth - 2
+  st.depth <- st.depth - 2;
+  match st.genvardepth with
+  | h::rest ->
+      st.genvardepth <- rest;
+      for _ = 1 to h do output_string st.oc " } " done
+  | _ -> failwith "genvardepth empty"
 
 let is_ref_var v st =
   IdentSet.mem v st.ref_vars
@@ -200,19 +213,21 @@ let write_unsupported st =
 
 let write_call f targs args st =
   let f = prefixed_name_of_ident st f in
-  let args = targs @ args in
+  let args = [] @ args in
   let call = f ^ "(" ^ (String.concat ", " args) ^ ")" in
   write_line call st
 
 let write_ref v e st =
   let name = prefixed_name_of_ident st v in
   let s = Printf.sprintf "auto %s = %s" name e in
+  inc_vars st;
   write_line s st;
   add_ref_var v st
 
 let write_let v e st =
   let v = prefixed_name_of_ident st v in
   let s = Printf.sprintf "const auto %s = %s" v e in
+  inc_vars st;
   write_line s st
 
 let write_if_start c st =
@@ -317,6 +332,7 @@ and write_stmts s st =
   match s with
   | [] ->
       write_proc_return st;
+      write_seq st;
       dec_depth st
   | x::xs ->
       write_stmt x st;
@@ -358,7 +374,8 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
 let init_st (fnsigs: Eval.fun_sig list) oc =
   let args = List.concat_map
     (fun fnsig -> fnsig_get_args fnsig @ fnsig_get_targs fnsig) fnsigs in
-  { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ; genfns = []; genvars = args; } 
+  { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ;
+    genfns = []; genvars = args; genvardepth = []; } 
 
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
 let global_deps = stdlib_deps @ ["aslp_lifter.hpp"; "decode_tests.hpp"]
