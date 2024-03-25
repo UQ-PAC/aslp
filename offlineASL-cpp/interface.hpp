@@ -15,15 +15,17 @@ public:
 
   // runtime-expression type, i.e. the type of values produced by the semantics
   using rt_expr = RT_EXPR;
-  using rt_lexpr = RT_EXPR;
+  using rt_lexpr = RT_LEXPR;
   // runtime-label, supports switching blocks during semantics generation
   using rt_label = RT_LABEL;
 
+  // TODO: split lift-time interface from run-time interface
+  // TODO: more flexible method of adding const-lvalue qualifiers
 protected:
-  virtual bigint bits_lit(unsigned width, std::string_view str) = 0;
-  virtual bigint bits_zero(unsigned width) = 0;
-  virtual bits bigint_lit(std::string_view str) = 0;
-  virtual bits bigint_zero() = 0;
+  virtual bits bits_lit(unsigned width, std::string_view str) = 0;
+  virtual bits bits_zero(unsigned width) = 0;
+  virtual bigint bigint_lit(std::string_view str) = 0;
+  virtual bigint bigint_zero() = 0;
   virtual bits extract_bits(const bits &val, bigint lo, bigint wd) = 0;
 
   virtual bool f_eq_bits(const bits &x, const bits &y) = 0;
