@@ -22,7 +22,7 @@ struct llvm_lifter_traits {
 static_assert(lifter_traits<llvm_lifter_traits>);
 
 class llvm_lift_time_interface : virtual public lifter_interface<llvm_lifter_traits> {
-
+public:
   bits bits_lit(unsigned width, std::string_view str) override {
    return llvm::APInt{width, str, (char)2};
   }
@@ -125,7 +125,7 @@ class llvm_lift_time_interface : virtual public lifter_interface<llvm_lifter_tra
 
 
 class llvm_run_time_interface : virtual public lifter_interface<llvm_lifter_traits> {
-
+public:
   rt_lexpr v_PSTATE_C() override { assert(0); };
   rt_lexpr v_PSTATE_Z() override { assert(0); };
   rt_lexpr v_PSTATE_V() override { assert(0); };
@@ -160,7 +160,10 @@ class llvm_run_time_interface : virtual public lifter_interface<llvm_lifter_trai
   void f_gen_array_store(rt_lexpr array, bigint index, rt_expr exp) override { assert(0); }
   void f_gen_Mem_set(rt_expr ptr, rt_expr width, rt_expr acctype, rt_expr exp) override { assert(0); }
   rt_expr f_gen_Mem_read(rt_expr ptr, rt_expr width, rt_expr acctype) override { assert(0); }
-  void f_gen_AArch64_MemTag_set(rt_expr desc, rt_expr value) override { assert(0); }
+  void f_gen_AArch64_MemTag_set(rt_expr address, rt_expr acctype, rt_expr value) override { assert(0); }
+
+  void f_AtomicStart() override { assert(0); }
+  void f_AtomicEnd() override { assert(0); }
 
   rt_expr f_gen_cvt_bits_uint(rt_expr bits) override { assert(0); }
   rt_expr f_gen_cvt_bool_bv(rt_expr e) override { assert(0); }
@@ -199,8 +202,8 @@ class llvm_run_time_interface : virtual public lifter_interface<llvm_lifter_trai
   rt_expr f_gen_FPCompareGT(rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }
   rt_expr f_gen_FPAdd(rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }
   rt_expr f_gen_FPSub(rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }
-  rt_expr f_gen_FPMulAdd(rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }
-  rt_expr f_gen_FPMulAddH(rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }
+  rt_expr f_gen_FPMulAdd(rt_expr addend, rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }
+  rt_expr f_gen_FPMulAddH(rt_expr addend, rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }
   rt_expr f_gen_FPMulX(rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }
   rt_expr f_gen_FPMul(rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }
   rt_expr f_gen_FPDiv(rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }

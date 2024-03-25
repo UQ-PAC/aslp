@@ -93,7 +93,10 @@ public:
   virtual void f_gen_array_store(rt_lexpr array, bigint index, rt_expr exp) = 0;
   virtual void f_gen_Mem_set(rt_expr ptr, rt_expr width, rt_expr acctype, rt_expr exp) = 0;
   virtual rt_expr f_gen_Mem_read(rt_expr ptr, rt_expr width, rt_expr acctype) = 0;
-  virtual void f_gen_AArch64_MemTag_set(rt_expr desc, rt_expr value) = 0;
+  virtual void f_gen_AArch64_MemTag_set(rt_expr address, rt_expr acctype, rt_expr value) = 0;
+
+  virtual void f_AtomicStart() = 0;
+  virtual void f_AtomicEnd() = 0;
 
   virtual rt_expr f_gen_cvt_bits_uint(rt_expr bits) = 0;
   virtual rt_expr f_gen_cvt_bool_bv(rt_expr e) = 0;
@@ -132,8 +135,8 @@ public:
   virtual rt_expr f_gen_FPCompareGT(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPAdd(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPSub(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
-  virtual rt_expr f_gen_FPMulAdd(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
-  virtual rt_expr f_gen_FPMulAddH(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
+  virtual rt_expr f_gen_FPMulAdd(rt_expr addend, rt_expr x, rt_expr y, rt_expr fpcr) = 0;
+  virtual rt_expr f_gen_FPMulAddH(rt_expr addend, rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPMulX(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPMul(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
   virtual rt_expr f_gen_FPDiv(rt_expr x, rt_expr y, rt_expr fpcr) = 0;
