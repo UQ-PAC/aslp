@@ -50,6 +50,6 @@ set_target_properties(
 
 
 # not working?
-file(GLOB GENERATED aarch64_*.cpp aarch64_*.hpp aslp_lifter.hpp decode_tests.hpp)
-set_directory_properties(ADDITIONAL_MAKE_CLEAN_FILES ${GENERATED})
+file(GLOB GENERATED aarch64_*.cpp aarch64_*.hpp aslp_lifter.hpp aslp_lifter.hpp aslp_lifter_impl.hpp decode_tests.hpp)
+set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${GENERATED}")
 

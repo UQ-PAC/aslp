@@ -361,7 +361,7 @@ let init_st (fnsigs: Eval.fun_sig list) oc =
   { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ; genfns = []; genvars = args; } 
 
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
-let global_deps = stdlib_deps @ ["aslp_lifter_decl.hpp"; "decode_tests.hpp"]
+let global_deps = stdlib_deps @ ["aslp_lifter.hpp"; "decode_tests.hpp"]
 
 (* Write an instruction file, containing just the behaviour of one instructions *)
 let write_instr_file fn fnsig dir =
@@ -394,7 +394,7 @@ let write_test_file tests dir =
 
 (* Write the decoder file - should depend on all of the above *)
 let write_decoder_file fn fnsig deps otherfns dir =
-  let m = "aslp_lifter" in
+  let m = "aslp_lifter_impl" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
   let st = init_st [fnsig] oc in
@@ -407,8 +407,9 @@ let write_decoder_file fn fnsig deps otherfns dir =
   close_out oc;
   m 
 
+(* Write the public-facing header file. *)
 let write_header_file fn fnsig deps tests dir =
-  let m = "aslp_lifter_decl" in
+  let m = "aslp_lifter" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
   let st = init_st [fnsig] oc in
