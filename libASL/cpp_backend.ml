@@ -10,7 +10,13 @@ type st = {
   mutable skip_seq : bool;
   oc : out_channel;
   mutable ref_vars : IdentSet.t;
-  fns : string list; (* defined instruction functions *)
+
+  (* generated instruction functions. *)
+  (* XXX: currently only set for decoder function, i.e. assuming only decoder calls other generated functions. *)
+  genfns : string list;
+
+  (* variables declared within semantics, i.e. non-global variables *)
+  mutable genvars : ident list;
 }
 
 let inc_depth st =
@@ -51,7 +57,9 @@ let name_of_ident v =
 let prefixed_name_of_ident st v =
   let name = name_of_ident v in
   match v with
-  | FIdent (f,_) when not (List.mem f st.fns) -> "iface." ^ name
+  (* non-generated functions and variables are translated to methods on an interface object. *)
+  | FIdent (f,_) when not (List.mem f st.genfns) -> "iface." ^ name
+  | Ident _ when not (List.mem v st.genvars) -> "iface." ^ name ^ "()"
   | _ -> name
 
 let rec name_of_lexpr l =
@@ -111,7 +119,7 @@ let rec prints_expr e st =
 
   (* State Accesses *)
   | Expr_Var(v) ->
-      let n = name_of_ident v in
+      let n = prefixed_name_of_ident st v in
       if is_ref_var v st then "" ^ n else n
   | Expr_Field(e, f) ->
       prints_expr e st ^ "." ^ name_of_ident f
@@ -197,13 +205,13 @@ let write_call f targs args st =
   write_line call st
 
 let write_ref v e st =
-  let name = name_of_ident v in
+  let name = prefixed_name_of_ident st v in
   let s = Printf.sprintf "auto %s = %s" name e in
   write_line s st;
   add_ref_var v st
 
 let write_let v e st =
-  let v = name_of_ident v in
+  let v = prefixed_name_of_ident st v in
   let s = Printf.sprintf "const auto %s = %s" v e in
   write_line s st
 
@@ -254,14 +262,17 @@ let rec write_stmt s st =
   match s with
   | Stmt_VarDeclsNoInit(ty, vs, loc) ->
       let e = default_value ty st in
+      st.genvars <- vs @ st.genvars;
       List.iter (fun v -> write_ref v e st) vs
 
   | Stmt_VarDecl(ty, v, e, loc) ->
       let e = prints_expr e st in
+      st.genvars <- v :: st.genvars;
       write_ref v e st
 
   | Stmt_ConstDecl(ty, v, e, loc) ->
       let e = prints_expr e st in
+      st.genvars <- v :: st.genvars;
       write_let v e st
 
   | Stmt_Assign(l, r, loc) ->
@@ -349,7 +360,7 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
  * Directory Setup
  ****************************************************************)
 
-let init_st oc = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ; fns = []; } 
+let init_st oc = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ; genfns = []; genvars = []; } 
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
 let global_deps = stdlib_deps @ ["aslp_lifter_decl.hpp"]
 
@@ -387,7 +398,7 @@ let write_decoder_file fn fnsig deps otherfns dir =
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
   let st = init_st oc in
-  let st = { st with fns = otherfns } in
+  let st = { st with genfns = otherfns } in
   let deps' = List.map (fun x -> x^".hpp") deps in
   write_line "#pragma once\n" st;
   write_preamble (global_deps@deps') st;
