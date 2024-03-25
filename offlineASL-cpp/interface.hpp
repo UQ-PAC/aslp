@@ -4,20 +4,29 @@
 
 namespace aslp {
 
-template <typename BITS, typename BIGINT, typename RT_EXPR, typename RT_LEXPR,
-          typename RT_LABEL>
-class lifter_interface {
+template<typename T>
+concept lifter_traits = requires(T a)
+{
+    typename T::bits;
+    typename T::bigint;
+    typename T::rt_expr;
+    typename T::rt_lexpr;
+    typename T::rt_label;
+};
+
+template <lifter_traits Traits>
+class lifter_interface : public Traits {
 public:
   // bits which are known at lift-time
-  using bits = BITS;
+  using typename Traits::bits;
   // bigints which are known at lift-time
-  using bigint = BIGINT;
+  using typename Traits::bigint;
 
   // runtime-expression type, i.e. the type of values produced by the semantics
-  using rt_expr = RT_EXPR;
-  using rt_lexpr = RT_LEXPR;
+  using typename Traits::rt_expr;
+  using typename Traits::rt_lexpr;
   // runtime-label, supports switching blocks during semantics generation
-  using rt_label = RT_LABEL;
+  using typename Traits::rt_label;
 
   // TODO: split lift-time interface from run-time interface
   // TODO: more flexible method of adding const-lvalue qualifiers

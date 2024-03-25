@@ -6,11 +6,18 @@
 
 namespace aslp {
 
-using  __lifter_interface_llvm = lifter_interface<llvm::APInt, long long, llvm::Value *, llvm::AllocaInst *, llvm::BasicBlock *>;
+struct llvm_lifter_traits {
+  using bits = llvm::APInt;
+  using bigint = long long;
+  using rt_expr = llvm::Value *;
+  using rt_lexpr = llvm::AllocaInst *;
+  using rt_label = llvm::BasicBlock *;
+};
 
-class llvm_lifter_interface : public __lifter_interface_llvm {
+static_assert(lifter_traits<llvm_lifter_traits>);
 
-  using super = __lifter_interface_llvm;
+class llvm_lifter_interface : public lifter_interface<llvm_lifter_traits> {
+  using super = lifter_interface<llvm_lifter_traits>;
   using typename super::bits;
   using typename super::bigint;
   using typename super::rt_expr;
