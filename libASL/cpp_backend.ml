@@ -23,7 +23,7 @@ type st = {
 }
 
 let inc_vars st =
-  output_string st.oc " { ";
+  (* output_string st.oc " { "; *)
   st.genvardepth <- (List.hd st.genvardepth + 1) :: List.tl st.genvardepth
 
 let inc_depth st =
@@ -35,7 +35,7 @@ let dec_depth st =
   match st.genvardepth with
   | h::rest ->
       st.genvardepth <- rest;
-      for _ = 1 to h do output_string st.oc " } " done
+      (* for _ = 1 to h do output_string st.oc " } " done *)
   | _ -> failwith "genvardepth empty"
 
 let is_ref_var v st =
