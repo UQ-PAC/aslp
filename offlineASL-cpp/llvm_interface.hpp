@@ -2,10 +2,12 @@
 #include <llvm/ADT/APInt.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/IRBuilder.h>
 
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <memory>
 
 #include "interface.hpp"
 
@@ -16,7 +18,7 @@ struct llvm_lifter_traits {
   using bigint = long long;
   using rt_expr = llvm::Value *;
   using rt_lexpr = llvm::AllocaInst *;
-  using rt_label = llvm::BasicBlock *;
+  using rt_label = std::shared_ptr<llvm::IRBuilder<>>;
 };
 
 static_assert(lifter_traits<llvm_lifter_traits>);
@@ -125,7 +127,22 @@ public:
 
 
 class llvm_run_time_interface : virtual public lifter_interface<llvm_lifter_traits> {
+  llvm::LLVMContext &context;
+  llvm::Function &function;
+
+  rt_label builder;
+
+protected:
+  llvm::Type* intty(unsigned width) {
+    return llvm::Type::getIntNTy(context, width);
+  }
+
 public:
+  llvm_run_time_interface(llvm::Function &f)
+    : function{f},
+      builder{std::make_shared<llvm::IRBuilder<>>(&f.getEntryBlock())},
+      context{f.getContext()} {}
+
   rt_lexpr v_PSTATE_C() override { assert(0); };
   rt_lexpr v_PSTATE_Z() override { assert(0); };
   rt_lexpr v_PSTATE_V() override { assert(0); };
@@ -144,16 +161,40 @@ public:
   rt_lexpr v___ExclusiveLocal() override { assert(0); };
 
 
-  rt_lexpr f_decl_bv(std::string_view name, bigint width) override { assert(0); }
-  rt_lexpr f_decl_bool(std::string_view name) override { assert(0); }
+  rt_lexpr f_decl_bv(std::string_view name, bigint width) override { 
+    return builder->CreateAlloca(intty(width), /*addrspace*/0, /*arraysize*/nullptr, name);
+  }
+  rt_lexpr f_decl_bool(std::string_view name) override {
+    return f_decl_bv(name, 1);
+  }
 
-  void f_switch_context(rt_label label) override { assert(0); }
-  std::tuple<rt_label, rt_label, rt_label> f_gen_branch(rt_expr cond) override { assert(0); }
+  void f_switch_context(rt_label label) override { builder.swap(label); }
+
+  std::tuple<rt_label, rt_label, rt_label> f_gen_branch(rt_expr cond) override {
+    auto tcase = llvm::BasicBlock::Create(context, "true", &function);
+    auto fcase = llvm::BasicBlock::Create(context, "false", &function);
+    auto join = llvm::BasicBlock::Create(context, "join", &function);
+
+    builder->CreateCondBr(cond, tcase, fcase);
+
+    rt_label tlabel = std::make_shared<llvm::IRBuilder<>>(llvm::BranchInst::Create(join, tcase));
+    rt_label flabel = std::make_shared<llvm::IRBuilder<>>(llvm::BranchInst::Create(join, fcase));
+    rt_label jlabel = std::make_shared<llvm::IRBuilder<>>(join);
+
+    return std::make_tuple(std::move(tlabel), std::move(flabel), std::move(jlabel));
+  }
 
   void f_gen_assert(rt_expr cond) override { assert(0); }
-  rt_expr f_gen_bit_lit(bits bits) override { assert(0); }
-  rt_expr f_gen_bool_lit(bool b) override { assert(0); }
-  rt_expr f_gen_int_lit(bigint i) override { assert(0); }
+  rt_expr f_gen_bit_lit(bits bits) override { 
+    return llvm::ConstantInt::get(intty(bits.getBitWidth()), bits);
+  }
+  rt_expr f_gen_bool_lit(bool b) override {
+    return f_gen_bit_lit(b ? llvm::APInt::getAllOnes(1) : llvm::APInt::getZero(1));
+  }
+  rt_expr f_gen_int_lit(bigint i) override {
+    return llvm::ConstantInt::get(intty(111), i); // XXX hopefully this is never needed
+  }
+
   rt_expr f_gen_load(rt_lexpr ptr) override { assert(0); }
   void f_gen_store(rt_lexpr var, rt_expr exp) override { assert(0); }
   rt_expr f_gen_array_load(rt_lexpr array, bigint index) override { assert(0); }
