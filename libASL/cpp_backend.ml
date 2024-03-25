@@ -336,14 +336,9 @@ let build_args prefix targs args =
       (targs@args))
 
 let typenames = ["bits"; "bigint"; "rt_expr"; "rt_lexpr"; "rt_label"]
-let typenames_upper = List.map String.uppercase_ascii typenames
-let template_header =
-  let ts =
-    String.concat ", " @@ List.map (fun x -> "typename "^x) typenames_upper in
-  "template <" ^ ts ^ ">\n"
-let template_args = 
-  let ts = String.concat ", " typenames_upper in
-  "<" ^ ts ^ ">"
+(* let typenames_upper = List.map String.uppercase_ascii typenames *)
+let template_header = "template <lifter_traits Traits>\n"
+let template_args = "<Traits>"
 
 let write_fn name (ret_tyo,_,targs,args,_,body) st =
   clear_ref_vars st;
@@ -425,7 +420,7 @@ let write_header_file fn fnsig deps tests dir =
   write_line "public:\n" st;
   write_line "aslp_lifter(interface& iface) : iface{iface} { }\n" st;
   List.iter
-    (fun t -> write_line ("using typename interface::" ^ t ^ ";\n") st)
+    (fun t -> write_line ("using typename Traits::" ^ t ^ ";\n") st)
     typenames;
   List.iter
     (fun f -> write_line (void_str ^ " " ^ name_of_ident f ^ "(bits);\n") st)
