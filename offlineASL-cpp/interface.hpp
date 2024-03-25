@@ -22,6 +22,23 @@ public:
   // TODO: split lift-time interface from run-time interface
   // TODO: more flexible method of adding const-lvalue qualifiers
 protected:
+  virtual rt_lexpr v_PSTATE_C() = 0;
+  virtual rt_lexpr v_PSTATE_Z() = 0;
+  virtual rt_lexpr v_PSTATE_V() = 0;
+  virtual rt_lexpr v_PSTATE_N() = 0;
+  virtual rt_lexpr v__PC() = 0;
+  virtual rt_lexpr v__R() = 0;
+  virtual rt_lexpr v__Z() = 0;
+  virtual rt_lexpr v_SP_EL0() = 0;
+  virtual rt_lexpr v_FPSR() = 0;
+  virtual rt_lexpr v_FPCR() = 0;
+
+  virtual rt_lexpr v_PSTATE_BTYPE() = 0;
+  virtual rt_lexpr v_BTypeCompatible() = 0;
+  virtual rt_lexpr v___BranchTaken() = 0;
+  virtual rt_lexpr v_BTypeNext() = 0;
+  virtual rt_lexpr v___ExclusiveLocal() = 0;
+
   virtual bits bits_lit(unsigned width, std::string_view str) = 0;
   virtual bits bits_zero(unsigned width) = 0;
   virtual bigint bigint_lit(std::string_view str) = 0;
