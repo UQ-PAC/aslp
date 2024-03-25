@@ -201,7 +201,7 @@ let write_unsupported st =
 let write_call f targs args st =
   let f = prefixed_name_of_ident st f in
   let args = targs @ args in
-  let call = f ^ " (" ^ (String.concat ", " args) ^ ")" in
+  let call = f ^ "(" ^ (String.concat ", " args) ^ ")" in
   write_line call st
 
 let write_ref v e st =
@@ -343,7 +343,7 @@ let template_args = "<Traits>"
 let write_fn name (ret_tyo,_,targs,args,_,body) st =
   clear_ref_vars st;
   let classname = "aslp_lifter" ^ template_args ^ "::" in
-  let args = build_args classname targs args in
+  let args = build_args "Traits::" targs args in
   let ret = prints_ret_type ret_tyo in
 
   write_line template_header st;
@@ -355,7 +355,12 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
  * Directory Setup
  ****************************************************************)
 
-let init_st oc = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ; genfns = []; genvars = []; } 
+let init_st ?(fnsig: Eval.fun_sig option) oc =
+  let args = match fnsig with
+    | None -> []
+    | Some fnsig -> fnsig_get_args fnsig @ fnsig_get_targs fnsig in
+  { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ; genfns = []; genvars = args; } 
+
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
 let global_deps = stdlib_deps @ ["aslp_lifter_decl.hpp"]
 
@@ -364,7 +369,7 @@ let write_instr_file fn fnsig dir =
   let m = name_of_FIdent fn in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
-  let st = init_st oc in
+  let st = init_st ~fnsig oc in
   write_line "#pragma once\n" st;
   write_preamble global_deps st;
   write_fn fn fnsig st;
@@ -392,7 +397,7 @@ let write_decoder_file fn fnsig deps otherfns dir =
   let m = "aslp_lifter" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
-  let st = init_st oc in
+  let st = init_st ~fnsig oc in
   let st = { st with genfns = otherfns } in
   let deps' = List.map (fun x -> x^".hpp") deps in
   write_line "#pragma once\n" st;
@@ -406,7 +411,7 @@ let write_header_file fn fnsig deps tests dir =
   let m = "aslp_lifter_decl" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
-  let st = init_st oc in
+  let st = init_st ~fnsig oc in
   write_line "#pragma once\n" st;
   write_preamble stdlib_deps st;
 
@@ -420,11 +425,13 @@ let write_header_file fn fnsig deps tests dir =
   write_line "public:\n" st;
   write_line "aslp_lifter(interface& iface) : iface{iface} { }\n" st;
   List.iter
-    (fun t -> write_line ("using typename Traits::" ^ t ^ ";\n") st)
+    (fun t -> write_line ("using " ^ t ^ " = typename Traits::" ^ t ^ ";\n") st)
     typenames;
+  write_line "/* generated functions */\n" st;
   List.iter
     (fun f -> write_line (void_str ^ " " ^ name_of_ident f ^ "(bits);\n") st)
     (fn :: List.map (fun x -> FIdent(x,0)) deps);
+  write_line "/* generated decode test conditions */\n" st;
   Bindings.iter
     (fun k (ret,_,_,_,_,_) -> write_line (prints_ret_type ret ^ " " ^ name_of_ident k ^ "(bits);\n") st)
     tests;
