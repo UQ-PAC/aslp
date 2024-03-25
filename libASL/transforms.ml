@@ -1717,11 +1717,11 @@ module ScopedBindings : ScopedBindings = struct
   let find_binding (b:'elt t) (i) : 'a option = Seq.find_map (fun s -> Bindings.find_opt i s) (Stack.to_seq b)
 
   
-  let current_scope_bindings (b:'elt t) : 'elt Bindings.t = 
-    let keyset c = IdentSet.of_list (Bindings.bindings c |> List.map fst) in
-    let keysdiff a b = IdentSet.diff (keyset a) (keyset b) in
-    let join bas bbs = Bindings.add_seq (Seq.map (fun i -> i, Bindings.find i bbs) (IdentSet.to_seq (keysdiff bbs bas))) bas in
-    List.fold_left join Bindings.empty (List.of_seq (Stack.to_seq b))
+  (** returns a flattened view of bindings accessible from the current (innermost) scope. *)
+  let current_scope_bindings (b:'elt t) : 'elt Bindings.t =
+    (* inner bindings shadow outer bindings. *)
+    let join = Bindings.union (fun _ inner _outer -> Some inner) in
+    Seq.fold_left join Bindings.empty (Stack.to_seq b)
 end
 
 module FixRedefinitions = struct
