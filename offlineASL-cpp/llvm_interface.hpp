@@ -22,13 +22,6 @@ struct llvm_lifter_traits {
 static_assert(lifter_traits<llvm_lifter_traits>);
 
 class llvm_lift_time_interface : virtual public lifter_interface<llvm_lifter_traits> {
-  // using super = lifter_interface<llvm_lifter_traits>;
-  // using typename super::bits;
-  // using typename super::bigint;
-  // using typename super::rt_expr;
-  // using typename super::rt_lexpr;
-  // using typename super::rt_label;
-
 
   bits bits_lit(unsigned width, std::string_view str) override {
    return llvm::APInt{width, str, (char)2};

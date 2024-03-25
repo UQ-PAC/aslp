@@ -196,7 +196,7 @@ let write_assert s st =
   write_line s st
 
 let write_unsupported st =
-  write_line {|throw std::runtime_error{"unsupported"}|} st
+  write_line {|throw std::runtime_error{"aslp_lifter: unsupported! " + std::string{__func__} + " @ " + std::string{__FILE__} + ":" + std::to_string(__LINE__)}|} st
 
 let write_call f targs args st =
   let f = prefixed_name_of_ident st f in
@@ -355,21 +355,20 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
  * Directory Setup
  ****************************************************************)
 
-let init_st ?(fnsig: Eval.fun_sig option) oc =
-  let args = match fnsig with
-    | None -> []
-    | Some fnsig -> fnsig_get_args fnsig @ fnsig_get_targs fnsig in
+let init_st (fnsigs: Eval.fun_sig list) oc =
+  let args = List.concat_map
+    (fun fnsig -> fnsig_get_args fnsig @ fnsig_get_targs fnsig) fnsigs in
   { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty ; genfns = []; genvars = args; } 
 
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
-let global_deps = stdlib_deps @ ["aslp_lifter_decl.hpp"]
+let global_deps = stdlib_deps @ ["aslp_lifter_decl.hpp"; "decode_tests.hpp"]
 
 (* Write an instruction file, containing just the behaviour of one instructions *)
 let write_instr_file fn fnsig dir =
   let m = name_of_FIdent fn in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
-  let st = init_st ~fnsig oc in
+  let st = init_st [fnsig] oc in
   write_line "#pragma once\n" st;
   write_preamble global_deps st;
   write_fn fn fnsig st;
@@ -382,7 +381,8 @@ let write_test_file tests dir =
   let m = "decode_tests" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
-  let st = init_st oc in
+  let fnsigs = List.map snd (Bindings.bindings tests) in
+  let st = init_st fnsigs oc in
   write_line "#pragma once\n" st;
   write_preamble global_deps st;
   Bindings.iter (fun i s -> write_fn i s st) tests;
@@ -397,7 +397,7 @@ let write_decoder_file fn fnsig deps otherfns dir =
   let m = "aslp_lifter" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
-  let st = init_st ~fnsig oc in
+  let st = init_st [fnsig] oc in
   let st = { st with genfns = otherfns } in
   let deps' = List.map (fun x -> x^".hpp") deps in
   write_line "#pragma once\n" st;
@@ -411,7 +411,7 @@ let write_header_file fn fnsig deps tests dir =
   let m = "aslp_lifter_decl" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let oc = open_out path in
-  let st = init_st ~fnsig oc in
+  let st = init_st [fnsig] oc in
   write_line "#pragma once\n" st;
   write_preamble stdlib_deps st;
 
