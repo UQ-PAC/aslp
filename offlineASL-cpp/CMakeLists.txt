@@ -25,8 +25,8 @@ target_include_directories(aslp-lifter-gen INTERFACE "${CMAKE_CURRENT_SOURCE_DIR
 
 target_compile_options(aslp-lifter-gen INTERFACE -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-but-set-variable)
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
-  # target_compile_options(aslp-lifter-gen INTERFACE -g -Ofast -fsanitize=address)
-  # target_link_options(aslp-lifter-gen INTERFACE -g -Ofast -fsanitize=address)
+  target_compile_options(aslp-lifter-gen INTERFACE -g -Ofast -fsanitize=address)
+  target_link_options(aslp-lifter-gen INTERFACE -g -Ofast -fsanitize=address)
 ENDIF()
 
 ### aslp-lifter-llvm ###
