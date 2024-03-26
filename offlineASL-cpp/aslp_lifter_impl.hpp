@@ -1,1 +1,1 @@
-#include "aslp-lifter-instantiate/aslp_lifter_impl.hpp" // IWYU pragma: export
+#include "aslp-lifter-gen/aslp_lifter_impl.hpp" // IWYU pragma: export

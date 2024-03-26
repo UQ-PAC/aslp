@@ -76,9 +76,9 @@ let write_preamble opens ?(header = true) ?(exports = []) st =
   Printf.fprintf st.oc "/* AUTO-GENERATED LIFTER FILE */\n\n";
   if header then Printf.fprintf st.oc "#pragma once\n";
   List.iter (fun s ->
-    Printf.fprintf st.oc "#include \"%s\"\n" s) opens;
+    Printf.fprintf st.oc "#include <%s>\n" s) opens;
   List.iter (fun s ->
-    Printf.fprintf st.oc "#include \"%s\" // IWYU pragma: export\n" s) exports;
+    Printf.fprintf st.oc "#include <%s> // IWYU pragma: export\n" s) exports;
   Printf.fprintf st.oc "\n";
   Printf.fprintf st.oc "namespace aslp {\n\n"
 
@@ -379,8 +379,10 @@ let init_st (genfns: cpp_fun_sig list) file =
   { depth = 0; skip_seq = false; file; oc; ref_vars = IdentSet.empty ;
     genvars; } 
 
+let gen_prefix = "aslp-lifter-gen"
+let instantiate_prefix = "aslp-lifter-instantiate"
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
-let global_deps = stdlib_deps @ ["aslp_lifter.hpp"; "decode_tests.hpp"]
+let global_deps = stdlib_deps @ [gen_prefix^"/aslp_lifter.hpp"; gen_prefix^"/decode_tests.hpp"]
 
 
 (** Write an instruction file, containing just the behaviour of one instructions *)
@@ -449,6 +451,19 @@ let write_header_file fn fnsig semfns testfns dir =
   close_out st.oc;
   (name, semfns @ testfns)
 
+(** Writes the template implementation file. If needed, this can be used to instantiate the entire lifter.
+    However, it is fairly slow. *)
+let write_impl_file allfns dir =
+  let name = "aslp_lifter_impl" in
+  let path = dir ^ "/" ^ name ^ ".hpp" in
+  let st = init_st [] path in
+  let exports = Utils.nub @@ List.map (fun {file;_} -> file) allfns in
+  write_preamble stdlib_deps ~exports st;
+
+  write_epilogue () st;
+  close_out st.oc;
+  name
+
 (* Creates a directory of explicit instantiations, supporting parallel compilation. *)
 let write_explicit_instantiations cppfuns dir =
   let write_instantiation ({rty; name; args; file; _} : cpp_fun_sig) =
@@ -475,19 +490,21 @@ let write_explicit_instantiations cppfuns dir =
 (* Write all of the above, expecting Utils.ml to already be present in dir *)
 let run dfn dfnsig tests fns rootdir =
 
-  let dir = rootdir ^ "/aslp-lifter-gen" in
-  let instdir = rootdir ^ "/aslp-lifter-instantiate" in
-  if not (Sys.file_exists dir) then Sys.mkdir dir 777;
+  let gendir = rootdir ^ "/" ^ gen_prefix in
+  let instdir = rootdir ^ "/" ^ instantiate_prefix in
+  if not (Sys.file_exists gendir) then Sys.mkdir gendir 777;
   if not (Sys.file_exists instdir) then Sys.mkdir instdir 777;
 
-  let semfns = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig dir)::acc) fns [] in
-  let testfns = write_test_file tests dir in
+  let semfns = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig gendir)::acc) fns [] in
+  let testfns = write_test_file tests gendir in
   let allfns = semfns @ testfns in
 
-  let dfn = write_decoder_file dfn dfnsig allfns dir in
+  let dfn = write_decoder_file dfn dfnsig allfns gendir in
   let allfns = dfn :: allfns in
 
-  let _header = write_header_file dfn dfnsig (dfn :: semfns) testfns dir in
+  let _header = write_header_file dfn dfnsig (dfn :: semfns) testfns gendir in
   let _explicits = write_explicit_instantiations allfns instdir in
+
+  let _impl = write_impl_file allfns gendir in
   (* write_dune_file (decoder::files@global_deps) dir *)
   ()
