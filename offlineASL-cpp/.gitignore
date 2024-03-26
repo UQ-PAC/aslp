@@ -1,3 +1,5 @@
 /gen/*
 !/gen/.gitkeep
+/gen-instantiate/*
+!/gen-instantiate/.gitkeep
 /build
