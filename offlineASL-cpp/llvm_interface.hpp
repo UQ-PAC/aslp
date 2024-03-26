@@ -128,6 +128,7 @@ public:
 
 class llvm_run_time_interface : virtual public lifter_interface<llvm_lifter_traits> {
   llvm::LLVMContext &context;
+  llvm::Module &module;
   llvm::Function &function;
 
   rt_label builder;
@@ -140,6 +141,7 @@ protected:
 public:
   llvm_run_time_interface(llvm::Function &f)
     : function{f},
+      module{*f.getParent()},
       builder{std::make_shared<llvm::IRBuilder<>>(&f.getEntryBlock())},
       context{f.getContext()} {}
 
@@ -269,7 +271,10 @@ public:
 };
 
 
-class llvm_lifter_interface : public llvm_lift_time_interface, public llvm_run_time_interface { };
+class llvm_lifter_interface : public llvm_lift_time_interface, public llvm_run_time_interface {
+public:
+  llvm_lifter_interface(llvm::Function &f) : llvm_run_time_interface(f) { };
+};
 
 static_assert(!std::is_abstract_v<llvm_lifter_interface>);
 

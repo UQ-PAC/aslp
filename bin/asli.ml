@@ -59,7 +59,7 @@ let help_msg = [
 (** supported backends for :gen and their default output directories *)
 let gen_backends = [
     ("ocaml", (Cpu.Ocaml, "offlineASL"));
-    ("cpp",   (Cpu.Cpp, "offlineASL-cpp"));
+    ("cpp",   (Cpu.Cpp, "offlineASL-cpp/gen"));
 ]
 
 let flags = [

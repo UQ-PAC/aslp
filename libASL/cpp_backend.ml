@@ -89,10 +89,12 @@ let rec name_of_lexpr l =
  * File IO
  ****************************************************************)
 
-let write_preamble opens st =
+let write_preamble opens ?(exports = []) st =
   Printf.fprintf st.oc "/* AUTO-GENERATED LIFTER FILE */\n\n";
   List.iter (fun s ->
     Printf.fprintf st.oc "#include \"%s\"\n" s) opens;
+  List.iter (fun s ->
+    Printf.fprintf st.oc "#include \"%s\" // IWYU pragma: export\n" s) exports;
   Printf.fprintf st.oc "\n";
   Printf.fprintf st.oc "namespace aslp {\n\n"
 
@@ -418,7 +420,7 @@ let write_decoder_file fn fnsig deps otherfns dir =
   let st = { st with genfns = otherfns } in
   let deps' = List.map (fun x -> x^".hpp") deps in
   write_line "#pragma once\n" st;
-  write_preamble (global_deps@deps') st;
+  write_preamble global_deps ~exports:deps' st;
   write_fn fn fnsig st;
   write_epilogue fn st;
   close_out oc;
