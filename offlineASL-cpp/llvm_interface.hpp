@@ -10,18 +10,9 @@
 #include <memory>
 
 #include "interface.hpp"
+#include "llvm_lifter_traits.hpp"
 
 namespace aslp {
-
-struct llvm_lifter_traits {
-  using bits = llvm::APInt;
-  using bigint = long long;
-  using rt_expr = llvm::Value *;
-  using rt_lexpr = llvm::AllocaInst *;
-  using rt_label = std::shared_ptr<llvm::IRBuilder<>>;
-};
-
-static_assert(lifter_traits<llvm_lifter_traits>);
 
 class llvm_lift_time_interface : virtual public lifter_interface<llvm_lifter_traits> {
 public:
@@ -145,14 +136,30 @@ public:
       builder{std::make_shared<llvm::IRBuilder<>>(&f.getEntryBlock())},
       context{f.getContext()} {}
 
-  rt_lexpr v_PSTATE_C() override { assert(0); };
-  rt_lexpr v_PSTATE_Z() override { assert(0); };
-  rt_lexpr v_PSTATE_V() override { assert(0); };
-  rt_lexpr v_PSTATE_N() override { assert(0); };
-  rt_lexpr v__PC() override { assert(0); };
-  rt_lexpr v__R() override { assert(0); };
-  rt_lexpr v__Z() override { assert(0); };
-  rt_lexpr v_SP_EL0() override { assert(0); };
+  rt_lexpr v_PSTATE_C() override { 
+    return builder->CreateAlloca(intty(1), 0, nullptr, "c");
+  };
+  rt_lexpr v_PSTATE_Z() override { 
+    return builder->CreateAlloca(intty(1), 0, nullptr, "z");
+  };
+  rt_lexpr v_PSTATE_V() override {
+    return builder->CreateAlloca(intty(1), 0, nullptr, "v");
+  };
+  rt_lexpr v_PSTATE_N() override {
+    return builder->CreateAlloca(intty(1), 0, nullptr, "n");
+  };
+  rt_lexpr v__PC() override { 
+    return builder->CreateAlloca(intty(64), 0, nullptr, "pc");
+  };
+  rt_lexpr v__R() override { 
+    return builder->CreateAlloca(intty(64), 0, nullptr, "r");
+  };
+  rt_lexpr v__Z() override { 
+    return builder->CreateAlloca(intty(64), 0, nullptr, "z");
+  };
+  rt_lexpr v_SP_EL0() override {
+    return builder->CreateAlloca(intty(64), 0, nullptr, "sp");
+  };
   rt_lexpr v_FPSR() override { assert(0); };
   rt_lexpr v_FPCR() override { assert(0); };
 
