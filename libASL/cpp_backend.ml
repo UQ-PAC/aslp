@@ -466,25 +466,34 @@ let write_impl_file allfns dir =
 
 (* Creates a directory of explicit instantiations, supporting parallel compilation. *)
 let write_explicit_instantiations cppfuns dir =
-  let write_instantiation ({rty; name; args; file; _} : cpp_fun_sig) =
-    let name = name_of_FIdent name
-    and fname = name_of_ident name in
-    let path = dir ^ "/" ^ name ^ ".cpp" in
+  let write_instantiation file (cppfuns : cpp_fun_sig list) =
+    let dep = file in
+    let file = Filename.(chop_extension (basename file)) in
+    let path = dir ^ "/" ^ file ^ ".cpp" in
     let st = init_st [] path in
 
-    write_preamble ~header:false stdlib_deps ~exports:[file] st;
+    write_preamble ~header:false stdlib_deps ~exports:[dep] st;
 
     write_line "#ifdef ASLP_LIFTER_INSTANTIATE\n" st;
     write_line "using Traits = ASLP_LIFTER_INSTANTIATE;\n" st;
-    let s = Printf.sprintf "template %s %s%s::%s%s;\n" rty "aslp_lifter" template_args fname args in
-    write_line s st;
+    List.iter
+      (fun {rty; name; args; _} ->
+        let fname = name_of_ident name in
+        let s = Printf.sprintf "template %s %s%s::%s%s;\n" rty "aslp_lifter" template_args fname args in
+        write_line s st)
+      cppfuns;
     write_line "#endif\n" st;
 
-    write_epilogue fname st;
+    write_epilogue () st;
     close_out st.oc;
-    fname
+    cppfuns
   in
-  List.map write_instantiation cppfuns
+  (* group by the .hpp file where each template is defined. *)
+  let files = Utils.nub @@ List.map (fun x -> x.file) cppfuns in
+  List.map
+    (fun file ->
+      write_instantiation file (List.filter (fun x -> x.file = file) cppfuns))
+    files
 
 
 (* Write all of the above, expecting Utils.ml to already be present in dir *)
