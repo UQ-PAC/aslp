@@ -1,5 +1,5 @@
-/gen/*
-!/gen/.gitkeep
-/gen-instantiate/*
-!/gen-instantiate/.gitkeep
+/aslp-lifter-gen/*
+!/aslp-lifter-gen/.gitkeep
+/aslp-lifter-instantiate/*
+!/aslp-lifter-instantiate/.gitkeep
 /build

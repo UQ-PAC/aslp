@@ -12,32 +12,15 @@ type st = {
   oc : out_channel;
   mutable ref_vars : IdentSet.t;
 
-  (* generated instruction functions. *)
-  (* XXX: currently only set for decoder function, i.e. assuming only decoder calls other generated functions. *)
-  genfns : string list;
-
-  (* variables declared within semantics, i.e. non-global variables *)
+  (* symbols declared within semantics, e.g. non-global variables and other generated functions *)
   mutable genvars : ident list;
-
-  (* number of identifiers declared in each scope. *)
-  mutable genvardepth : int list;
 }
 
-let inc_vars st =
-  (* output_string st.oc " { "; *)
-  st.genvardepth <- (List.hd st.genvardepth + 1) :: List.tl st.genvardepth
-
 let inc_depth st =
-  st.depth <- st.depth + 2;
-  st.genvardepth <- 0 :: st.genvardepth
+  st.depth <- st.depth + 2
 
 let dec_depth st =
-  st.depth <- st.depth - 2;
-  match st.genvardepth with
-  | h::rest ->
-      st.genvardepth <- rest;
-      (* for _ = 1 to h do output_string st.oc " } " done *)
-  | _ -> failwith "genvardepth empty"
+  st.depth <- st.depth - 2
 
 let is_ref_var v st =
   IdentSet.mem v st.ref_vars
@@ -52,7 +35,6 @@ let add_ref_var v st =
  * String Utils
  ****************************************************************)
 
-let gen_regex = Str.regexp {|^\(f_gen_\|f_decl_\)|}
 let replace s =
   let s =
     String.fold_left (fun acc c ->
@@ -72,7 +54,7 @@ let prefixed_name_of_ident st v =
   let name = name_of_ident v in
   match v with
   (* non-generated functions and variables are translated to methods on an interface object. *)
-  | FIdent (f,_) when not (List.mem f st.genfns) -> "iface." ^ name
+  | FIdent _ when not (List.mem v st.genvars) -> "iface." ^ name
   | Ident _ when not (List.mem v st.genvars) -> "iface." ^ name ^ "()"
   | _ -> name
 
@@ -224,14 +206,12 @@ let write_call f targs args st =
 let write_ref v e st =
   let name = prefixed_name_of_ident st v in
   let s = Printf.sprintf "auto %s = %s" name e in
-  inc_vars st;
   write_line s st;
   add_ref_var v st
 
 let write_let v e st =
   let v = prefixed_name_of_ident st v in
   let s = Printf.sprintf "const auto %s = %s" v e in
-  inc_vars st;
   write_line s st
 
 let write_if_start c st =
@@ -363,34 +343,41 @@ let template_args = "<Traits>"
 type cpp_fun_sig = {
   rty: string;
   prefix: string;
-  name: string;
+  name: ident;
   args: string;
   file: string;
 }
 
 let write_fn name (ret_tyo,_,targs,args,_,body) st : cpp_fun_sig =
   clear_ref_vars st;
+  let oldvars = st.genvars in
+  st.genvars <- (targs @ args) @ oldvars;
+
   let prefix = "aslp_lifter" ^ template_args ^ "::" in
-  let name = name_of_ident name in
+  let fname = name_of_ident name in
   let args = build_args "Traits::" targs args in
   let ret = prints_ret_type ret_tyo in
 
   write_line template_header st;
-  Printf.fprintf st.oc "%s %s%s%s {\n" ret prefix name args;
+  Printf.fprintf st.oc "%s %s%s%s {\n" ret prefix fname args;
   write_stmts body st;
-  Printf.fprintf st.oc "\n} // %s\n\n" name;
-  { rty = ret; prefix; name; args; file = ""; }
+  Printf.fprintf st.oc "\n} // %s\n\n" fname;
+
+  st.genvars <- oldvars;
+  { rty = ret; prefix; name; args; file = st.file; }
 
 (****************************************************************
  * Directory Setup
  ****************************************************************)
 
-let init_st (fnsigs: Eval.fun_sig list) file =
-  let args = List.concat_map
-    (fun fnsig -> fnsig_get_args fnsig @ fnsig_get_targs fnsig) fnsigs in
+let init_st (genfns: cpp_fun_sig list) file =
+  let genvars = List.map (fun {name;_} -> name) genfns in
   let oc = open_out file in
+  (* XXX: obtain filename with its immediate parent directory. *)
+  let file = Filename.(basename (dirname file) ^ "/" ^ basename file) in
+
   { depth = 0; skip_seq = false; file; oc; ref_vars = IdentSet.empty ;
-    genfns = []; genvars = args; genvardepth = []; } 
+    genvars; } 
 
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
 let global_deps = stdlib_deps @ ["aslp_lifter.hpp"; "decode_tests.hpp"]
@@ -400,7 +387,7 @@ let global_deps = stdlib_deps @ ["aslp_lifter.hpp"; "decode_tests.hpp"]
 let write_instr_file fn fnsig dir =
   let m = name_of_FIdent fn in
   let path = dir ^ "/" ^ m ^ ".hpp" in
-  let st = init_st [fnsig] path in
+  let st = init_st [] path in
   write_preamble global_deps st;
   let gen = write_fn fn fnsig st in
   write_epilogue () st;
@@ -411,24 +398,19 @@ let write_instr_file fn fnsig dir =
 let write_test_file tests dir =
   let m = "decode_tests" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
-  let fnsigs = List.map snd (Bindings.bindings tests) in
-  let st = init_st fnsigs path in
+  let st = init_st [] path in
   write_preamble global_deps st;
   let gens = List.map (fun (i,s) -> write_fn i s st) @@ Bindings.bindings tests in
   write_epilogue () st;
   close_out st.oc;
   gens
 
-(* Write the decoder file - should depend on all of the above *)
-let write_decoder_file fn fnsig deps otherfns dir =
-  let m = "aslp_lifter_impl" in
+(* Write the root decoder file *)
+let write_decoder_file fn fnsig genfns dir =
+  let m = name_of_FIdent fn in
   let path = dir ^ "/" ^ m ^ ".hpp" in
-  let st = init_st [fnsig] path in
-  let genfns = List.map (fun {name;_} -> name) (deps @ otherfns) in
-  let st = { st with genfns } in
-  (* let deps' = List.map (fun x -> x^".hpp") deps in *)
-  let deps' = [] in
-  write_preamble global_deps ~exports:deps' st;
+  let st = init_st genfns path in
+  write_preamble global_deps st;
   let gen = write_fn fn fnsig st in
   write_epilogue fn st;
   close_out st.oc;
@@ -437,9 +419,9 @@ let write_decoder_file fn fnsig deps otherfns dir =
 
 (* Write the public-facing header file. For compilation speed, this declares but does not define. *)
 let write_header_file fn fnsig semfns testfns dir =
-  let name = name_of_FIdent fn in
+  let name = "aslp_lifter" in
   let path = dir ^ "/" ^ name ^ ".hpp" in
-  let st = init_st [fnsig] path in
+  let st = init_st [] path in
   write_preamble stdlib_deps st;
 
   write_line template_header st;
@@ -453,11 +435,11 @@ let write_header_file fn fnsig semfns testfns dir =
 
   write_line "/* generated semantics */\n" st;
   List.iter
-    (fun {rty; name; args; _} -> write_line (rty ^ " " ^ name ^ args ^ ";\n") st)
+    (fun {rty; name; args; _} -> write_line (rty ^ " " ^ name_of_ident name ^ args ^ ";\n") st)
     semfns;
   write_line "/* generated decode test conditions */\n" st;
   List.iter
-    (fun {rty; name; args; _} -> write_line (rty ^ " " ^ name ^ args ^ ";\n") st)
+    (fun {rty; name; args; _} -> write_line (rty ^ " " ^ name_of_ident name ^ args ^ ";\n") st)
     testfns;
 
   dec_depth st;
@@ -469,29 +451,23 @@ let write_header_file fn fnsig semfns testfns dir =
 
 (* Creates a directory of explicit instantiations, supporting parallel compilation. *)
 let write_explicit_instantiations cppfuns dir =
-  (* XXX HACK! we need to properly record which functions are in which file. *)
-  let header_file fnfile =
-    if String.ends_with ~suffix:"_decode_test" fnfile then
-      "gen/decode_tests.hpp"
-    else
-      "gen/"^fnfile^".hpp" in
-
-  let write_instantiation ({rty; name; args; _} : cpp_fun_sig) =
-    let fnfile = String.(sub name 2 (length name - 2)) in
-    let path = dir ^ "/" ^ fnfile ^ ".cpp" in
+  let write_instantiation ({rty; name; args; file; _} : cpp_fun_sig) =
+    let name = name_of_FIdent name
+    and fname = name_of_ident name in
+    let path = dir ^ "/" ^ name ^ ".cpp" in
     let st = init_st [] path in
 
-    write_preamble ~header:false (stdlib_deps @ [header_file fnfile]) st;
+    write_preamble ~header:false stdlib_deps ~exports:[file] st;
 
     write_line "#ifdef ASLP_LIFTER_INSTANTIATE\n" st;
     write_line "using Traits = ASLP_LIFTER_INSTANTIATE;\n" st;
-    let s = Printf.sprintf "template %s %s%s::%s%s;\n" rty "aslp_lifter" template_args name args in
+    let s = Printf.sprintf "template %s %s%s::%s%s;\n" rty "aslp_lifter" template_args fname args in
     write_line s st;
     write_line "#endif\n" st;
 
-    write_epilogue name st;
+    write_epilogue fname st;
     close_out st.oc;
-    fnfile
+    fname
   in
   List.map write_instantiation cppfuns
 
@@ -499,15 +475,19 @@ let write_explicit_instantiations cppfuns dir =
 (* Write all of the above, expecting Utils.ml to already be present in dir *)
 let run dfn dfnsig tests fns rootdir =
 
-  let dir = rootdir ^ "/gen" in
-  let instdir = rootdir ^ "/gen-instantiate" in
+  let dir = rootdir ^ "/aslp-lifter-gen" in
+  let instdir = rootdir ^ "/aslp-lifter-instantiate" in
   if not (Sys.file_exists dir) then Sys.mkdir dir 777;
   if not (Sys.file_exists instdir) then Sys.mkdir instdir 777;
 
-  let files = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig dir)::acc) fns [] in
+  let semfns = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig dir)::acc) fns [] in
   let testfns = write_test_file tests dir in
-  let _decoder = write_decoder_file dfn dfnsig files (files@testfns) dir in
-  let (_header, cppfuns) = write_header_file dfn dfnsig files testfns dir in
-  let _explicits = write_explicit_instantiations cppfuns instdir in
+  let allfns = semfns @ testfns in
+
+  let dfn = write_decoder_file dfn dfnsig allfns dir in
+  let allfns = dfn :: allfns in
+
+  let _header = write_header_file dfn dfnsig (dfn :: semfns) testfns dir in
+  let _explicits = write_explicit_instantiations allfns instdir in
   (* write_dune_file (decoder::files@global_deps) dir *)
   ()

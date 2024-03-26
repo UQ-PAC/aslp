@@ -11,6 +11,7 @@ int main(int argc, char **argv) {
 
   auto funty = llvm::FunctionType::get(llvm::Type::getVoidTy(context), {}, false);
   auto function = llvm::Function::Create(funty, llvm::GlobalValue::LinkageTypes::ExternalLinkage, "aslp_lifter_fun", module);
+  auto entry = llvm::BasicBlock::Create(context, "entry", function);
 
   aslp::llvm_lifter_interface iface{*function};
   aslp::aslp_lifter<aslp::llvm_lifter_traits> lifter{iface};
