@@ -129,6 +129,10 @@ protected:
     return llvm::Type::getIntNTy(context, width);
   }
 
+  bigint int_expr(rt_expr x) {
+    return llvm::cast<llvm::ConstantInt>(x)->getSExtValue();
+  }
+
 public:
   llvm_run_time_interface(llvm::Function &f)
     : function{f},
@@ -204,10 +208,20 @@ public:
     return llvm::ConstantInt::get(intty(111), i); // XXX hopefully this is never needed
   }
 
-  rt_expr f_gen_load(rt_lexpr ptr) override { assert(0); }
-  void f_gen_store(rt_lexpr var, rt_expr exp) override { assert(0); }
-  rt_expr f_gen_array_load(rt_lexpr array, bigint index) override { assert(0); }
-  void f_gen_array_store(rt_lexpr array, bigint index, rt_expr exp) override { assert(0); }
+  rt_expr f_gen_load(rt_lexpr ptr) override {
+    return builder->CreateLoad(ptr->getAllocatedType(), ptr);
+  }
+  void f_gen_store(rt_lexpr var, rt_expr exp) override {
+    builder->CreateStore(exp, var);
+  }
+  
+  rt_expr f_gen_array_load(rt_lexpr array, bigint index) override {
+    return f_gen_load(array); // TODO
+  }
+
+  void f_gen_array_store(rt_lexpr array, bigint index, rt_expr exp) override {
+    return f_gen_store(array, exp);
+  }
   void f_gen_Mem_set(rt_expr ptr, rt_expr width, rt_expr acctype, rt_expr exp) override { assert(0); }
   rt_expr f_gen_Mem_read(rt_expr ptr, rt_expr width, rt_expr acctype) override { assert(0); }
   void f_gen_AArch64_MemTag_set(rt_expr address, rt_expr acctype, rt_expr value) override { assert(0); }
@@ -215,22 +229,46 @@ public:
   void f_AtomicStart() override { assert(0); }
   void f_AtomicEnd() override { assert(0); }
 
-  rt_expr f_gen_cvt_bits_uint(rt_expr bits) override { assert(0); }
-  rt_expr f_gen_cvt_bool_bv(rt_expr e) override { assert(0); }
+  rt_expr f_gen_cvt_bits_uint(rt_expr bits) override {
+    return bits;
+  }
+  rt_expr f_gen_cvt_bool_bv(rt_expr e) override {
+    return e;
+  }
 
-  rt_expr f_gen_not_bool(rt_expr e) override { assert(0); }
-  rt_expr f_gen_and_bool(rt_expr x, rt_expr y) override { assert(0); }
-  rt_expr f_gen_or_bool(rt_expr x, rt_expr y) override { assert(0); }
+  rt_expr f_gen_not_bool(rt_expr e) override {
+    return f_gen_not_bits(e);
+  }
+  rt_expr f_gen_and_bool(rt_expr x, rt_expr y) override {
+    return f_gen_and_bits(x, y);
+  }
+  rt_expr f_gen_or_bool(rt_expr x, rt_expr y) override {
+    return f_gen_or_bits(x, y);
+  }
   rt_expr f_gen_eq_enum(rt_expr x, rt_expr y) override { assert(0); }
 
-  rt_expr f_gen_not_bits(rt_expr x) override { assert(0); }
-  rt_expr f_gen_eq_bits(rt_expr x, rt_expr y) override { assert(0); }
-  rt_expr f_gen_ne_bits(rt_expr x, rt_expr y) override { assert(0); }
-  rt_expr f_gen_or_bits(rt_expr x, rt_expr y) override { assert(0); }
-  rt_expr f_gen_eor_bits(rt_expr x, rt_expr y) override { assert(0); }
-  rt_expr f_gen_and_bits(rt_expr x, rt_expr y) override { assert(0); }
+  rt_expr f_gen_not_bits(rt_expr x) override {
+    return builder->CreateNot(x);
+  }
+  rt_expr f_gen_eq_bits(rt_expr x, rt_expr y) override {
+    return builder->CreateICmpEQ(x, y);
+  }
+  rt_expr f_gen_ne_bits(rt_expr x, rt_expr y) override {
+    return builder->CreateICmpNE(x, y);
+  }
+  rt_expr f_gen_or_bits(rt_expr x, rt_expr y) override {
+    return builder->CreateOr(x, y);
+  }
+  rt_expr f_gen_eor_bits(rt_expr x, rt_expr y) override {
+    return builder->CreateXor(x, y);
+  }
+  rt_expr f_gen_and_bits(rt_expr x, rt_expr y) override {
+    return builder->CreateAnd(x, y);
+  }
 
-  rt_expr f_gen_add_bits(rt_expr x, rt_expr y) override { assert(0); }
+  rt_expr f_gen_add_bits(rt_expr x, rt_expr y) override {
+    return builder->CreateAdd(x, y);
+  }
   rt_expr f_gen_sub_bits(rt_expr x, rt_expr y) override { assert(0); }
   rt_expr f_gen_sdiv_bits(rt_expr x, rt_expr y) override { assert(0); }
   rt_expr f_gen_sle_bits(rt_expr x, rt_expr y) override { assert(0); }
@@ -239,12 +277,30 @@ public:
 
   rt_expr f_gen_append_bits(rt_expr x, rt_expr y) override { assert(0); }
   rt_expr f_gen_lsr_bits(rt_expr x, rt_expr y) override { assert(0); }
-  rt_expr f_gen_lsl_bits(rt_expr x, rt_expr y) override { assert(0); }
+
+  rt_expr f_gen_lsl_bits(rt_expr x, rt_expr y) override {
+    auto wd = x->getType()->getIntegerBitWidth();
+    auto max = llvm::ConstantInt::get(x->getType(), wd-1);
+    auto ok = builder->CreateICmpULE(y, max);
+    auto shift = builder->CreateShl(x, y);
+    auto zero = llvm::ConstantInt::get(x->getType(), 0);
+    return builder->CreateSelect(ok, shift, zero);
+  }
+
   rt_expr f_gen_asr_bits(rt_expr x, rt_expr y) override { assert(0); }
   rt_expr f_gen_replicate_bits(rt_expr x, rt_expr y) override { assert(0); }
-  rt_expr f_gen_ZeroExtend(rt_expr x, rt_expr y) override { assert(0); }
-  rt_expr f_gen_SignExtend(rt_expr x, rt_expr y) override { assert(0); }
-  rt_expr f_gen_slice(rt_expr e, bigint lo, bigint wd) override { assert(0); }
+
+  rt_expr f_gen_ZeroExtend(rt_expr x, rt_expr y) override {
+    return builder->CreateZExtOrBitCast(x, intty(int_expr(y)));
+  }
+  rt_expr f_gen_SignExtend(rt_expr x, rt_expr y) override {
+    return builder->CreateSExtOrBitCast(x, intty(int_expr(y)));
+  }
+
+  rt_expr f_gen_slice(rt_expr e, bigint lo, bigint wd) override {
+    auto shifted = lo != 0 ? builder->CreateLShr(e, llvm::ConstantInt::get(e->getType(), lo)) : e;
+    return builder->CreateTruncOrBitCast(shifted, intty(wd));
+  }
 
   rt_expr f_gen_FPCompare(rt_expr x, rt_expr y, rt_expr signalnan, rt_expr fpcr) override { assert(0); }
   rt_expr f_gen_FPCompareEQ(rt_expr x, rt_expr y, rt_expr fpcr) override { assert(0); }

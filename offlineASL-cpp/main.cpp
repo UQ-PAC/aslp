@@ -20,5 +20,8 @@ int main(int argc, char **argv) {
   auto v_enc = llvm::APInt{32, adds};
   lifter.f_A64_decoder(v_enc);
 
+  module.print(llvm::errs(), nullptr);
+  // module.dump();
+
   std::cout << "boop" << std::endl;
 }

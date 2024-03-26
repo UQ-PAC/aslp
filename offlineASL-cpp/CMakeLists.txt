@@ -40,13 +40,13 @@ execute_process(COMMAND "${LLVM_CONFIG}" --libs support core irreader bitwriter
                 OUTPUT_VARIABLE llvm_libs OUTPUT_STRIP_TRAILING_WHITESPACE)
 message(STATUS "llvm_libs: ${llvm_libs}")
 separate_arguments(llvm_libs UNIX_COMMAND "${llvm_libs}")
-target_link_options(aslp-lifter-llvm PUBLIC "${llvm_libs}")
+target_link_options(aslp-lifter-llvm BEFORE PUBLIC "${llvm_libs}")
 target_link_directories(aslp-lifter-llvm PUBLIC ${LLVM_LIBRARY_DIR})
 target_include_directories(aslp-lifter-llvm PUBLIC ${LLVM_INCLUDE_DIRS})
 
 target_link_libraries(aslp-lifter-llvm PUBLIC aslp-lifter-gen)
 
-target_compile_options(aslp-lifter-llvm PRIVATE "-includellvm_interface.hpp")
+target_compile_options(aslp-lifter-llvm PRIVATE "-includellvm_lifter_traits.hpp")
 target_compile_definitions(aslp-lifter-llvm PRIVATE "ASLP_LIFTER_INSTANTIATE=llvm_lifter_traits")
 
 
