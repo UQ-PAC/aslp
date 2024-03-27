@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 
 def trace(args):
-  print('$', *map(shlex.quote, args), file=sys.stderr)
+  print('$', *map(shlex.quote, map(str, args)), file=sys.stderr)
   return args
 
 def concat(xss):
