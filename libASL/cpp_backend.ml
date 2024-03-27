@@ -347,7 +347,7 @@ let build_args prefix targs args =
   "(" ^ inner ^ ")"
 
 let typenames = ["bits"; "bigint"; "rt_expr"; "rt_lexpr"; "rt_label"]
-let template_header = "template <lifter_traits Traits>\n"
+let template_header = "template <typename Traits>\n"
 let template_args = "<Traits>"
 
 (** tuple of return type, function name, function arguments (parenthesised) *)
