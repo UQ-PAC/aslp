@@ -20,11 +20,13 @@ def concat(xss):
 
 def lint(args) -> int:
   cmd = (
-    ['git', 'grep', '-n', '--break', '--no-recursive']
+    ['git']
+    + ['-c', 'color.grep.matchSelected=white red', '-c', 'color.grep.function=yellow']
+    + ['grep', '-n', '--show-function', '--break', '--no-recursive']
   )
   cmd_files = (
     # ['-l', '-e', r'', '--']
-    ['-e', r'\s$', '--']
+    ['-e', r'\s\+$', '--']
     # non-directories should be added literally
     + [f for f in args.files if not f.is_dir()]
     # directories are searched for files matching the includes.
