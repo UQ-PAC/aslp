@@ -173,11 +173,17 @@ and default_value t st =
       Printf.sprintf "std::vector{(%s)-(%s), %s}" hi lo d
   | _ -> failwith @@ "Unknown type for default value: " ^ (pp_type t)
 
-let prints_ret_type t =
+let prints_type t =
   match t with
-  | Some (Type_Constructor (Ident "boolean")) -> "bool"
-  | None -> "void"
-  | Some t -> failwith @@ "Unknown return type: " ^ (pp_type t)
+  | Type_Constructor (Ident "boolean") -> "bool"
+  | Type_Bits _ -> "typename Traits::bits"
+  | Type_Constructor (Ident "integer") -> "typename Traits::bigint"
+  | Type_Constructor (Ident "rt_label") -> "typename Traits::rt_label"
+  | Type_Constructor (Ident "rt_expr") -> "typename Traits::rt_expr"
+  | Type_Constructor (Ident "rt_sym") -> "typename Traits::rt_lexpr"
+  | _ -> failwith @@ Asl_utils.pp_type t
+
+let prints_ret_type = Option.fold ~none:"void" ~some:prints_type
 
 (****************************************************************
  * Prim Printing
@@ -203,15 +209,19 @@ let write_call f targs args st =
   let call = f ^ "(" ^ (String.concat ", " args) ^ ")" in
   write_line call st
 
-let write_ref v e st =
+let write_ref ty v e st =
+  (* let t = prints_type ty in *)
+  let t = "auto" in
   let name = prefixed_name_of_ident st v in
-  let s = Printf.sprintf "auto %s = %s" name e in
+  let s = Printf.sprintf "%s %s = %s" t name e in
   write_line s st;
   add_ref_var v st
 
-let write_let v e st =
+let write_let ty v e st =
+  (* let t = prints_type ty in *)
+  let t = "auto" in
   let v = prefixed_name_of_ident st v in
-  let s = Printf.sprintf "const auto %s = %s" v e in
+  let s = Printf.sprintf "const %s %s = %s" t v e in
   write_line s st
 
 let write_if_start c st =
@@ -262,17 +272,17 @@ let rec write_stmt s st =
   | Stmt_VarDeclsNoInit(ty, vs, loc) ->
       let e = default_value ty st in
       st.genvars <- vs @ st.genvars;
-      List.iter (fun v -> write_ref v e st) vs
+      List.iter (fun v -> write_ref ty v e st) vs
 
   | Stmt_VarDecl(ty, v, e, loc) ->
       let e = prints_expr e st in
       st.genvars <- v :: st.genvars;
-      write_ref v e st
+      write_ref ty v e st
 
   | Stmt_ConstDecl(ty, v, e, loc) ->
       let e = prints_expr e st in
       st.genvars <- v :: st.genvars;
-      write_let v e st
+      write_let ty v e st
 
   | Stmt_Assign(l, r, loc) ->
       let e = prints_expr r st in
@@ -328,6 +338,7 @@ and write_stmts s st =
       dec_depth st;
       assert (not st.skip_seq)
 
+(* XXX: assumes all function arguments are bits. *)
 let build_args prefix targs args =
   let inner = String.concat " " @@
     List.map
@@ -355,7 +366,7 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st : cpp_fun_sig =
 
   let prefix = "aslp_lifter" ^ template_args ^ "::" in
   let fname = name_of_ident name in
-  let args = build_args "Traits::" targs args in
+  let args = build_args "typename Traits::" targs args in
   let ret = prints_ret_type ret_tyo in
 
   write_line template_header st;
@@ -382,7 +393,7 @@ let init_st (genfns: cpp_fun_sig list) file =
 let gen_prefix = "aslp-lifter-gen"
 let instantiate_prefix = "aslp-lifter-instantiate"
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
-let global_deps = stdlib_deps @ [gen_prefix^"/aslp_lifter.hpp"; gen_prefix^"/decode_tests.hpp"]
+let global_deps = stdlib_deps @ [gen_prefix^"/aslp_lifter.hpp"]
 
 
 (** Write an instruction file, containing just the behaviour of one instructions *)
@@ -412,7 +423,7 @@ let write_decoder_file fn fnsig genfns dir =
   let m = name_of_FIdent fn in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let st = init_st genfns path in
-  write_preamble global_deps st;
+  write_preamble (global_deps@[gen_prefix^"/decode_tests.hpp"]) st;
   let gen = write_fn fn fnsig st in
   write_epilogue fn st;
   close_out st.oc;
