@@ -26,6 +26,8 @@ jobs:
 
     - uses: cachix/install-nix-action@v25
     - uses: DeterminateSystems/magic-nix-cache-action@main
+      with:
+        upstream-cache: https://nowhere.example.com # we want to cache from cache.nixos.org.
 
     - run: echo 'preparing nix shell environment'
 
