@@ -233,6 +233,16 @@ public:
     return std::make_tuple(std::move(tlabel), std::move(flabel), std::move(jlabel));
   }
 
+  rt_label f_true_branch(std::tuple<rt_label, rt_label, rt_label> x) override {
+    return std::get<0>(x);
+  }
+  rt_label f_false_branch(std::tuple<rt_label, rt_label, rt_label> x) override {
+    return std::get<1>(x);
+  }
+  rt_label f_merge_branch(std::tuple<rt_label, rt_label, rt_label> x) override {
+    return std::get<2>(x);
+  }
+
   void f_gen_assert(rt_expr cond) override {
     builder->CreateCall(assertDecl.getFunctionType(), &assertDecl, {cond});
   }

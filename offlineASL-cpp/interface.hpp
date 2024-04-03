@@ -81,6 +81,9 @@ public:
   virtual rt_lexpr f_decl_bool(std::string_view name) = 0;
 
   virtual void f_switch_context(rt_label label) = 0;
+  virtual rt_label f_true_branch(std::tuple<rt_label, rt_label, rt_label>) = 0;
+  virtual rt_label f_false_branch(std::tuple<rt_label, rt_label, rt_label>) = 0;
+  virtual rt_label f_merge_branch(std::tuple<rt_label, rt_label, rt_label>) = 0;
   virtual std::tuple<rt_label, rt_label, rt_label> f_gen_branch(rt_expr cond) = 0;
 
   virtual void f_gen_assert(rt_expr cond) = 0;
