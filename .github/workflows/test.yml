@@ -30,6 +30,7 @@ jobs:
     - run: dune build --profile release
     - run: dune runtest -j4
     - run: dune build '@coverage' -j4
+    - run: dune build '@offline-coverage' -j4
     - run: |
         echo "OUTPUT=$(pwd)/_build/default/tests/coverage" >> $GITHUB_OUTPUT
         rm -rf _build/default/tests/coverage/encodings
