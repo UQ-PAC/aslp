@@ -1,5 +1,3 @@
-/aslp-lifter-gen/*
-!/aslp-lifter-gen/.gitkeep
-/aslp-lifter-instantiate/*
-!/aslp-lifter-instantiate/.gitkeep
-/build
+generated
+!*/generated/.gitkeep
+build
