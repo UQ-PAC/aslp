@@ -2,28 +2,13 @@ cmake_minimum_required(VERSION 3.20)
 
 project(offlineasl)
 
-option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
-
-set(CMAKE_BUILD_TYPE "DEBUG" CACHE STRING "cmake build type")
-message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-if (NOT LLVM_FOUND)
-  find_package(LLVM REQUIRED CONFIG)
-else()
-  message(STATUS "... LLVM already found")
-endif()
-message(STATUS "Found LLVM: " ${LLVM_DIR} ", tools: " ${LLVM_TOOLS_BINARY_DIR})
-get_target_property(LLVM_CONFIG llvm-config LOCATION)
-
-message(STATUS "llvm-config: ${LLVM_CONFIG}")
+include(../cmake/prelude.cmake)
 
 ### aslp-lifter-gen ###
 # provides templates to instantiate the lifter with generic targets
 
 add_library(aslp-lifter-gen INTERFACE)
-target_include_directories(aslp-lifter-gen INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/.")
+target_include_directories(aslp-lifter-gen INTERFACE include)
 
 target_compile_options(aslp-lifter-gen INTERFACE -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-but-set-variable)
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
@@ -31,20 +16,19 @@ IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
   target_link_options(aslp-lifter-gen INTERFACE -g -Ofast -fsanitize=address)
 ENDIF()
 
-include(GNUInstallDirs)
-
-file(GLOB HEADERS interface.hpp aslp_lifter.hpp aslp_lifter_impl.hpp)
 install(
-  FILES ${HEADERS}
-  DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/aslp)
-install(
-  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/aslp-lifter-gen
-  DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/aslp
+  DIRECTORY include/
+  DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp")
 configure_file(aslp-lifter-gen.pc.in aslp-lifter-gen.pc @ONLY) 
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/aslp-lifter-gen.pc
   DESTINATION ${CMAKE_INSTALL_FULL_DATAROOTDIR}/pkgconfig)
 
+add_executable(dummy src/dummy.cpp)
+target_link_libraries(dummy PRIVATE aslp-lifter-gen)
+
+file(GLOB GENERATED include/aslp/generated/*.hpp)
+set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${GENERATED}")
 
 ### aslp-lifter-llvm ###
 # instantiates the aslp-lifter with a LLVM target

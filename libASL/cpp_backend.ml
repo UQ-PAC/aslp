@@ -381,26 +381,27 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st : cpp_fun_sig =
  * Directory Setup
  ****************************************************************)
 
-let init_st (genfns: cpp_fun_sig list) file =
+let init_st (genfns: cpp_fun_sig list) prefix file =
   let genvars = List.map (fun {name;_} -> name) genfns in
-  let oc = open_out file in
-  (* XXX: obtain filename with its immediate parent directory. *)
-  let file = Filename.(basename (dirname file) ^ "/" ^ basename file) in
+  let path = Filename.concat prefix file in
+  Utils.mkdir_p (Filename.dirname path);
+  let oc = open_out path in
 
   { depth = 0; skip_seq = false; file; oc; ref_vars = IdentSet.empty ;
-    genvars; } 
+    genvars; }
 
-let gen_prefix = "aslp-lifter-gen"
-let instantiate_prefix = "aslp-lifter-instantiate"
-let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "interface.hpp"]
-let global_deps = stdlib_deps @ [gen_prefix^"/aslp_lifter.hpp"]
+let export_dir = "aslp/generated"
+let gen_prefix = "aslp-lifter-gen/include"
+let instantiate_prefix = "aslp-lifter-instantiate/src"
+let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "aslp/interface.hpp"]
+let global_deps = stdlib_deps @ [export_dir^"/aslp_lifter.hpp"]
 
 
 (** Write an instruction file, containing just the behaviour of one instructions *)
-let write_instr_file fn fnsig dir =
+let write_instr_file fn fnsig prefix dir =
   let m = name_of_FIdent fn in
   let path = dir ^ "/" ^ m ^ ".hpp" in
-  let st = init_st [] path in
+  let st = init_st [] prefix path in
   write_preamble global_deps st;
   let gen = write_fn fn fnsig st in
   write_epilogue () st;
@@ -408,22 +409,22 @@ let write_instr_file fn fnsig dir =
   gen
 
 (* Write the test file, containing all decode tests *)
-let write_test_file tests dir =
+let write_test_file tests prefix dir =
   let m = "decode_tests" in
   let path = dir ^ "/" ^ m ^ ".hpp" in
-  let st = init_st [] path in
+  let st = init_st [] prefix path in
   write_preamble global_deps st;
   let gens = List.map (fun (i,s) -> write_fn i s st) @@ Bindings.bindings tests in
   write_epilogue () st;
   close_out st.oc;
   gens
 
-(* Write the root decoder file *)
-let write_decoder_file fn fnsig genfns dir =
+(* Write the prefix decoder file *)
+let write_decoder_file fn fnsig genfns prefix dir =
   let m = name_of_FIdent fn in
   let path = dir ^ "/" ^ m ^ ".hpp" in
-  let st = init_st genfns path in
-  write_preamble (global_deps@[gen_prefix^"/decode_tests.hpp"]) st;
+  let st = init_st genfns prefix path in
+  write_preamble (global_deps@[export_dir^"/decode_tests.hpp"]) st;
   let gen = write_fn fn fnsig st in
   write_epilogue fn st;
   close_out st.oc;
@@ -431,10 +432,10 @@ let write_decoder_file fn fnsig genfns dir =
 
 
 (* Write the public-facing header file. For compilation speed, this declares but does not define. *)
-let write_header_file fn fnsig semfns testfns dir =
+let write_header_file fn fnsig semfns testfns prefix dir =
   let name = "aslp_lifter" in
   let path = dir ^ "/" ^ name ^ ".hpp" in
-  let st = init_st [] path in
+  let st = init_st [] prefix path in
   write_preamble stdlib_deps st;
 
   write_line template_header st;
@@ -464,10 +465,10 @@ let write_header_file fn fnsig semfns testfns dir =
 
 (** Writes the template implementation file. If needed, this can be used to instantiate the entire lifter.
     However, it is fairly slow. *)
-let write_impl_file allfns dir =
+let write_impl_file allfns prefix dir =
   let name = "aslp_lifter_impl" in
   let path = dir ^ "/" ^ name ^ ".hpp" in
-  let st = init_st [] path in
+  let st = init_st [] prefix path in
   let exports = Utils.nub @@ List.map (fun {file;_} -> file) allfns in
   write_preamble stdlib_deps ~exports st;
 
@@ -476,12 +477,12 @@ let write_impl_file allfns dir =
   name
 
 (* Creates a directory of explicit instantiations, supporting parallel compilation. *)
-let write_explicit_instantiations cppfuns dir =
+let write_explicit_instantiations cppfuns prefix dir =
   let write_instantiation file (cppfuns : cpp_fun_sig list) =
     let dep = file in
     let file = Filename.(chop_extension (basename file)) in
     let path = dir ^ "/" ^ file ^ ".cpp" in
-    let st = init_st [] path in
+    let st = init_st [] prefix path in
 
     write_preamble ~header:false stdlib_deps ~exports:[dep] st;
 
@@ -508,23 +509,21 @@ let write_explicit_instantiations cppfuns dir =
 
 
 (* Write all of the above, expecting Utils.ml to already be present in dir *)
-let run dfn dfnsig tests fns rootdir =
+let run dfn dfnsig tests fns root =
 
-  let gendir = rootdir ^ "/" ^ gen_prefix in
-  let instdir = rootdir ^ "/" ^ instantiate_prefix in
-  if not (Sys.file_exists gendir) then Sys.mkdir gendir 777;
-  if not (Sys.file_exists instdir) then Sys.mkdir instdir 777;
+  let genprefix = root ^ "/" ^ gen_prefix in
+  let instprefix = root ^ "/" ^ instantiate_prefix in
 
-  let semfns = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig gendir)::acc) fns [] in
-  let testfns = write_test_file tests gendir in
+  let semfns = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig genprefix export_dir)::acc) fns [] in
+  let testfns = write_test_file tests genprefix export_dir in
   let allfns = semfns @ testfns in
 
-  let dfn = write_decoder_file dfn dfnsig allfns gendir in
+  let dfn = write_decoder_file dfn dfnsig allfns genprefix export_dir in
   let allfns = dfn :: allfns in
 
-  let _header = write_header_file dfn dfnsig (dfn :: semfns) testfns gendir in
-  let _explicits = write_explicit_instantiations allfns instdir in
+  let _header = write_header_file dfn dfnsig (dfn :: semfns) testfns genprefix export_dir in
+  let _explicits = write_explicit_instantiations allfns instprefix "generated" in
 
-  let _impl = write_impl_file allfns gendir in
+  let _impl = write_impl_file allfns genprefix export_dir in
   (* write_dune_file (decoder::files@global_deps) dir *)
   ()
