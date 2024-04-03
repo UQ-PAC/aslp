@@ -4,6 +4,8 @@ project(offlineasl)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
+set(CMAKE_BUILD_TYPE "DEBUG" CACHE STRING "cmake build type")
+message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -54,6 +56,10 @@ target_compile_definitions(aslp-lifter-llvm PRIVATE "ASLP_LIFTER_INSTANTIATE=llv
 # a simple test application
 add_executable(aslp-lifter-bin main.cpp)
 target_link_libraries(aslp-lifter-bin PUBLIC aslp-lifter-llvm)
+IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
+  target_compile_options(aslp-lifter-bin PRIVATE -g -Ofast -fsanitize=address)
+  target_link_options(aslp-lifter-bin PRIVATE -g -Ofast -fsanitize=address)
+ENDIF()
 
 install(TARGETS aslp-lifter-bin DESTINATION bin)
 
