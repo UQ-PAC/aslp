@@ -4,7 +4,9 @@ project('offlineasl', 'cpp',
     'warning_level=3',
     'cpp_std=c++20',
     'buildtype=debug',
-    'strip=true',
+    # 'optimization=1', # slow and increases file size?
+    # 'b_lto=true', # too slow
+    # 'b_lto_mode=thin',
   ]
 )
 
