@@ -1,3 +1,4 @@
+#pragma once
 #include <aslp/interface.hpp>
 
 #include <llvm/ADT/APInt.h>

@@ -3,5 +3,12 @@
 set -o pipefail
 
 # echo ":gen A64 aarch64_integer_arithmetic.+ cpp $(pwd)" | dune exec asli
-echo ":gen A64 aarch64.+ cpp $(dirname "$0")" | dune exec asli
+dir="$(dirname "$0")"
+cd "$dir"
+# echo ":gen A64 aarch64.+ cpp ./subprojects" | dune exec asli
 
+meson setup --reconfigure build
+pushd build
+meson compile
+DESTDIR=$(pwd)/prefix meson install
+popd

@@ -2,31 +2,26 @@ project('aslp-lifter-instantiate', 'cpp',
   version : '0.1',
   default_options : [ 'warning_level=3', 'cpp_std=c++20' ])
 
+version = meson.project_version()
 llvm_dep = dependency('llvm')
 
-gen_name = 'aslp-lifter-gen'
-gen_proj = subproject(gen_name, version: meson.project_version())
-gen_dep = gen_proj.get_variable('dep')
-# gen_pc = gen_proj.get_variable('pc')
+lifter_name = 'aslp-lifter'
+lifter_proj = subproject(lifter_name, version: version)
+instantiate_dep = lifter_proj.get_variable('instantiate_dep')
 
 incdir = 'include'
 install_subdir(incdir, install_dir : get_option('includedir'), strip_directory : true)
 
-find = run_command('find', 'src', '-name', '*.cpp', check : true)
-srcfiles = find.stdout().strip().split('\n')[0] # XXX for meson testing
-
 lib = library(
-  'aslp-lifter-instantiate',
-  srcfiles,
+  meson.project_name(),
+  [],
   include_directories : incdir,
-  dependencies: [ llvm_dep, gen_dep ],
+  dependencies: [ llvm_dep, instantiate_dep ],
   cpp_args: [
-    '-Wno-unused-parameter',
     '-includeaslp/llvm_lifter_traits.hpp',
     '-DASLP_LIFTER_INSTANTIATE=llvm_lifter_traits'],
+  cpp_pch: 'pch/cpp_pch.hpp',
   install : true)
 
-dep = declare_dependency(link_with: lib, dependencies: gen_dep)
-
 pkg = import('pkgconfig')
-pkg.generate(lib, subdirs: 'aslp', requires: gen_name)
+pkg.generate(lib, requires: lifter_name + '=' + version)

@@ -391,8 +391,8 @@ let init_st (genfns: cpp_fun_sig list) prefix file =
     genvars; }
 
 let export_dir = "aslp/generated"
-let gen_prefix = "aslp-lifter-gen/include"
-let instantiate_prefix = "aslp-lifter-instantiate/src"
+let gen_prefix = "aslp-lifter/include"
+let instantiate_prefix = "aslp-lifter/src"
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "aslp/interface.hpp"]
 let global_deps = stdlib_deps @ [export_dir^"/aslp_lifter.hpp"]
 
@@ -419,7 +419,7 @@ let write_test_file tests prefix dir =
   close_out st.oc;
   gens
 
-(* Write the prefix decoder file *)
+(* Write the decoder file *)
 let write_decoder_file fn fnsig genfns prefix dir =
   let m = name_of_FIdent fn in
   let path = dir ^ "/" ^ m ^ ".hpp" in
