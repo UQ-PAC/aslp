@@ -10,7 +10,7 @@
 #include <memory>
 #include <variant>
 
-#include "interface.hpp"
+#include <aslp/interface.hpp>
 #include "llvm_lifter_traits.hpp"
 
 namespace aslp {
