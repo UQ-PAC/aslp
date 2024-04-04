@@ -1,3 +1,4 @@
+#pragma once
 #include <charconv>
 #include <llvm/ADT/APInt.h>
 #include <llvm/IR/Value.h>
