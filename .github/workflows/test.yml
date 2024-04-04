@@ -34,12 +34,8 @@ jobs:
         echo "OUTPUT=$(pwd)/_build/default/tests/coverage" >> $GITHUB_OUTPUT
         rm -rf _build/default/tests/coverage/encodings
       id: coverage
-    - run: sudo apt-get update && sudo apt-get install clang-15 lld-15 meson ninja-build
+    - run: sudo apt-get update && sudo apt-get install meson ninja-build
     - run: offlineASL-cpp/build.sh
-      env:
-        CXX: "clang++-15"
-        CXX_LD: "ld.lld-15"
-
 
     - name: Upload new coverage results
       if: always()
