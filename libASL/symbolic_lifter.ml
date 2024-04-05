@@ -12,7 +12,7 @@ open Visitor
 
   symbolic_lifter:
   - Remove unsupported_set with overrides.asl instead
-  - Remove unsupported globals, including partial record removal
+  - Move supported globals to backend
 *)
 
 (* Set of functions we do not want to analyse / inline due to their complexity *)
@@ -24,7 +24,25 @@ let unsupported_set = IdentSet.of_list [
   FIdent ("AArch64.SetExclusiveMonitors", 0);
 ]
 
+(* Backend specific: Globals we want to keep in the result *)
+let supported_globals = IdentSet.of_list [
+  Ident("PSTATE.C");
+  Ident("PSTATE.Z");
+  Ident("PSTATE.V");
+  Ident("PSTATE.N");
+  Ident("_PC");
+  Ident("_R");
+  Ident("_Z");
+  Ident("SP_EL0");
+  Ident("FPSR");
+  Ident("FPCR");
+]
 
+(* Backend specific: Globals we are confident we can ignore *)
+let ignored_globals = IdentSet.of_list [
+  Ident("__BranchTaken");
+  Ident("BTypeNext");
+]
 
 (** Trivial walk to replace unsupported calls with a corresponding throw *)
 module RemoveUnsupported = struct
@@ -289,8 +307,15 @@ let dis_wrapper fn fnsig env =
     let ((),lenv',stmts) = Dis.dis_stmts body env lenv in
     let stmts = Dis.flatten stmts [] in
 
+    (* Optional post-pass to prune unsupported globals and their fields *)
+    let stmts' = if false then
+      let flattened_globals = Transforms.UnsupportedVariables.flatten_vars (Eval.Env.readGlobals env) in
+      let unsupported_globals = IdentSet.diff flattened_globals supported_globals in
+      Transforms.UnsupportedVariables.do_transform ignored_globals unsupported_globals stmts
+    else stmts in
+
     (* Cleanup transforms *)
-    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
+    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
     let stmts' = Transforms.RedundantSlice.do_transform Bindings.empty stmts' in
     let stmts' = Transforms.StatefulIntToBits.run (Dis.enum_types env) stmts' in
     let stmts' = Transforms.IntToBits.ints_to_bits stmts' in

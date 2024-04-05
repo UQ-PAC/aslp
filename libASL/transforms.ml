@@ -835,6 +835,7 @@ module StatefulIntToBits = struct
         | Stmt_VarDeclsNoInit _
         | Stmt_Assign _
         | Stmt_Assert _
+        | Stmt_Throw _
         | Stmt_TCall _ -> (st,stmt)
         | _ -> failwith "walk: invalid IR") in
         (st,acc@[stmt])
@@ -1346,7 +1347,8 @@ module CopyProp = struct
           let (fstmts, fcopies) = copyProp' fstmts copies in
           (acc@[Stmt_If (e, tstmts, [], fstmts, loc)], merge tcopies fcopies)
 
-      | Stmt_Assert (_, _)  ->
+      | Stmt_Throw _
+      | Stmt_Assert _  ->
           (* Statements that shouldn't clobber *)
           (acc@[subst_stmt copies stmt], copies)
 
@@ -1816,3 +1818,116 @@ module FixRedefinitions = struct
     visit_stmts v s
 end
 
+(* Ensure the program does not write or read a set of variables and fields.
+   Assumes all record accesses are fully flattened and no name collisions between
+   variable names and field accesses with '.' concatenation.
+   Reads and writes to unsupported variables are reduced to throws.
+   A set of variables and fields can be additionally nominated to be silently ignored,
+   such that their updates are removed, however, their reads will still become throws.
+   *)
+module UnsupportedVariables = struct
+  type state = {
+    unsupported: IdentSet.t;
+    ignored: IdentSet.t;
+    debug: bool;
+  }
+
+  let throw loc = Stmt_Throw(Ident ("UNSUPPORTED"), loc)
+
+  let concat_ident a b =
+    match a, b with
+    | Ident a, Ident b -> Ident (a ^ "." ^ b)
+    | _ -> invalid_arg "concat_ident"
+
+  (* Reduce a series of field accesses into a single ident *)
+  let rec reduce_expr e =
+    match e with
+    | Expr_Var v -> v
+    | Expr_Field (e, f) -> concat_ident (reduce_expr e) f
+    | _ -> invalid_arg @@ "reduce_expr: " ^ pp_expr e
+  let rec reduce_lexpr e =
+    match e with
+    | LExpr_Var (v) -> v
+    | LExpr_Field (e, f) -> concat_ident (reduce_lexpr e) f
+    | LExpr_Array (e, _) -> reduce_lexpr e
+    | _ -> invalid_arg @@ "reduce_lexpr: " ^ pp_lexpr e
+
+  (* Test read/write sets, with logging *)
+  let unsupported_read name st =
+    let r = IdentSet.mem name st.unsupported || IdentSet.mem name st.ignored in
+    if r && st.debug then Printf.printf "Unsupported Read: %s\n" (pprint_ident name);
+    r
+  let ignored_write name st =
+    let r = IdentSet.mem name st.ignored in
+    if r && st.debug then Printf.printf "Ignored Write: %s\n" (pprint_ident name);
+    r
+  let unsupported_write name st =
+    let r = IdentSet.mem name st.unsupported in
+    if r && st.debug then Printf.printf "Unsupported Write: %s\n" (pprint_ident name);
+    r
+
+  (* Search a stmt/expr for an unsupported load.
+     Assumes the load will be evaluated, i.e., no short-circuiting.
+   *)
+  class find_unsupported_read st = object
+    inherit nopAslVisitor
+    val mutable issue = false
+    method has_issue = issue
+    method! vexpr = function
+      | Expr_Var name ->
+          if unsupported_read name st then issue <- true;
+          SkipChildren
+      | Expr_Field _ as e ->
+          if unsupported_read (reduce_expr e) st then issue <- true;
+          SkipChildren
+      | _ -> DoChildren
+  end
+
+  let unsupported_stmt stmt st =
+    let v = new find_unsupported_read st in
+    let _ = visit_stmt v stmt in
+    v#has_issue
+
+  let unsupported_expr expr st =
+    let v = new find_unsupported_read st in
+    let _ = visit_expr v expr in
+    v#has_issue
+
+  let rec walk stmts st =
+    List.fold_right (fun s acc ->
+      match s with
+      | Stmt_Assign(lexpr, e, loc) ->
+          let name = reduce_lexpr lexpr in
+          if ignored_write name st then acc
+          else if unsupported_write name st then [throw loc]
+          else if unsupported_stmt s st then [throw loc]
+          else s::acc
+      | Stmt_If(e, tstmts, [], fstmts, loc) when unsupported_expr e st ->
+          [throw loc]
+      | Stmt_If(e, tstmts, [], fstmts, loc) ->
+          let tstmts = walk tstmts st in
+          let fstmts = walk fstmts st in
+          Stmt_If(e, tstmts, [], fstmts, loc)::acc
+      | s ->
+          if unsupported_stmt s st then [throw (get_loc s)]
+          else s::acc) stmts []
+
+  (* Entry point to the transform *)
+  let do_transform ignored unsupported stmts =
+    let st = { ignored ; unsupported ; debug = false } in
+    walk stmts st
+
+  (* Utility to convert a global state into flattened variable identifiers *)
+  let rec flatten_var (k: ident) (v: Value.value) =
+    match v with
+    | Value.VRecord bs ->
+        let fields = Bindings.bindings bs in
+        let vals = List.map (fun (f,v) -> flatten_var (concat_ident k f) v) fields in
+        List.flatten vals
+    | _ -> [k]
+
+  let flatten_vars vars =
+    let globals = Bindings.bindings vars in
+    IdentSet.of_list (List.flatten (List.map (fun (k,v) -> flatten_var k v) globals))
+
+end
