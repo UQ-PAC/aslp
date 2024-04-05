@@ -120,7 +120,7 @@ let build_decoder include_pc iset c loc =
   let typed_args = generate_args include_pc in
   (fid, (None, typed_args, [], List.map snd typed_args, loc, stmts))
 
-let run include_pc iset pat env problematic =
+let run include_pc iset pat env =
   let loc = Unknown in
 
   (* Find all matching instructions, pulled from testing.ml *)
@@ -128,7 +128,7 @@ let run include_pc iset pat env problematic =
   let re = Pcre.regexp pat in
   let filterfn = function
     | ((Encoding_Block (Ident nm, Ident is, _, _, _, _, _, _)),_,_,_) ->
-        is = iset && Pcre.pmatch ~rex:re nm && not (List.mem nm problematic)
+        is = iset && Pcre.pmatch ~rex:re nm
     | _ -> assert false
   in
   let encs = List.filter filterfn (Eval.Env.listInstructions env) in

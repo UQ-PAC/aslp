@@ -24,22 +24,7 @@ let unsupported_set = IdentSet.of_list [
   FIdent ("AArch64.SetExclusiveMonitors", 0);
 ]
 
-(* Problematic instruction encoding names, due to various disassembly issues *)
-let problematic_enc = [
-  (* Need to extend RemoveUnsupported to remove all undesirable global variables & fields *)
-  "aarch64_system_register_system";
-  "aarch64_system_register_cpsr";
-]
 
-(* Model doesn't need these globals *)
-(* Need to model these for coverage, but really should be excluded
-let dead_globals =  IdentSet.of_list [
-  Ident "BTypeCompatible";
-  Ident "__BranchTaken";
-  Ident "BTypeNext";
-  Ident "__ExclusiveLocal";
-] *)
-let dead_globals = IdentSet.empty
 
 (** Trivial walk to replace unsupported calls with a corresponding throw *)
 module RemoveUnsupported = struct
@@ -305,7 +290,6 @@ let dis_wrapper fn fnsig env =
     let stmts = Dis.flatten stmts [] in
 
     (* Cleanup transforms *)
-    let globals = IdentSet.diff globals dead_globals in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     let stmts' = Transforms.RedundantSlice.do_transform Bindings.empty stmts' in
     let stmts' = Transforms.StatefulIntToBits.run (Dis.enum_types env) stmts' in
@@ -328,7 +312,7 @@ let dis_wrapper fn fnsig env =
 (* Produce a lifter for the desired parts of the instruction set *)
 let run include_pc iset pat env =
   Printf.printf "Stage 1: Mock decoder & instruction encoding definitions\n";
-  let ((did,dsig),tests,instrs) = Decoder_program.run include_pc iset pat env problematic_enc in
+  let ((did,dsig),tests,instrs) = Decoder_program.run include_pc iset pat env in
   Printf.printf "  Collected %d instructions\n\n" (Bindings.cardinal instrs);
 
   Printf.printf "Stage 2: Call graph construction\n";
