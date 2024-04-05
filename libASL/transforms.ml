@@ -1717,24 +1717,24 @@ module RemoveRegisters = struct
 end
 
 
-module type ScopedBindings = sig  
+module type ScopedBindings = sig
     type 'elt t = 'elt Bindings.t Stack.t
 
-    val push_scope : 'elt t  -> unit -> unit 
-    val pop_scope : 'elt t  -> unit -> unit 
-    val add_bind : 'elt t  -> ident -> 'elt -> unit 
-    val find_binding : 'elt t -> ident -> 'elt option 
+    val push_scope : 'elt t  -> unit -> unit
+    val pop_scope : 'elt t  -> unit -> unit
+    val add_bind : 'elt t  -> ident -> 'elt -> unit
+    val find_binding : 'elt t -> ident -> 'elt option
     val current_scope_bindings : 'elt t -> 'elt Bindings.t
 end
 
-module ScopedBindings : ScopedBindings = struct 
+module ScopedBindings : ScopedBindings = struct
   type 'elt t = 'elt Bindings.t Stack.t
-  let push_scope (b:'elt t) (_:unit) : unit = Stack.push (Bindings.empty) b 
-  let pop_scope (b:'elt t) (_:unit) : unit = Stack.pop_opt b |> ignore 
-  let add_bind (b:'elt t) k v : unit = Stack.push (Bindings.add k v (Stack.pop b)) b 
+  let push_scope (b:'elt t) (_:unit) : unit = Stack.push (Bindings.empty) b
+  let pop_scope (b:'elt t) (_:unit) : unit = Stack.pop_opt b |> ignore
+  let add_bind (b:'elt t) k v : unit = Stack.push (Bindings.add k v (Stack.pop b)) b
   let find_binding (b:'elt t) (i) : 'a option = Seq.find_map (fun s -> Bindings.find_opt i s) (Stack.to_seq b)
 
-  
+
   (** returns a flattened view of bindings accessible from the current (innermost) scope. *)
   let current_scope_bindings (b:'elt t) : 'elt Bindings.t =
     (* inner bindings shadow outer bindings. *)
@@ -1762,8 +1762,8 @@ module FixRedefinitions = struct
       Stack.push (Bindings.empty) s ; s
 
     method push_scope (_:unit) : unit = push_scope scoped_bindings ()
-    method pop_scope (_:unit) : unit = pop_scope scoped_bindings () 
-    method add_bind (n: var_t) : unit = add_bind scoped_bindings n.name n 
+    method pop_scope (_:unit) : unit = pop_scope scoped_bindings ()
+    method add_bind (n: var_t) : unit = add_bind scoped_bindings n.name n
     method existing_binding (i: ident) : var_t option = find_binding scoped_bindings i
 
     method incr_binding (i: ident) : var_t =
