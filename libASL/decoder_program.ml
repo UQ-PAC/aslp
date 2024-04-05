@@ -4,17 +4,23 @@ open Asl_utils
 
 (*
   Convert an ASL decoder/instruction construct into an executable ASL program.
-  The results consits of:
+  The results consists of:
     - A decoder function
     - A series of instruction encoding test functions, to sanity check the result
     - A series of instruction encoding behaviour functions, corresponding to the instruction execution
 
-  All of these functions consume the 32bit instruction encoding, with only the tests
-  returning a boolean result.
+  The decoder and instruction behaviour functions take the 32bit instruction encoding and optionally
+  the current PC, returning nothing.
+  The test functions take only the current instruction encoding and return a boolean result.
 *)
 
 let enc = Ident("enc")
 let enc_type = Type_Bits (expr_of_int 32)
+let pc = Ident("pc")
+let pc_type = Type_Bits (expr_of_int 32)
+
+let generate_args include_pc =
+  [enc_type, enc] @ (if include_pc then [pc_type, pc] else [])
 
 let expr_in_bits e b =
   let bv = Value.to_bits Unknown (Value.from_bitsLit b) in
@@ -29,7 +35,7 @@ let enc_expr opcode =
   | Opcode_Bits b -> expr_in_bits (Expr_Var enc) b
   | Opcode_Mask m -> expr_in_mask (Expr_Var enc) m
 
-let enc_slice lo wd = 
+let enc_slice lo wd =
   Expr_Slices (Expr_Var enc, [Slice_LoWd (expr_of_int lo, expr_of_int wd)])
 
 let field_extract loc (IField_Field (f, lo, wd)) =
@@ -39,6 +45,11 @@ let unpred_test loc (i, b) =
   Stmt_Assert (Expr_TApply (FIdent ("ne_bits", 0), [expr_of_int 1], [enc_slice i 1; Expr_LitBits b]), loc)
 
 let not_expr a = Expr_TApply (FIdent ("not_bool", 0), [], [a])
+
+let rec and_exprs = function
+  | [e] -> e
+  | e::es -> Expr_TApply (FIdent ("and_bool", 0), [], [e;and_exprs es])
+  | [] -> expr_true
 
 let decode_slice_expr s =
   match s with
@@ -65,7 +76,7 @@ let build_test_fn ((Encoding_Block (nm, _, fields, opcode, guard, unpreds, b, lo
   (fid, (Some type_bool, [enc_type, enc], [], [enc], loc, stmts))
 
 let get_body_fn nm = FIdent (pprint_ident nm, 0)
-let build_instr_fn ((Encoding_Block (nm, _, fields, opcode, guard, unpreds, b, loc)),opost,cond,exec) =
+let build_instr_fn include_pc ((Encoding_Block (nm, _, fields, opcode, guard, unpreds, b, loc)),opost,cond,exec) =
   (* Extract all of the instructions fields *)
   let stmts = List.map (field_extract loc) fields in
   (* Add encoding body *)
@@ -76,42 +87,40 @@ let build_instr_fn ((Encoding_Block (nm, _, fields, opcode, guard, unpreds, b, l
   let stmts = stmts @ exec in
   (* Build the function decl *)
   let fid = get_body_fn nm in
-  (fid, (None, [enc_type, enc], [], [enc], loc, stmts))
+  let typed_args = generate_args include_pc in
+  (fid, (None, typed_args, [], List.map snd typed_args, loc, stmts))
 
-let rec and_all = function
-  | [e] -> e
-  | e::es -> Expr_TApply (FIdent ("and_bool", 0), [], [e;and_all es])
-  | [] -> expr_true
-
-let rec decode_case vs (DecoderAlt_Alt (ps, b)) =
+let rec decode_case include_pc vs (DecoderAlt_Alt (ps, b)) =
   let ps = List.map2 decode_pattern_expr ps vs in
   let (body, oc) = (match b with
   | DecoderBody_UNPRED loc ->  ([Stmt_Dep_Unpred(loc)], [])
   | DecoderBody_UNALLOC loc -> ([Stmt_Undefined(loc)], [])
   | DecoderBody_NOP loc -> ([], [])
-  | DecoderBody_Encoding(nm, loc) -> 
+  | DecoderBody_Encoding(nm, loc) ->
       let test_fn = get_test_fn nm in
       let body_fn = get_body_fn nm in
+      let args = (Expr_Var enc)::(if include_pc then [Expr_Var pc] else []) in
       let test = Expr_TApply (test_fn, [], [Expr_Var enc]) in
-      ([Stmt_TCall(body_fn, [], [Expr_Var enc], loc)], [test])
+      ([Stmt_TCall(body_fn, [], args, loc)], [test])
   | DecoderBody_Decoder (fs, c, loc) ->
       let stmts = List.map (field_extract loc) fs in
-      (stmts @ build_decoder_case c, [])) in
-  let c = and_all (ps @ oc) in
+      (stmts @ build_decoder_case include_pc c, [])) in
+  let c = and_exprs (ps @ oc) in
   S_Elsif_Cond(c, body)
 
-and build_decoder_case (DecoderCase_Case(ss, alts, loc)) =
+and build_decoder_case include_pc (DecoderCase_Case(ss, alts, loc)) =
   let decode_slices = List.map decode_slice_expr ss in
-  match List.map (decode_case decode_slices) alts with
+  match List.map (decode_case include_pc decode_slices) alts with
   | S_Elsif_Cond(c,body)::xs -> [Stmt_If(c, body, xs, [Stmt_Assert(expr_false,loc)], loc)]
   | _ -> failwith "Empty decoder case"
 
-let build_decoder iset c loc =
-  let stmts = build_decoder_case c in
+let build_decoder include_pc iset c loc =
+  let stmts = build_decoder_case include_pc c in
   let fid = FIdent(iset ^ "_decoder", 0) in
-  (fid, (None, [enc_type, enc], [], [enc], loc, stmts))
+  let typed_args = generate_args include_pc in
+  (fid, (None, typed_args, [], List.map snd typed_args, loc, stmts))
 
-let run iset pat env problematic =
+let run include_pc iset pat env problematic =
   let loc = Unknown in
 
   (* Find all matching instructions, pulled from testing.ml *)
@@ -126,8 +135,8 @@ let run iset pat env problematic =
 
   (* Build the encoding functions *)
   let tests = List.map build_test_fn encs in
-  let instr = List.map build_instr_fn encs in
-  let dec = build_decoder iset decoder loc in
+  let instr = List.map (build_instr_fn include_pc) encs in
+  let dec = build_decoder include_pc iset decoder loc in
 
   (* Add to the environment *)
   List.iter (fun (f,s) -> Eval.Env.addFun loc env f s) tests;
