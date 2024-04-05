@@ -14,7 +14,7 @@ concept lifter_traits = requires(T)
     typename T::rt_label;
 };
 
-template <lifter_traits Traits>
+template <typename Traits>
 class lifter_interface : public Traits {
 public:
   // bits which are known at lift-time
@@ -31,6 +31,7 @@ public:
   // TODO: split lift-time interface from run-time interface
   // TODO: more flexible method of adding const-lvalue qualifiers
 public:
+  virtual ~lifter_interface() = default;
 
   virtual rt_lexpr v_PSTATE_C() = 0;
   virtual rt_lexpr v_PSTATE_Z() = 0;

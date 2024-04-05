@@ -18,6 +18,9 @@ instantiate_dep = declare_dependency(
   dependencies: gen_dep,
   compile_args: ['-Wno-unused-parameter'])
 
+# needed to generate compile_commands.json when building this subproject standalone
+dummy_lib = library('dummy', 'dummy.cpp', dependencies: gen_dep, install: false)
+
 pkg = import('pkgconfig')
 pkg.generate(
   name: meson.project_name(),
