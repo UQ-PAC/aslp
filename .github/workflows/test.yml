@@ -34,11 +34,8 @@ jobs:
         echo "OUTPUT=$(pwd)/_build/default/tests/coverage" >> $GITHUB_OUTPUT
         rm -rf _build/default/tests/coverage/encodings
       id: coverage
-    - run: sudo apt-get update && sudo apt-get install clang-15 lld-15 llvm-15 meson ninja-build
-    - run: offlineASL-cpp/build.sh
-      env:
-        CXX: "/usr/lib/llvm-15/bin/clang++"
-        # CXX_LD: "/usr/bin/ld.lld-15"
+    - run: sudo apt-get update && sudo apt-get install clang-15 lld-15 llvm-15 llvm-15-dev meson ninja-build
+    - run: "CXX=$(which clang++15) LLVM_CONFIG=$(which llvm-config-15) offlineASL-cpp/build.sh"
 
     - name: Upload new coverage results
       if: always()
