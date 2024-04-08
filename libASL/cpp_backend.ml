@@ -390,11 +390,17 @@ let init_st (genfns: cpp_fun_sig list) prefix file =
   { depth = 0; skip_seq = false; file; oc; ref_vars = IdentSet.empty ;
     genvars; }
 
-let export_dir = "aslp/generated"
-let gen_prefix = "aslp-lifter/include"
-let instantiate_prefix = "aslp-lifter/src"
+(* prefix used to access all generated header files. *)
+let export_prefix = "aslp/generated"
+(* directory for generated template headers. *)
+let gen_dir = "include"
+(* directory for generated source files for explicit instantiation. *)
+let instantiate_dir = "src/generated"
+(* headers required by all files. note aslp/interface.hpp is NOT generated. *)
 let stdlib_deps = ["cassert"; "tuple"; "variant"; "vector"; "stdexcept"; "aslp/interface.hpp"]
-let global_deps = stdlib_deps @ [export_dir^"/aslp_lifter.hpp"]
+(* headers required by instruction semantics files.
+   includes forward declaration of lifter class. *)
+let global_deps = stdlib_deps @ [export_prefix^"/aslp_lifter.hpp"]
 
 
 (** Write an instruction file, containing just the behaviour of one instructions *)
@@ -424,7 +430,7 @@ let write_decoder_file fn fnsig genfns prefix dir =
   let m = name_of_FIdent fn in
   let path = dir ^ "/" ^ m ^ ".hpp" in
   let st = init_st genfns prefix path in
-  write_preamble (global_deps@[export_dir^"/decode_tests.hpp"]) st;
+  write_preamble (global_deps@[export_prefix^"/decode_tests.hpp"]) st;
   let gen = write_fn fn fnsig st in
   write_epilogue fn st;
   close_out st.oc;
@@ -511,19 +517,19 @@ let write_explicit_instantiations cppfuns prefix dir =
 (* Write all of the above, expecting Utils.ml to already be present in dir *)
 let run dfn dfnsig tests fns root =
 
-  let genprefix = root ^ "/" ^ gen_prefix in
-  let instprefix = root ^ "/" ^ instantiate_prefix in
+  let genprefix = root ^ "/" ^ gen_dir in
+  let instprefix = root ^ "/" ^ instantiate_dir in
 
-  let semfns = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig genprefix export_dir)::acc) fns [] in
-  let testfns = write_test_file tests genprefix export_dir in
+  let semfns = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig genprefix export_prefix)::acc) fns [] in
+  let testfns = write_test_file tests genprefix export_prefix in
   let allfns = semfns @ testfns in
 
-  let dfn = write_decoder_file dfn dfnsig allfns genprefix export_dir in
+  let dfn = write_decoder_file dfn dfnsig allfns genprefix export_prefix in
   let allfns = dfn :: allfns in
 
-  let _header = write_header_file dfn dfnsig (dfn :: semfns) testfns genprefix export_dir in
-  let _explicits = write_explicit_instantiations allfns instprefix "generated" in
+  let _header = write_header_file dfn dfnsig (dfn :: semfns) testfns genprefix export_prefix in
+  let _explicits = write_explicit_instantiations allfns instprefix "." in
 
-  let _impl = write_impl_file allfns genprefix export_dir in
+  let _impl = write_impl_file allfns genprefix export_prefix in
   (* write_dune_file (decoder::files@global_deps) dir *)
   ()
