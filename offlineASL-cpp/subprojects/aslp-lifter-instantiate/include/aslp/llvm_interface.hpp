@@ -265,8 +265,8 @@ public:
   }
  
   rt_expr f_gen_array_load(rt_lexpr var, bigint index) override {
-    llvm::Value *ptr;
-    llvm::Type *ty;
+    llvm::Value* ptr{};
+    llvm::Type* ty{};
 
     if (auto global = std::get_if<rt_global>(&var); global) {
       auto glob = global[0]->at(index);
@@ -282,7 +282,7 @@ public:
   }
 
   void f_gen_array_store(rt_lexpr var, bigint index, rt_expr exp) override {
-    llvm::Value *ptr;
+    llvm::Value* ptr{};
 
     if (auto global = std::get_if<rt_global>(&var); global) {
       auto glob = global[0]->at(index);
