@@ -25,7 +25,7 @@
    offline_transform ocaml_backend dis_tc
    offline_opt
    )
- (libraries pprint zarith z3 str pcre  dune-site))
+ (libraries pprint zarith z3 str pcre mlbdd dune-site))
 
 (generate_sites_module
  (module res)
