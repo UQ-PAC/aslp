@@ -1626,6 +1626,7 @@ module CaseSimp = struct
         | Some (w, x', b), Some (r', c), Some res when x' = x && r = r' -> Some (StringMap.add b c res)
         | _ -> None)
     | Stmt_Assert (Expr_Var(Ident "FALSE"), _) -> Some StringMap.empty
+    | Stmt_Throw _ -> Some StringMap.empty
     | _ -> None
 
   (* Match a chain of 'if X = BV_CONSTANT then R := BV_CONSTANT else if ... else assert FALSE',

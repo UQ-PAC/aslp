@@ -322,6 +322,7 @@ let dis_wrapper fn fnsig env =
     (*let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in*)
     let stmts' = Transforms.CopyProp.copyProp stmts' in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
+    let stmts' = Transforms.CaseSimp.do_transform stmts' in
     let stmts' = Transforms.RemoveRegisters.run stmts' in
     let stmts' = Cleanup.run false stmts' in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
