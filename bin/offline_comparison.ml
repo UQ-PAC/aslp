@@ -5,20 +5,9 @@ open Asl_visitor
 open Value
 open Utils
 
+module IntSet = Set.Make(Int)
 
 
-
-let dis_online env (iset: string) (op: int): (stmt list*Mtime.span) opresult =
-  let c = Mtime_clock.counter () in
-  let lenv = Dis.build_env env in
-  let decoder = Eval.Env.getDecoder env (Ident iset) in
-  let bv = Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int op) in
-  try
-    let stmts = Dis.dis_decode_entry env lenv decoder (VBits bv) in
-    let ts = Mtime_clock.count c in
-    Result.Ok (stmts, ts)
-  with
-    | e -> Result.Error (Op_DisFail e)
 
 
 module NoCSV  = struct 
@@ -70,6 +59,20 @@ module NoCSV  = struct
     {t with rows = (trans t.rows cols)}
 end
 
+
+let dis_online env (iset: string) (op: int): (stmt list*Mtime.span) opresult =
+  let c = Mtime_clock.counter () in
+  let lenv = Dis.build_env env in
+  let decoder = Eval.Env.getDecoder env (Ident iset) in
+  let bv = Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int op) in
+
+
+  try
+    let stmts = Dis.dis_decode_entry env lenv decoder (VBits bv) in
+    let ts = Mtime_clock.count c in
+    Result.Ok (stmts, ts)
+  with
+    | e -> Result.Error (Op_DisFail e)
 
 let dis_offline (op: int): (stmt list * Mtime.span) opresult =
   let c = Mtime_clock.counter () in
@@ -141,11 +144,6 @@ let count_branch (s:stmt list) : int =
 
 
 
-let op_test_opcode (env: Env.t) (iset: string) (op: int) =
-  let disstmts = dis_online env iset op in
-  let disstmts_off =  dis_offline op in
-  {online=disstmts; offline=disstmts_off}
-
 
 
 let get_int_opcodes verbose instr env : (string * int) list = 
@@ -162,31 +160,7 @@ let get_int_opcodes verbose instr env : (string * int) list =
   results
 
 
-
-
 let lift_offline (ops: (string * int) list) : (string * i * dis_single) list = List.map (fun (insn, op) -> insn, op, (dis_offline op)) ops
-
-let run opt_verbose instr env: resultstype  =
-  Printf.printf "decodeall %s\n" instr;
-  let iset = "A64" in
-  let encodings = get_opcodes opt_verbose iset instr env in
-  let results : resultstype  = List.concat_map (fun (enc, fields, opt_opcodes) ->
-      Printf.printf "\nENCODING: %s\n" enc;
-      match opt_opcodes with
-      | None -> Printf.printf "(encoding unused)\n"; []
-      | Some opcodes ->
-          List.concat_map (fun (op, valid) ->
-              if valid then
-                let a, b = (hex_of_int op), op_test_opcode env iset op  in
-                (*let printssl sl = String.concat "\n" (List.map (fun s -> Utils.to_string (Asl_parser_pp.pp_stmt s)) sl) in 
-                print_endline (printssl (unres b.online))  ;
-                print_endline (printssl  (unres b.offline))  ; *)
-                [(instr, op, b)]
-              else []
-      ) opcodes 
-  ) encodings in
-  (results)
-
 
 let rec process_command tcenv env cmd =
   match String.split_on_char ' ' cmd with
@@ -283,7 +257,7 @@ let count_success_dis (i:grouped_res) : 'a StringMap.t =
   let sumdis (x: dis_single list)  = List.fold_left (+) 0 (List.map dis_ok x) in
   StringMap.map (fun ins vs -> sumdis (List.map (fun (ins, op, ds) -> ds) vs)) i 
 (*  
-  let elems = List.map snd (StringMap.to_list i) in
+  let elems = List.map snd (StringMap.bindings i) in
   let online = List.map (fun (ins, op, dr) -> (ins, op, dr.online)) elems in
     *)
 
@@ -371,9 +345,8 @@ let do_analysis tblname (online_by_insgrp : grouped_res) offline_by_insgroup  =
   let failed_off = num_failed_by_insn offline_by_insgroup in
 
   (* filter out the records that didn't pass in both online and offline *)
-  let module IntSet = Set.Make(Int) in
   let passedset (x: grouped_res) = 
-    let x = StringMap.to_list x in
+    let x = StringMap.bindings x in
     let x = List.concat_map (fun (k, vs) -> vs) x in
     let ps = List.map (fun (ins, op, rs) -> match rs with 
         | Result.Ok _ -> Some (op)
@@ -382,8 +355,9 @@ let do_analysis tblname (online_by_insgrp : grouped_res) offline_by_insgroup  =
     in
     IntSet.of_list @@ List.concat_map Option.to_list ps
   in
-  let allowed = IntSet.inter (passedset online_by_insgrp) (passedset offline_by_insgroup) in
-  Printf.printf "ALLOW %d \n" (IntSet.cardinal allowed);
+  let ponline, poffline = (passedset online_by_insgrp),(passedset offline_by_insgroup)  in
+  let allowed = IntSet.inter ponline poffline in
+  let missing_offline = IntSet.diff ponline poffline in
   let allowedop_filter b = 
     let x = StringMap.map (fun vs -> List.filter (fun (b,op,is) -> IntSet.mem op allowed) vs) b in
     StringMap.filter (fun k vs -> (List.length vs) > 0) x
@@ -393,7 +367,7 @@ let do_analysis tblname (online_by_insgrp : grouped_res) offline_by_insgroup  =
 
   let toton = total_tm_by_insn  online_by_insgrp in
   let totoff = total_tm_by_insn offline_by_insgroup in
-  let to_secs_float x = StringMap.to_list x |>  List.map (fun (k, v) -> k, ns_to_ms (Int64.to_float v)) |> StringMap.of_list in
+  let to_secs_float x = StringMap.bindings x |>  List.map (fun (k, v) -> k, ns_to_ms (Int64.to_float v)) |> List.to_seq |> StringMap.of_seq in
   let total_s_ol = to_secs_float toton in 
   let total_s_off = to_secs_float totoff in
 
@@ -406,7 +380,7 @@ let do_analysis tblname (online_by_insgrp : grouped_res) offline_by_insgroup  =
   let avg_on_complexity, avg_on_branch, avg_on_vars = avg_counts online_by_insgrp in
   let df  = 
     let open NoCSV in 
-    let headsi =  (StringMap.to_list  off_complexity |> List.map fst) in
+    let headsi =  (StringMap.bindings off_complexity |> List.map fst) in
     let array_of x = List.map (fun h -> StringMap.find h x) headsi in
     let vals x = List.map (fun x -> IntC x) (array_of x) in
     let fvals x = List.map (fun x -> FloatC x) (array_of x) in
@@ -417,27 +391,28 @@ let do_analysis tblname (online_by_insgrp : grouped_res) offline_by_insgroup  =
     "online time total ms" ; "offline time total ms" ;
     "online time avg ms"; "offline time avg ms";
     "online max complexity"; "offline max complexity";
-    "online max branch count"; "offline max branch count";
-      "online max variable count"; "offline max variable count";
     "online avg complexity"; "offline avg complexity";
+    "online max branch count"; "offline max branch count";
     "online avg branch count"; "offline avg branch count";
-      "online avg variable count"; "offline avg variable count"]) [] in  
+    "online max variable count"; "offline max variable count";
+    "online avg variable count"; "offline avg variable count";
+    ]) [] in  
       let f3 = NoCSV.add_columns f [heads;
           vals passed_on ; vals passed_off ;
           vals failed_on ; vals failed_off ;
           fvals total_s_ol ; fvals total_s_off ;
           fvals avg_s_ol ; fvals avg_s_off;
           vals on_complexity; vals off_complexity; 
-          vals on_branch ; vals off_branch ;
-          vals on_vars ; vals off_vars  ;
           fvals avg_on_complexity; fvals avg_off_complexity; 
+          vals on_branch ; vals off_branch ;
           fvals avg_on_branch ; fvals avg_off_branch ;
+          vals on_vars ; vals off_vars  ;
           fvals avg_on_vars ; fvals avg_off_vars  
       ] in
       let x = open_out (tblname ^ ".csv") in
       output_string x (NoCSV.to_csv f3); 
       close_out x ;
-  in ()
+  in missing_offline
   
 
 module CanonicaliseNames = struct
@@ -561,10 +536,15 @@ let main () =
   let online_by_insgrp = (group_list (fun (ins, op,dis) -> ins) online) in
   let offline_by_insgroup = (group_list (fun (ins, op,dis) -> ins) offline ) in
   do_analysis "by_instruction" online_by_insgrp offline_by_insgroup |> ignore;
-  let to_sm x = StringMap.of_list (List.map (fun (ins, op,dis) -> (hex_of_int op), [(ins,op,dis)]) x) in
+  let to_sm x = StringMap.of_seq (List.to_seq (List.map (fun (ins, op,dis) -> (hex_of_int op), [(ins,op,dis)]) x)) in
   let offline_by_opcode = to_sm offline in 
-  let online_by_opcode = to_sm online in
-  do_analysis "by_opcode" online_by_opcode offline_by_opcode; 
+  let (online_by_opcode : (bitsLit * i * dis_single) list StringMap.t) = to_sm online in
+
+  let missing_offline = do_analysis "by_opcode" online_by_opcode offline_by_opcode in
+  IntSet.iter (fun x -> 
+    List.iter (fun (bl,i,ds) -> Printf.printf "Missing offline: %s : %x\n" bl i) (StringMap.find (hex_of_int x) offline_by_opcode)
+  ) missing_offline; 
+
   let dump_group pref g (rs:grouped_res) = 
     let to_dump = StringMap.find g rs in
     let progs : stmt list list = List.map (function 

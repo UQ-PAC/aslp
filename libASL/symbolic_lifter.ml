@@ -360,6 +360,7 @@ let dis_wrapper fn fnsig env =
     (*let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in*)
     let stmts' = Transforms.CopyProp.copyProp stmts' in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
+    let stmts' = Transforms.CaseSimp.do_transform stmts' in (* ??? *)
     let stmts' = Transforms.RemoveRegisters.run stmts' in
     let stmts' = Cleanup.run false stmts' in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
@@ -445,8 +446,8 @@ let run iset pat env =
 
   let fnbodys = ((List.map (fun (i,fs) -> i, fnsig_get_body fs)  (Bindings.bindings offline_fns))) in
   let visitors =  (List.map (fun (i, b) -> let v = new GCCounter.gen_counter in ignore (visit_stmts v b); (i, v)) fnbodys) in
-  let branches_bounds = Bindings.of_list @@ List.map (fun (i, b) -> i, b#gbranch_count) visitors in
-  let decls_bounds = Bindings.of_list @@ List.map (fun (i, b) -> i, b#gdecl_count) visitors in
+  let branches_bounds = Bindings.of_seq @@ Seq.map (fun (i, b) -> i, b#gbranch_count) (List.to_seq visitors) in
+  let decls_bounds = Bindings.of_seq @@ List.to_seq @@ List.map (fun (i, b) -> i, b#gdecl_count) visitors in
   let complexity_bounds = List.map (fun (i, b) -> i, b#gexpr_count) visitors in
   let complexity_bounds = List.rev @@ List.sort (fun (i, ca) (ii, cb) -> compare ca cb) complexity_bounds in
   let oc = open_out "insn_complexity_bounds.csv" in

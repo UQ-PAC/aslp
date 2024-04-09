@@ -10,7 +10,6 @@ let () = Printexc.register_printer
     | _ -> None)
 
 let op_dis (op: int): stmt list opresult =
-  print_endline "test opcode\n" ;
   let bv = Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int op) in
   try
     let stmts = OfflineASL.Offline.run bv in
@@ -19,7 +18,6 @@ let op_dis (op: int): stmt list opresult =
     | e -> Result.Error (Op_DisFail e)
 
 let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
-  print_endline "test opcode\n" ;
   let op' = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int op)) in
 
   let initenv = Env.copy env in

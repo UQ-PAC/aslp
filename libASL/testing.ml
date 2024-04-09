@@ -431,7 +431,7 @@ let get_opcodes (opt_verbose: bool ref) (iset: string) (instr: string) (env: Env
   in
   let encs = List.map (fun (x,_,_,_) -> x) (Env.listInstructions env) in
   let encs' = List.filter encoding_matches encs in
-   List.iter (function (Encoding_Block (Ident mn, _,_,_,_,_,_,_)) -> Printf.printf "%s\n" mn | _ -> assert false) encs'; 
+   (*List.iter (function (Encoding_Block (Ident mn, _,_,_,_,_,_,_)) -> Printf.printf "%s\n" mn | _ -> assert false) encs';  *)
 
   let opcodes = load_opcodes "encodings" in
   let get_opcodes nm =
