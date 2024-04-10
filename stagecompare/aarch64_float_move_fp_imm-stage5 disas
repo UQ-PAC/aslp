@@ -1,0 +1,25 @@
+    Stmt_ConstDecl(Type_Constructor("boolean"),"Exp2__1",Expr_TApply("eq_bits.0",[2],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(22,2)]);'00']))
+
+    Stmt_If(Expr_Var("Exp2__1"),[
+Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[6],['000000';Expr_TApply("ZeroExtend.0",[5;6],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(0,5)]);6])]);Expr_TApply("sle_bits.0",[6],[Expr_TApply("ZeroExtend.0",[5;6],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(0,5)]);6]);'011111'])]));
+Stmt_Assign(LExpr_Array(LExpr_Var("_Z"),Expr_TApply("cvt_bits_uint.0",[5],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(0,5)])])),Expr_TApply("ZeroExtend.0",[32;128],[Expr_TApply("append_bits.0",[9;23],[Expr_TApply("append_bits.0",[1;8],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(20,1)]);Expr_TApply("append_bits.0",[6;2],[Expr_TApply("append_bits.0",[1;5],[Expr_TApply("not_bits.0",[1],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(19,1)])]);Expr_TApply("replicate_bits.0",[1;5],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(19,1)]);5])]);Expr_Slices(Expr_Var("enc"),[Slice_LoWd(17,2)])])]);Expr_TApply("append_bits.0",[4;19],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(13,4)]);'0000000000000000000'])]);128]))
+],[],[
+Stmt_ConstDecl(Type_Constructor("boolean"),"Exp11__1",Expr_TApply("eq_bits.0",[2],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(22,2)]);'01']));
+Stmt_If(Expr_Var("Exp11__1"),[
+Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[6],['000000';Expr_TApply("ZeroExtend.0",[5;6],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(0,5)]);6])]);Expr_TApply("sle_bits.0",[6],[Expr_TApply("ZeroExtend.0",[5;6],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(0,5)]);6]);'011111'])]));
+Stmt_Assign(LExpr_Array(LExpr_Var("_Z"),Expr_TApply("cvt_bits_uint.0",[5],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(0,5)])])),Expr_TApply("ZeroExtend.0",[64;128],[Expr_TApply("append_bits.0",[12;52],[Expr_TApply("append_bits.0",[1;11],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(20,1)]);Expr_TApply("append_bits.0",[9;2],[Expr_TApply("append_bits.0",[1;8],[Expr_TApply("not_bits.0",[1],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(19,1)])]);Expr_TApply("replicate_bits.0",[1;8],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(19,1)]);8])]);Expr_Slices(Expr_Var("enc"),[Slice_LoWd(17,2)])])]);Expr_TApply("append_bits.0",[4;48],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(13,4)]);'000000000000000000000000000000000000000000000000'])]);128]))
+],[],[
+Stmt_ConstDecl(Type_Constructor("boolean"),"Exp20__1",Expr_TApply("eq_bits.0",[2],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(22,2)]);'10']));
+Stmt_If(Expr_Var("Exp20__1"),[
+Stmt_Throw("UNSUPPORTED")
+],[],[
+Stmt_ConstDecl(Type_Constructor("boolean"),"Exp21__1",Expr_TApply("eq_bits.0",[2],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(22,2)]);'11']));
+Stmt_If(Expr_Var("Exp21__1"),[
+Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[6],['000000';Expr_TApply("ZeroExtend.0",[5;6],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(0,5)]);6])]);Expr_TApply("sle_bits.0",[6],[Expr_TApply("ZeroExtend.0",[5;6],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(0,5)]);6]);'011111'])]));
+Stmt_Assign(LExpr_Array(LExpr_Var("_Z"),Expr_TApply("cvt_bits_uint.0",[5],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(0,5)])])),Expr_TApply("ZeroExtend.0",[16;128],[Expr_TApply("append_bits.0",[6;10],[Expr_TApply("append_bits.0",[1;5],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(20,1)]);Expr_TApply("append_bits.0",[3;2],[Expr_TApply("append_bits.0",[1;2],[Expr_TApply("not_bits.0",[1],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(19,1)])]);Expr_TApply("replicate_bits.0",[1;2],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(19,1)]);2])]);Expr_Slices(Expr_Var("enc"),[Slice_LoWd(17,2)])])]);Expr_TApply("append_bits.0",[4;6],[Expr_Slices(Expr_Var("enc"),[Slice_LoWd(13,4)]);'000000'])]);128]))
+],[],[
+Stmt_Throw("UNSUPPORTED")
+])
+])
+])
+])
