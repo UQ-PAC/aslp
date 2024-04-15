@@ -1427,8 +1427,8 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
                 let@ enc_match = dis_encoding enc op in
                 if enc_match then begin
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
-                    if !debug_level >= 1 then begin
-                        Printf.printf "Dissasm: %s\n" (pprint_ident inst);
+                    if !debug_level >= 0 then begin
+                        Printf.printf "Disasm: %s\n" (pprint_ident inst);
                     end;
 
                     let@ (lenv',stmts) = DisEnv.locally_ (
