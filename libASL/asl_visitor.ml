@@ -66,9 +66,18 @@ end
     different.
  *)
 
-let visit_loc (vis: #aslVisitor) (x: l): l =
-    doVisit vis (vis#vloc x) (fun _ x -> x) x
-
+let rec visit_loc (vis: #aslVisitor) (x: l): l =
+    let aux (vis: #aslVisitor) (x: l): l =
+        (match x with
+        | Unknown | Range _ | Int (_,None) -> x
+        | Generated (loc) ->
+            let loc' = visit_loc vis loc in
+            if loc == loc' then x else Generated loc'
+        | Int (str,Some loc) ->
+            let loc' = visit_loc vis loc in
+            if loc == loc' then x else Int (str, Some loc')
+        ) in
+    doVisit vis (vis#vloc x) aux x
 
 let rec visit_exprs (vis: #aslVisitor) (xs: expr list): expr list =
         mapNoCopy (visit_expr vis) xs
