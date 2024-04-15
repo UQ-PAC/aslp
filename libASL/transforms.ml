@@ -1827,7 +1827,7 @@ module TailCallSplitting = struct
     inherit nopAslVisitor
 
     val mutable size: int = 0
-    val mutable created: Eval.fun_sig list = []
+    val mutable created = []
 
     method! vstmt _ = failwith "expr_splitter should not visit statements."
     method! vexpr = function
@@ -1837,10 +1837,10 @@ module TailCallSplitting = struct
         (match infer_type e with
         | _ when size < max_expr_size -> e
         | None -> e
-        | Some ty ->
-            let fvs = fv_expr e in
-            let fn' : Eval.fun_sig = (Some ty,2,3,4,5,6) in
-          created <- 
+        | Some ty -> e
+            (* let fvs = fv_expr e in *)
+            (* let fn' : Eval.fun_sig = (Some ty,2,3,4,5,6) in *)
+          (* created <-  *)
 
             )
   )

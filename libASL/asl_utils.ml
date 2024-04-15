@@ -226,7 +226,7 @@ let fv_stmts stmts =
 
 let fv_stmt stmt =
     let fvs = new freevarClass in
-    ignore (visit_stmt (fvs :> aslVisitor) stmt);
+    ignore (visit_stmt_single (fvs :> aslVisitor) stmt);
     fvs#result
 
 let fv_decl decl =
@@ -421,9 +421,9 @@ let subst_type (s: expr Bindings.t) (x: ty): ty =
     let subst = new substClass s in
     visit_type subst x
 
-let subst_stmt (s: expr Bindings.t) (x: stmt): stmt list =
+let subst_stmt (s: expr Bindings.t) (x: stmt): stmt =
     let subst = new substClass s in
-    visit_stmt subst x
+    visit_stmt_single subst x
 
 
 (** More flexible substitution class - takes a function instead
