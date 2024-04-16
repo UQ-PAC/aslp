@@ -513,6 +513,22 @@ let write_explicit_instantiations cppfuns prefix dir =
       write_instantiation file (List.filter (fun x -> x.file = file) cppfuns))
     files
 
+(* Installs non-generated support headers, e.g. interface definition *)
+let install_headers prefix dir =
+  let res = List.nth Res.Sites.aslfiles 0 ^ "/include/aslp" in
+  let files = Array.to_list @@ Sys.readdir res in
+  let files = List.filter (String.ends_with ~suffix:".hpp") files in
+  List.map
+    (fun f ->
+      let i = open_in_bin (res ^ "/" ^ f) in
+      let size = in_channel_length i in
+      let path = (prefix ^ "/" ^ dir ^ "/" ^ Filename.basename f) in
+      let o = open_out_bin path in
+      output_string o (really_input_string i size);
+      close_in i;
+      close_out o;
+      path)
+    files
 
 (* Write all of the above, expecting Utils.ml to already be present in dir *)
 let run dfn dfnsig tests fns root =
@@ -531,5 +547,7 @@ let run dfn dfnsig tests fns root =
   let _explicits = write_explicit_instantiations allfns instprefix "." in
 
   let _impl = write_impl_file allfns genprefix export_prefix in
-  (* write_dune_file (decoder::files@global_deps) dir *)
+
+  let _headers = install_headers genprefix (export_prefix ^ "/..") in
+
   ()
