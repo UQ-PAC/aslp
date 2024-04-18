@@ -40,7 +40,7 @@
  (modes exe)
  (modules offline_comparison)
  (flags (-cclib -lstdc++))
- (libraries libASL offlineASL mtime mtime.clock.os))
+ (libraries libASL offlineASL mtime mtime.clock.os patience_diff patdiff))
 
 (executable
  (name offline_coverage)

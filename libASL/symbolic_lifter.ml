@@ -303,6 +303,7 @@ module GCCounter = struct
     method !vstmt s = match s with
       | Stmt_TCall(FIdent(n, _), _, _, _) when (String.starts_with ~prefix:"gen_branch" (n)) -> gen_count <- gen_count + 1 ; branch_count <- branch_count + 1 ; DoChildren
       | Stmt_TCall(FIdent(n, _), _, _, _) when (String.starts_with ~prefix:"decl" (n)) -> gen_count <- gen_count + 1 ; decl_count <- decl_count + 1 ; DoChildren
+      | Stmt_TCall(FIdent(n, _), _, _, _) when (String.starts_with ~prefix:"gen" (n)) -> gen_count <- gen_count + 1  ; DoChildren
       | Stmt_If (c, t, els, e, loc) ->
         let (vc, vt, ve) = (new gen_counter, new gen_counter, new gen_counter) in
         let _   = visit_expr vc c in
@@ -323,16 +324,9 @@ module GCCounter = struct
     method !vexpr s = match s with 
       | Expr_TApply(FIdent(n, _), _, _) when (String.starts_with ~prefix:"gen_branch" (n)) -> gen_count <- gen_count + 1 ; branch_count <- branch_count + 1 ; DoChildren
       | Expr_TApply(FIdent(n, _), _, _) when (String.starts_with ~prefix:"decl" (n)) -> gen_count <- gen_count + 1 ; decl_count <- decl_count + 1 ; DoChildren
+      | Expr_TApply(FIdent(n, _), _, _) when (String.starts_with ~prefix:"gen" (n)) -> gen_count <- gen_count + 1 ; DoChildren
       | _ -> DoChildren
     
-
-  
-    method count_gen (s:stmt list) : int = 
-      stmt_count <- 0; gen_count <- 0; 
-      (visit_stmts this s) |> ignore; 
-      this#gexpr_count
-
-    method expr_count (e:expr) : int = gen_count <- 0; (visit_expr this e) |> ignore ; gen_count
     method gexpr_count = gen_count
     method gbranch_count = branch_count 
     method gdecl_count = decl_count
@@ -390,6 +384,17 @@ let run iset pat env =
   let timer = Utils.Timer.print_checkpoint timer  "Stage 2" in
   Printf.printf "  Collected %d functions\n\n" (Bindings.cardinal fns);
 
+  let pfn stage funs = 
+    let fnbody = (Bindings.find_opt (FIdent ("aarch64_float_move_fp_imm", 0)) funs) in
+    (Option.iter (fun fb -> 
+    let fb = fnsig_get_body fb in
+    let oc = open_out (Printf.sprintf "stagecompare/aarch64_float_move_fp_imm-stage%s" stage) in
+    let res = String.concat "\n" (List.map (fun x -> Printf.sprintf "    %s\n" (Utils.to_string (Asl_parser_pp.pp_stmt x))) fb) in
+    (Printf.printf "\n\nSTAGE %s aarch64_float_move_fp_imm\n\n%s" stage res);
+    output_string oc res ;
+    close_out oc)  fnbody)
+    in
+  pfn "2 callgraph" fns ;
   Printf.printf "Stage 3: Simplification\n";
   (* Remove temporary dynamic bitvectors where possible *)
   let fns = Bindings.map (fnsig_upd_body (Transforms.RemoveTempBVs.do_transform false)) fns in
@@ -398,6 +403,7 @@ let run iset pat env =
   let s3 = Utils.Timer.get_delta_float_seconds timer in
   let timer = Utils.Timer.print_checkpoint timer  "Stage 3" in
   Printf.printf "\n";
+  pfn "3 simplify" fns ;
 
   Printf.printf "Stage 4: Specialisation\n";
   (* Run requirement collection over the full set *)
@@ -405,6 +411,7 @@ let run iset pat env =
   let s4 = Utils.Timer.get_delta_float_seconds timer in
   let timer = Utils.Timer.print_checkpoint timer  "Stage 4" in
   Printf.printf "\n";
+  pfn "4 specialise" fns ;
 
   Printf.printf "Stage 5: Disassembly\n";
   (* Build an environment with these new function definitions *)
@@ -417,6 +424,7 @@ let run iset pat env =
   let s5 = Utils.Timer.get_delta_float_seconds timer in
   Utils.Timer.print_checkpoint timer  "Stage 5" |> ignore ;
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
+  pfn "5 disas" fns ;
 
   Printf.printf "Stmt Counts\n";
   let l = Bindings.fold (fun fn fnsig acc -> (fn, stmts_count (fnsig_get_body fnsig))::acc) fns [] in
@@ -443,6 +451,7 @@ let run iset pat env =
   let s7 = Utils.Timer.get_delta_float_seconds timer in
   Utils.Timer.print_checkpoint timer  "Stage 7-8"  |> ignore;
   Printf.printf "\n";
+  pfn "7-8 offline transform" offline_fns ;
 
   let fnbodys = ((List.map (fun (i,fs) -> i, fnsig_get_body fs)  (Bindings.bindings offline_fns))) in
   let visitors =  (List.map (fun (i, b) -> let v = new GCCounter.gen_counter in ignore (visit_stmts v b); (i, v)) fnbodys) in
@@ -458,5 +467,5 @@ let run iset pat env =
     (Printf.printf "%d\t%d\t%d\t%s\n" (c) (Bindings.find i branches_bounds) (Bindings.find i decls_bounds) (name_of_FIdent i) );
   ) complexity_bounds ;
   close_out oc;
-  Printf.printf "Gen times\nstage\tseconds\n1\t%f\n2\t%f\n3\t%f\n4\t%f\n5\t%f\n6\t%f\n7\t%f" s1 s2 s3 s4 s5 s6 s7 ;
+  Printf.printf "Gen times\nstage\tseconds\n1\t%f\n2\t%f\n3\t%f\n4\t%f\n5\t%f\n6\t%f\n7\t%f\n" s1 s2 s3 s4 s5 s6 s7 ;
   (did,dsig,tests,offline_fns)

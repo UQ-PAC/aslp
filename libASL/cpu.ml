@@ -76,7 +76,9 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
             | Cpp -> failwith "cpp backend not yet implemented" in
 
         (* Build backend program *)
-        run_gen_backend decoder_id decoder_fnsig tests instrs dir
+        let timer = Utils.Timer.make () in
+        run_gen_backend decoder_id decoder_fnsig tests instrs dir ;
+        Utils.Timer.print_checkpoint timer  "Run backend"  |> ignore 
 
     in
     {
