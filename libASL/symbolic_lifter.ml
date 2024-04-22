@@ -369,6 +369,11 @@ let run include_pc iset pat env =
     else Option.map (fnsig_set_body fnsig) (dis_wrapper fn fnsig env')) fns in
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
 
+  let decoder = Eval.Env.getDecoder env (Ident iset) in
+  let fns = Transforms.BDDSimp.transform_all fns decoder in
+  let (_,globals) = Dis.build_env env in
+  let fns = Bindings.map (fnsig_upd_body (Transforms.RemoveUnused.remove_unused globals)) fns in
+
   Printf.printf "Stmt Counts\n";
   let l = Bindings.fold (fun fn fnsig acc -> (fn, stmts_count (fnsig_get_body fnsig))::acc) fns [] in
   let l = List.sort (fun (_,i) (_,j) -> compare i j) l in

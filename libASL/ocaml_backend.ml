@@ -313,8 +313,8 @@ and write_stmts s st =
         write_seq st;
         write_stmt s st
       ) xs;
-      dec_depth st;
-      assert (not st.skip_seq)
+      dec_depth st
+      (*assert (not st.skip_seq)*)
 
 let build_args targs args =
   if List.length targs = 0 && List.length args = 0 then "()"

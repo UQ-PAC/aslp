@@ -1932,3 +1932,556 @@ module UnsupportedVariables = struct
     IdentSet.of_list (List.flatten (List.map (fun (k,v) -> flatten_var k v) globals))
 
 end
+
+module DecoderChecks = struct
+  type sl = (int * int)
+  type st = {
+    ctx: MLBDD.man;
+    vars: sl Bindings.t;
+    cur_enc: MLBDD.t;
+    unpred: MLBDD.t;
+    unalloc: MLBDD.t;
+    nop: MLBDD.t;
+    instrs: MLBDD.t Bindings.t;
+  }
+
+  let init_state =
+    let ctx = MLBDD.init ~cache:1024 () in
+    {
+      ctx ;
+      vars = Bindings.empty ;
+      cur_enc = MLBDD.dtrue ctx ;
+      unpred = MLBDD.dfalse ctx ;
+      unalloc = MLBDD.dfalse ctx ;
+      nop = MLBDD.dfalse ctx ;
+      instrs = Bindings.empty ;
+    }
+
+  let get_slice s st  = Bindings.find s st.vars
+
+  let extract_field (IField_Field(f, lo, wd)) st =
+    { st with vars = Bindings.add f (lo,wd) st.vars }
+
+  let add_unpred g st =
+    { st with unpred = MLBDD.dor st.unpred g }
+
+  let add_unalloc g st =
+    { st with unalloc = MLBDD.dor st.unalloc g }
+
+  let add_nop g st =
+    { st with nop = MLBDD.dor st.nop g }
+
+  let add_instr k g st =
+    let existing = Option.value (Bindings.find_opt k st.instrs) ~default:(MLBDD.dfalse st.ctx) in
+    { st with instrs = Bindings.add k (MLBDD.dor existing g) st.instrs }
+
+  let restrict_enc g st =
+    { st with cur_enc = MLBDD.dand st.cur_enc g }
+
+  let set_enc g st =
+    { st with cur_enc = g }
+
+  let bdd_of_mask bs lo ctx =
+    snd @@ String.fold_right (fun c (pos,e) ->
+      match c with
+      | ' ' -> (pos, e)
+      | 'x' -> (* No constraint *)
+          (pos + 1, e)
+      | '1' -> (* bit hi is true *)
+        let bit = MLBDD.ithvar ctx pos in
+        (pos + 1, MLBDD.dand bit e)
+      | '0' -> (* bit hi is true *)
+        let bit = MLBDD.dnot (MLBDD.ithvar ctx pos) in
+        (pos + 1, MLBDD.dand bit e)
+      | _ -> invalid_arg "bdd_of_mask") bs (lo,MLBDD.dtrue ctx)
+
+  let implicant_to_mask m =
+    let chars = List.init 32 (fun i ->
+      if List.mem (true, i)  m then '1' else
+        if List.mem (false, i) m then '0' else
+          'x'
+        ) in
+    let buf = Buffer.create 32 in
+    List.iter (Buffer.add_char buf) (List.rev chars);
+    Buffer.contents buf
+
+  let to_string bdd =
+    let imps = MLBDD.allprime bdd in
+    Utils.pp_list implicant_to_mask imps
+
+  (* Represent slices in terms of their position in enc *)
+  let decode_slice s st =
+    match s with
+    | DecoderSlice_Slice(lo, wd) -> (lo,wd)
+    | DecoderSlice_FieldName f   -> get_slice f st
+    | DecoderSlice_Concat fs     -> failwith "DecoderSlice_Concat not expected"
+
+  (* Convert decode patterns into BDDs *)
+  let rec decode_pattern (lo,wd) p ctx =
+    match p with
+    | DecoderPattern_Bits b
+    | DecoderPattern_Mask b -> bdd_of_mask b lo ctx
+    | DecoderPattern_Wildcard _ -> MLBDD.dtrue ctx
+    | DecoderPattern_Not p -> MLBDD.dnot (decode_pattern (lo,wd) p ctx)
+
+  (* Combine the various tests due to a guard into one BDD *)
+  let decode_case_guard vs ps st =
+    List.fold_left2 (fun e s p -> MLBDD.dand e (decode_pattern s p st.ctx)) (st.cur_enc) vs ps
+
+  (* Collect reachability for each instruction encoding IGNORING ordering on alts *)
+  let rec tf_decode_case b st =
+    match b with
+    | DecoderBody_UNPRED loc          -> add_unpred st.cur_enc st
+    | DecoderBody_UNALLOC loc         -> add_unalloc st.cur_enc st
+    | DecoderBody_NOP loc             -> add_nop st.cur_enc st
+    | DecoderBody_Encoding(nm, loc)   -> add_instr nm st.cur_enc st
+    | DecoderBody_Decoder(fs, c, loc) ->
+        tf_decoder c (List.fold_right extract_field fs st)
+
+  and tf_decoder (DecoderCase_Case(ss, alts, loc)) st =
+    let vs = List.map (fun s -> decode_slice s st) ss in
+    let (st,_) = List.fold_left ( fun (st,prior) (DecoderAlt_Alt(ps,b))->
+      let guard = decode_case_guard vs ps st in
+      let st' = tf_decode_case b (set_enc (MLBDD.dand prior guard) st) in
+      let prior = MLBDD.dand prior (MLBDD.dnot guard) in
+      let st = set_enc st.cur_enc st' in
+      (st,prior) ) (st,st.cur_enc) alts in
+    st
+
+  let do_transform d =
+    tf_decoder d init_state
+
+end
+
+module BDDSimp = struct
+  type abs = 
+    Top |
+    Val of MLBDD.t list |
+    Bot
+
+  type state =  {
+    man: MLBDD.man;
+    vars: abs Bindings.t;
+    ctx: MLBDD.t;
+    stmts: stmt list;
+  }
+
+  let init_state (ctx : MLBDD.t) = {
+    man = MLBDD.manager ctx;
+    vars = Bindings.empty ;
+    ctx ;
+    stmts = [] 
+  }
+
+
+  let to_string bdd =
+    let imps = MLBDD.allprime bdd in
+    Utils.pp_list DecoderChecks.implicant_to_mask imps
+
+  let pp_abs a =
+    match a with
+    | Top -> "Top"
+    | Bot -> "Bot"
+    | Val v -> Printf.sprintf "Val (%s)" (Utils.pp_list to_string v)
+
+  let pp_state st =
+    Printf.sprintf "{ ctx = %s ; vars = %s }" (to_string st.ctx) (pp_bindings pp_abs st.vars)
+
+  let is_true a st =
+    match a with
+    | Val [v] -> MLBDD.is_true (MLBDD.imply st.ctx v)
+    | _ -> false
+
+  let is_false a st =
+    match a with
+    | Val [v] -> MLBDD.(is_true (imply st.ctx (dnot v)))
+    | _ -> false
+
+  let halt st =
+    { st with ctx = MLBDD.dfalse st.man }
+
+  let write s st =
+    { st with stmts = st.stmts @ [s] }
+
+  let writeall stmts st =
+    { st with stmts = st.stmts @ stmts }
+
+  let get_var v st =
+    match Bindings.find_opt v st.vars with
+    | Some v -> v
+    | _ -> Top (* logically this should be Bot, but need to init globals *)
+
+  let add_var v abs st =
+    { st with vars = Bindings.add v abs st.vars }
+
+  let restrict_ctx cond st =
+    match cond with
+    | Top -> st
+    | Bot -> st
+    | Val [cond] -> { st with ctx = MLBDD.dand st.ctx cond }
+    | _ -> invalid_arg "restrict_ctx"
+
+  let to_bool abs st =
+    match abs with
+    | Top 
+    | Bot -> MLBDD.dtrue st.man
+    | Val [v] -> v
+    | _ -> failwith "unexpected to_bool"
+
+  let trivial_eq a b =
+    if List.length a <> List.length b then false
+    else List.fold_right2 (fun a b acc -> MLBDD.equal a b && acc) a b true
+
+  let join_abs cond a b =
+    match cond, a, b with
+    | _, Top, _
+    | _, _, Top -> Top
+    | _, Bot, a
+    | _, a, Bot -> a
+    | _, Val a, Val b when trivial_eq a b -> Val a
+    | Val [c], Val a, Val b when List.length a = List.length b ->
+        let a = List.map (MLBDD.dand c) a in
+        let ncond = MLBDD.dnot c in
+        let b = List.map (MLBDD.dand ncond) b in
+        Val (List.map2 MLBDD.dor a b)
+    | _, Val a, Val b -> Top
+
+  let join_state cond a b =
+    let vars = Bindings.merge (fun k a b ->
+      match a, b with
+      | Some x, Some y -> Some (join_abs cond x y)
+      | Some x, _ -> Some x
+      | _, Some y -> Some y
+      | _ -> None) a.vars b.vars in
+    let ctx = MLBDD.dor a.ctx b.ctx in
+    { man = a.man ; vars ; ctx ; stmts = [] }
+
+  let wrap_bop f a b =
+    match a, b with
+    | Bot, _ 
+    | _, Bot -> Bot
+    | Top, _
+    | _, Top -> Top
+    | Val a, Val b -> Val (f a b)
+
+  let wrap_uop f a =
+    match a with
+    | Top -> Top
+    | Bot -> Bot
+    | Val a -> Val (f a)
+
+  (****************************************************************)
+  (** Boolean Prims                                               *)
+  (****************************************************************)
+
+  let and_bool = wrap_bop (fun a b ->
+    match a, b with
+    | [a], [b] -> [MLBDD.dand a b]
+    | _ -> failwith "bad bool width")
+
+  let or_bool = wrap_bop (fun a b ->
+    match a, b with
+    | [a], [b] -> [MLBDD.dor a b]
+    | _ -> failwith "bad bool width")
+
+  let not_bool = wrap_uop (fun a ->
+    match a with
+    | [a] -> [MLBDD.dnot a]
+    | _ -> failwith "bad bool width")
+
+  let eq_bool = wrap_bop (fun a b ->
+    match a, b with
+    | [a], [b] -> [MLBDD.eq a b]
+    | _ -> failwith "bad bool width")
+
+  let ne_bool = wrap_bop (fun a b ->
+    match a, b with
+    | [a], [b] -> [MLBDD.(dnot (eq a b))]
+    | _ -> failwith "bad bool width")
+
+  (****************************************************************)
+  (** Bitvector Prims                                             *)
+  (****************************************************************)
+
+  let and_bits = wrap_bop (List.map2 MLBDD.dand)
+  let or_bits = wrap_bop (List.map2 MLBDD.dor)
+  let eor_bits = wrap_bop (List.map2 MLBDD.xor)
+
+  let not_bits = wrap_uop (List.map MLBDD.dnot)
+
+  let eq_bits = wrap_bop (fun a b ->
+    let bits = List.map2 MLBDD.eq a b in
+    match bits with
+    | x::xs -> [List.fold_right MLBDD.dand xs x]
+    | _ -> failwith "bad bits width"
+  )
+  let ne_bits a b = not_bool (eq_bits a b)
+
+  let zero_extend_bits x nw st =
+    match x with
+    | Val v -> Val (List.init (nw - List.length v) (fun _ -> MLBDD.dfalse st.man) @ v)
+    | _ -> x
+
+  let sign_extend_bits x nw st =
+    match x with
+    | Val (x::xs) -> Val (List.init (nw - List.length xs - 1) (fun _ -> x) @ (x::xs))
+    | _ -> x
+
+  let append_bits = wrap_bop (@)
+
+  let rec sublist l start wd =
+    match l, start, wd with
+    | _, 0, 0 -> []
+    | x::xs, 0, n -> x::(sublist xs 0 (n-1))
+    | x::xs, n, _ -> sublist xs (n-1) wd
+    | _ -> invalid_arg "sublist"
+
+  let extract_bits e lo wd =
+    match e with
+    | Top -> Top
+    | Bot -> Bot
+    | Val v -> 
+        let start = List.length v - lo - wd in
+        Val (sublist v start wd)
+
+  (****************************************************************)
+  (** Expr Walk                                                   *)
+  (****************************************************************)
+
+  let eval_prim f tes es st = 
+    match f, tes, es with
+    | "and_bool", [], [x; y] -> and_bool x y
+    | "or_bool",  [], [x; y] -> or_bool x y
+    | "eq_enum",  [], [x; y] -> eq_bool x y
+    | "ne_enum",  [], [x; y] -> ne_bool x y
+    | "not_bool", [], [x]    -> not_bool x
+
+    | "and_bits", [w], [x; y] -> and_bits x y
+    | "or_bits",  [w], [x; y] -> or_bits  x y
+    | "not_bits", [w], [x]    -> not_bits x
+    | "eq_bits",  [w], [x; y] -> eq_bits  x y
+    | "ne_bits",  [w], [x; y] -> ne_bits  x y
+    | "eor_bits", [w], [x; y] -> eor_bits x y
+
+    | "append_bits", [w;w'], [x; y] -> append_bits x y
+
+    | "ZeroExtend", [w;Expr_LitInt nw], [x; y] ->
+        zero_extend_bits x (int_of_string nw) st
+    | "SignExtend", [w;Expr_LitInt nw], [x; y] ->
+        sign_extend_bits x (int_of_string nw) st
+
+    | "sle_bits", [w], [x; y] -> Top
+    | "add_bits", [w], [x; y] -> Top
+    | "lsr_bits", [w;w'], [x; y] -> Top
+
+    | _, _, _ -> 
+        Printf.printf "unknown prim %s\n" f;
+        Top
+
+  let rec eval_expr e st =
+    match e with
+    | Expr_Var (Ident "TRUE") -> Val ([ MLBDD.dtrue st.man ])
+    | Expr_Var (Ident "FALSE") -> Val ([ MLBDD.dfalse st.man ])
+    | Expr_LitBits b -> 
+        Val (String.fold_right (fun c acc ->
+          match c with
+          | '1' -> (MLBDD.dtrue st.man)::acc
+          | '0' -> (MLBDD.dfalse st.man)::acc
+          | _ -> acc) b [])
+    | Expr_LitInt e -> Top
+
+    | Expr_Var id -> get_var id st
+
+    (* Simply not going to track these *)
+    | Expr_Field _ -> Top
+    | Expr_Array _ -> Top
+
+    (* Prims *)
+    | Expr_TApply (FIdent (f, 0), tes, es) ->
+        let es = List.map (fun e -> eval_expr e st) es in
+        eval_prim f tes es st
+    | Expr_Slices(e, [Slice_LoWd(Expr_LitInt lo,Expr_LitInt wd)]) ->
+        let lo = int_of_string lo in
+        let wd = int_of_string wd in
+        let e = eval_expr e st in
+        extract_bits e lo wd
+    | Expr_Slices(e, [Slice_LoWd(lo,wd)]) ->
+        Top
+
+    | _ -> failwith @@ "unexpected expr: " ^ (pp_expr e)
+
+  (****************************************************************)
+  (** Stmt Walk                                                   *)
+  (****************************************************************)
+
+  let join_imps a b =
+    List.filter (fun v -> List.mem v b) a
+
+  let ctx_to_mask c =
+    let imps = MLBDD.allprime c in
+    match imps with 
+    | x::xs -> List.fold_right join_imps xs x
+    | _ -> invalid_arg "ctx_to_mask"
+
+  let clear_bits a c =
+    List.filter (fun (b,v) ->
+      if List.mem (b,v) c then false
+      else if List.mem (not b,v) c then false
+      else true) a
+
+
+  let rebuild_expr e cond st =
+    match cond with
+    | Val [cond] ->
+        let c = ctx_to_mask st.ctx in
+        let imps = MLBDD.allprime cond in
+        let imps = List.map (fun v -> clear_bits v c) imps in
+        let rebuild = List.fold_right (fun vars -> 
+          MLBDD.dor 
+          (List.fold_right (fun (b,v) -> 
+            MLBDD.(dand (if b then ithvar st.man v else dnot (ithvar st.man v)))
+          ) vars (MLBDD.dtrue st.man))
+        ) imps (MLBDD.dfalse st.man) in
+        let imps = MLBDD.allprime rebuild in
+        let masks = List.map DecoderChecks.implicant_to_mask imps in
+        (match masks with
+        | [b] ->
+          let bv = Value.to_mask Unknown (Value.from_maskLit b) in
+          sym_expr @@ sym_inmask Unknown (Exp (Expr_Var (Ident "enc"))) bv
+        | _ -> 
+            let try2 = MLBDD.dnot cond in
+            (if List.length (MLBDD.allprime try2) = 1 then
+              Printf.printf "Neg candidate %s %s\n" (pp_expr e) (Utils.pp_list DecoderChecks.implicant_to_mask (MLBDD.allprime try2))
+            else
+              Printf.printf "Can't simp %s %s\n" (pp_expr e) (Utils.pp_list (fun i -> i) masks));
+              Printf.printf "Ctx %s\n" (Utils.pp_list DecoderChecks.implicant_to_mask (MLBDD.allprime st.ctx));
+            e)
+    | _ -> 
+        Printf.printf "no value %s %s\n" (pp_expr e) (pp_abs cond);
+        e
+
+  let rec eval_stmt s st =
+    match s with
+    | Stmt_VarDeclsNoInit(t, [v], loc) ->
+        let st = add_var v Bot st in
+        write s st
+    | Stmt_VarDecl(t, v, e, loc) ->
+        let abs = eval_expr e st in
+        let st = add_var v abs st in
+        write s st
+    | Stmt_ConstDecl(t, v, e, loc) ->
+        let abs = eval_expr e st in
+        let st = add_var v abs st in
+        write s st
+    | Stmt_Assign(LExpr_Var v, e, loc) ->
+        let abs = eval_expr e st in
+        let st = add_var v abs st in
+        write s st
+
+    (* Eval the assert, attempt to discharge it & strengthen ctx *)
+    | Stmt_Assert(e, loc) ->
+        let abs = eval_expr e st in
+        if is_false abs st then st
+        else
+          let e = rebuild_expr e abs st in
+          let st = write (Stmt_Assert(e,loc)) st in
+          restrict_ctx abs st
+
+    (* State becomes bot - unreachable *)
+    | Stmt_Throw _ -> 
+        Printf.printf "%s : %s\n" (pp_stmt s) (pp_state st);
+        let st = write s st in
+        halt st
+
+    (* If we can reduce c to true/false, collapse *)
+    | Stmt_If(c, tstmts, [], fstmts, loc) ->
+        let cond = eval_expr c st in
+        if is_true cond st then  
+          eval_stmts tstmts st
+        else if is_false cond st then
+          eval_stmts fstmts st
+        else
+          let c = rebuild_expr c cond st in
+          let ncond = not_bool cond in
+          let tst = eval_stmts tstmts (restrict_ctx cond {st with stmts = []}) in
+          let fst = eval_stmts fstmts (restrict_ctx ncond {st with stmts = []}) in
+          let st' = join_state cond tst fst in
+          let st' = writeall st.stmts st' in
+          let st' = write (Stmt_If (c, tst.stmts, [], fst.stmts, loc)) st' in
+          st'
+
+    (* Can't do anything here *)
+    | Stmt_Assign _
+    | Stmt_TCall _ -> 
+        write s st
+
+    | _ -> failwith "unknown stmt"
+
+  and eval_stmts stmts st =
+    List.fold_left (fun st s -> if MLBDD.is_false st.ctx then st else eval_stmt s st) st stmts
+
+  let set_enc st =
+    let enc = Val (List.rev (List.init 32 (MLBDD.ithvar st.man))) in
+    {st with vars = Bindings.add (Ident "enc") enc st.vars}
+
+  let do_transform fn stmts reach =
+    let st = init_state reach in
+    let st = set_enc st in
+    let st' = eval_stmts stmts st in
+    st'.stmts
+
+
+  let rec split_on_bit imps =
+    if List.length imps == 0 then begin
+      Printf.printf "Dead end\n";
+      1
+    end
+    else if List.length imps == 1 then begin
+      Printf.printf "Match on %s\n" (match imps with [(k,e)] -> pprint_ident k | _ -> failwith "huh");
+      1
+    end
+    else
+      (* rank bits by the frequency with which they are constrained *)
+      let bits = List.init 32 (fun i ->
+        let freq = List.length (List.filter (fun (k,e) -> List.exists (fun (_,j) -> i = j) e) imps) in
+        (i,freq)) in
+      let max = List.fold_right (fun (i,f) (j,m) -> if f > m then (i,f) else (j,m)) bits (-1,0) in
+      if fst max == -1 then begin
+        Printf.printf "Ended up with %s\n" (Utils.pp_list (fun (k,s) -> pprint_ident k ^ ":" ^ DecoderChecks.implicant_to_mask s) imps);
+        failwith "huh"
+      end;
+      let set = List.filter (fun (k,e) -> not (List.mem (false,fst max) e)) imps in
+      let set = List.map (fun (k,e) -> (k,List.filter (fun (f,i) -> i <> fst max) e)) set in
+      let clr = List.filter (fun (k,e) -> not (List.mem (true,fst max) e)) imps in
+      let clr = List.map (fun (k,e) -> (k,List.filter (fun (f,i) -> i <> fst max) e)) clr in
+      Printf.printf "Splitting on %d, sub-lists %d %d of %d\n" (fst max) (List.length set) (List.length clr) (List.length imps);
+      if List.length set + List.length clr <> List.length imps then begin
+        Printf.printf "Duplication for %s\n" (Utils.pp_list (fun (k,s) -> pprint_ident k ^ ":" ^ DecoderChecks.implicant_to_mask s) imps);
+        1
+      end
+      else begin
+        let d1 = split_on_bit set in
+        let d2 = split_on_bit clr in
+        1 + (Int.max d1 d2)
+      end
+
+  let transform_all instrs decoder =
+    let st = DecoderChecks.do_transform decoder in
+    (* get all prim implicants for each instruction, one list *)
+    let imps = Bindings.fold (fun k e acc ->
+      let imps = MLBDD.allprime e in
+      let entries = List.map (fun e -> (k,e)) imps in
+      acc@entries) st.instrs [] in
+
+    let res = split_on_bit imps in
+
+    Printf.printf "Max depth of %d\n" res;
+
+
+    Bindings.mapi (fun nm fnsig ->
+      let i = match nm with FIdent(s,_) -> Ident s | s -> s in
+      match Bindings.find_opt i st.instrs with
+      | Some reach -> fnsig_upd_body (fun b -> do_transform nm b reach) fnsig
+      | None -> fnsig) instrs
+
+end
