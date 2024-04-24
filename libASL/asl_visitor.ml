@@ -24,6 +24,7 @@ open Visitor
 
 class type aslVisitor = object
 
+    method vloc      : l              -> l              visitAction
     method vvar      : ident          -> ident          visitAction
     method ve_elsif  : e_elsif        -> e_elsif        visitAction
     method vslice    : slice          -> slice          visitAction
@@ -64,6 +65,19 @@ end
     only reconstructing the constructor if the sub-values are
     different.
  *)
+
+let rec visit_loc (vis: #aslVisitor) (x: l): l =
+    let aux (vis: #aslVisitor) (x: l): l =
+        (match x with
+        | Unknown | Range _ | Int (_,None) -> x
+        | Generated (loc) ->
+            let loc' = visit_loc vis loc in
+            if loc == loc' then x else Generated loc'
+        | Int (str,Some loc) ->
+            let loc' = visit_loc vis loc in
+            if loc == loc' then x else Int (str, Some loc')
+        ) in
+    doVisit vis (vis#vloc x) aux x
 
 let rec visit_exprs (vis: #aslVisitor) (xs: expr list): expr list =
         mapNoCopy (visit_expr vis) xs
@@ -307,85 +321,118 @@ let rec visit_stmts (vis: #aslVisitor) (xs: stmt list): stmt list =
             | Stmt_VarDeclsNoInit (ty, vs, loc) ->
                     let ty' = visit_type vis ty in
                     let vs' = mapNoCopy (visit_lvar vis) vs in
-                    if ty == ty' && vs == vs' then x else Stmt_VarDeclsNoInit (ty', vs', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && vs == vs' && loc == loc' then x else Stmt_VarDeclsNoInit (ty', vs', loc')
             | Stmt_VarDecl (ty, v, i, loc) ->
                     let ty' = visit_type vis ty in
                     let v' = visit_lvar vis v in
                     let i' = visit_expr vis i in
-                    if ty == ty' && v == v' && i == i'  then x else Stmt_VarDecl (ty', v', i', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && v == v' && i == i'  && loc == loc' then x else Stmt_VarDecl (ty', v', i', loc')
             | Stmt_ConstDecl (ty, v, i, loc) ->
                     let ty' = visit_type vis ty in
                     let v' = visit_lvar vis v in
                     let i' = visit_expr vis i in
-                    if ty == ty' && v == v' && i == i' then x else Stmt_ConstDecl (ty', v', i', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && v == v' && i == i' && loc == loc' then x else Stmt_ConstDecl (ty', v', i', loc')
             | Stmt_Assign (l, r, loc) ->
                     let l' = visit_lexpr vis l in
                     let r' = visit_expr vis r in
-                    if l == l' && r == r' then x else Stmt_Assign (l', r', loc)
+                    let loc' = visit_loc vis loc in
+                    if l == l' && r == r' && loc == loc' then x else Stmt_Assign (l', r', loc')
             | Stmt_TCall (f, tes, args, loc) ->
                     let f'    = visit_var vis f in
                     let tes'  = visit_exprs vis tes in
                     let args' = visit_exprs vis args in
-                    if f == f' && tes == tes' && args == args' then x else Stmt_TCall (f', tes', args', loc)
+                    let loc' = visit_loc vis loc in
+                    if f == f' && tes == tes' && args == args' && loc == loc' then x else Stmt_TCall (f', tes', args', loc')
             | Stmt_FunReturn (e, loc) ->
                     let e' = visit_expr vis e in
-                    if e == e' then x else Stmt_FunReturn (e', loc)
-            | Stmt_ProcReturn (_) -> x
+                    let loc' = visit_loc vis loc in
+                    if e == e' && loc == loc' then x else Stmt_FunReturn (e', loc')
+            | Stmt_ProcReturn (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else Stmt_ProcReturn loc'
             | Stmt_Assert (e, loc) ->
                     let e' = visit_expr vis e in
-                    if e == e' then x else Stmt_Assert (e', loc)
-            | Stmt_Unpred (_) -> x
-            | Stmt_ConstrainedUnpred(_) -> x
+                    let loc' = visit_loc vis loc in
+                    if e == e' && loc == loc' then x else Stmt_Assert (e', loc')
+            | Stmt_Unpred (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else Stmt_Unpred loc'
+            | Stmt_ConstrainedUnpred (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else Stmt_ConstrainedUnpred loc'
             | Stmt_ImpDef (v, loc) ->
                     let v' = visit_var vis v in
-                    if v == v' then x else Stmt_ImpDef (v', loc)
-            | Stmt_Undefined (_) -> x
-            | Stmt_ExceptionTaken (_) -> x
-            | Stmt_Dep_Unpred (_) -> x
-            | Stmt_Dep_ImpDef (_, _) -> x
-            | Stmt_Dep_Undefined (_) -> x
+                    let loc' = visit_loc vis loc in
+                    if v == v' && loc == loc' then x else Stmt_ImpDef (v', loc')
+            | Stmt_Undefined (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else Stmt_Undefined loc'
+            | Stmt_ExceptionTaken (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else Stmt_ExceptionTaken loc'
+            | Stmt_Dep_Unpred (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else Stmt_Dep_Unpred loc'
+            | Stmt_Dep_ImpDef (imp, loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else Stmt_Dep_ImpDef (imp, loc')
+            | Stmt_Dep_Undefined (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else Stmt_Dep_Undefined loc'
             | Stmt_See (e, loc) ->
                     let e' = visit_expr vis e in
-                    if e == e' then x else Stmt_See (e', loc)
+                    let loc' = visit_loc vis loc in
+                    if e == e' && loc == loc' then x else Stmt_See (e', loc')
             | Stmt_Throw (v, loc) ->
                     let v' = visit_var vis v in
-                    if v == v' then x else Stmt_Throw (v', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && loc == loc' then x else Stmt_Throw (v', loc')
             | Stmt_DecodeExecute (i, e, loc) ->
                     let e' = visit_expr vis e in
-                    if e == e' then x else Stmt_DecodeExecute (i, e', loc)
+                    let loc' = visit_loc vis loc in
+                    if e == e' && loc == loc' then x else Stmt_DecodeExecute (i, e', loc')
             | Stmt_If (c, t, els, e, loc) ->
                     let c'   = visit_expr vis c in
                     let t'   = visit_stmts vis t in
                     let els' = mapNoCopy (visit_s_elsif vis) els in
                     let e'   = visit_stmts vis e in
-                    if c == c' && t == t' && els == els' && e == e' then x else Stmt_If (c', t', els', e', loc)
+                    let loc' = visit_loc vis loc in
+                    if c == c' && t == t' && els == els' && e == e' && loc == loc' then x else Stmt_If (c', t', els', e', loc')
             | Stmt_Case (e, alts, ob, loc) ->
                     let e'    = visit_expr vis e in
                     let alts' = mapNoCopy (visit_alt vis) alts in
                     let ob'   = mapOptionNoCopy (visit_stmts vis) ob in
-                    if e == e' && alts == alts' && ob == ob' then x else Stmt_Case (e', alts', ob', loc)
+                    let loc' = visit_loc vis loc in
+                    if e == e' && alts == alts' && ob == ob' && loc == loc' then x else Stmt_Case (e', alts', ob', loc')
             | Stmt_For (v, f, dir, t, b, loc) ->
                     let v' = visit_lvar vis v in
                     let f' = visit_expr vis f in
                     let t' = visit_expr vis t in
                     let ty_v' = (Type_Constructor(Ident "integer"), v') in
                     let b' = with_locals [ty_v'] vis visit_stmts b in
-                    if v == v' && f == f' && t == t' && b == b' then x else Stmt_For (v', f', dir, t', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && f == f' && t == t' && b == b' && loc == loc' then x else Stmt_For (v', f', dir, t', b', loc')
             | Stmt_While (c, b, loc) ->
                     let c' = visit_expr vis c in
                     let b' = visit_stmts vis b in
-                    if c == c' && b == b' then x else Stmt_While (c', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if c == c' && b == b' && loc == loc' then x else Stmt_While (c', b', loc')
             | Stmt_Repeat (b, c, loc) ->
                     let b' = visit_stmts vis b in
                     let c' = visit_expr vis c in
-                    if b == b' && c == c' then x else Stmt_Repeat (b', c', loc)
+                    let loc' = visit_loc vis loc in
+                    if b == b' && c == c' && loc == loc' then x else Stmt_Repeat (b', c', loc')
             | Stmt_Try (b, v, cs, ob, loc) ->
                     let b'  = visit_stmts vis b in
                     let v'  = visit_lvar vis v in
                     let ty_v' = (Type_Constructor(Ident "__Exception"), v') in
                     let cs' = mapNoCopy (with_locals [ty_v'] vis visit_catcher) cs in
                     let ob' = mapOptionNoCopy (with_locals [ty_v'] vis visit_stmts) ob in
-                    if b == b' && v == v' && cs == cs' && ob == ob' then x else Stmt_Try (b', v', cs', ob', loc)
+                    let loc' = visit_loc vis loc in
+                    if b == b' && v == v' && cs == cs' && ob == ob' && loc == loc' then x else Stmt_Try (b', v', cs', ob', loc')
 
             )
         in
@@ -471,7 +518,8 @@ let visit_encoding (vis: #aslVisitor) (x: encoding): encoding =
             | Encoding_Block (nm, iset, fs, op, e, ups, b, loc) ->
                     let e' = visit_expr vis e in
                     let b' = visit_stmts vis b in
-                    if e == e' && b == b' then x else Encoding_Block (nm, iset, fs, op, e, ups, b', loc)
+                    let loc' = visit_loc vis loc in
+                    if e == e' && b == b' && loc == loc' then x else Encoding_Block (nm, iset, fs, op, e, ups, b', loc')
             )
         in
         doVisit vis (vis#vencoding x) aux x
@@ -481,7 +529,8 @@ let rec visit_decode_case (vis: #aslVisitor) (x: decode_case): decode_case =
             (match x with
             | DecoderCase_Case (ss, alts, loc) ->
                     let alts' = mapNoCopy (visit_decode_alt vis) alts in
-                    if alts == alts' then x else DecoderCase_Case (ss, alts', loc)
+                    let loc' = visit_loc vis loc in
+                    if alts == alts' && loc == loc' then x else DecoderCase_Case (ss, alts', loc')
             )
         in
         doVisit vis (vis#vdcase x) aux x
@@ -501,13 +550,22 @@ let rec visit_decode_case (vis: #aslVisitor) (x: decode_case): decode_case =
     and visit_decode_body (vis: #aslVisitor) (x: decode_body): decode_body =
         let aux (vis: #aslVisitor) (x: decode_body): decode_body =
             (match x with
-            | DecoderBody_UNPRED   _ -> x
-            | DecoderBody_UNALLOC  _ -> x
-            | DecoderBody_NOP      _ -> x
-            | DecoderBody_Encoding _ -> x
+            | DecoderBody_UNPRED   (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else DecoderBody_UNPRED loc'
+            | DecoderBody_UNALLOC  (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else DecoderBody_UNALLOC loc'
+            | DecoderBody_NOP      (loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else DecoderBody_NOP loc'
+            | DecoderBody_Encoding (body,loc) ->
+                    let loc' = visit_loc vis loc in
+                    if loc == loc' then x else DecoderBody_Encoding (body,loc')
             | DecoderBody_Decoder (fs, c, loc) ->
                     let c' = visit_decode_case vis c in
-                    if c == c' then x else DecoderBody_Decoder (fs, c', loc)
+                    let loc' = visit_loc vis loc in
+                    if c == c' && loc == loc' then x else DecoderBody_Decoder (fs, c', loc')
             )
         in
         doVisit vis (vis#vdbody x) aux x
@@ -540,112 +598,131 @@ let visit_decl (vis: #aslVisitor) (x: declaration): declaration =
             (match x with
             | Decl_BuiltinType (v, loc) ->
                     let v'  = visit_var vis v in
-                    if v == v' then x else
-                    Decl_BuiltinType (v', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && loc == loc' then x else
+                    Decl_BuiltinType (v', loc')
             | Decl_Forward (v, loc) ->
                     let v'  = visit_var vis v in
-                    if v == v' then x else
-                    Decl_Forward (v', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && loc == loc' then x else
+                    Decl_Forward (v', loc')
             | Decl_Record (v, fs, loc) ->
                     let v'  = visit_var vis v in
                     let fs' = visit_args vis fs in
-                    if v == v' && fs == fs' then x else
-                    Decl_Record (v', fs', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && fs == fs' && loc == loc' then x else
+                    Decl_Record (v', fs', loc')
             | Decl_Typedef (v, ty, loc) ->
                     let v'  = visit_var vis v in
                     let ty' = visit_type vis ty in
-                    if v == v' && ty == ty' then x else
-                    Decl_Typedef (v', ty', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && ty == ty' && loc == loc' then x else
+                    Decl_Typedef (v', ty', loc')
             | Decl_Enum (v, es, loc) ->
                     let v'  = visit_var vis v in
                     let es' = mapNoCopy (visit_var vis) es in
-                    if v == v' && es == es' then x else
-                    Decl_Enum (v', es', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && es == es' && loc == loc' then x else
+                    Decl_Enum (v', es', loc')
             | Decl_Var (ty, v, loc) ->
                     let ty' = visit_type vis ty in
                     let v'  = visit_var vis v in
-                    if ty == ty' && v == v' then x else
-                    Decl_Var (ty', v', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && v == v' && loc == loc' then x else
+                    Decl_Var (ty', v', loc')
             | Decl_Const (ty, v, e, loc) ->
                     let ty' = visit_type vis ty in
                     let v'  = visit_var vis v in
                     let e'  = visit_expr vis e in
-                    if ty == ty' && v == v' && e == e' then x else
-                    Decl_Const (ty', v', e', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && v == v' && e == e' && loc == loc' then x else
+                    Decl_Const (ty', v', e', loc')
             | Decl_BuiltinFunction (ty, f, args, loc) ->
                     let ty'   = visit_type vis ty in
                     let f'    = visit_var vis f in
                     let args' = visit_args vis args in
-                    if ty == ty' && f == f' && args == args' then x else
-                    Decl_BuiltinFunction (ty', f', args', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && f == f' && args == args' && loc == loc' then x else
+                    Decl_BuiltinFunction (ty', f', args', loc')
             | Decl_FunType (ty, f, args, loc) ->
                     let ty'   = visit_type vis ty in
                     let f'    = visit_var vis f in
                     let args' = visit_args vis args in
-                    if ty == ty' && f == f' && args == args' then x else
-                    Decl_FunType (ty', f', args', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && f == f' && args == args' && loc == loc' then x else
+                    Decl_FunType (ty', f', args', loc')
             | Decl_FunDefn (ty, f, args, b, loc) ->
                     let ty'   = visit_type vis ty in
                     let f'    = visit_var vis f in
                     let args' = visit_args vis args in
                     let b'    = with_locals args' vis visit_stmts b in
-                    if ty == ty' && f == f' && args == args' && b == b' then x else
-                    Decl_FunDefn (ty', f', args', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && f == f' && args == args' && b == b' && loc == loc' then x else
+                    Decl_FunDefn (ty', f', args', b', loc')
             | Decl_ProcType (f, args, loc) ->
                     let f'    = visit_var vis f in
                     let args' = visit_args vis args in
-                    if f == f' && args == args' then x else
-                    Decl_ProcType (f', args', loc)
+                    let loc' = visit_loc vis loc in
+                    if f == f' && args == args' && loc == loc' then x else
+                    Decl_ProcType (f', args', loc')
             | Decl_ProcDefn (f, args, b, loc) ->
                     let f'    = visit_var vis f in
                     let args' = visit_args vis args in
                     let b'    = with_locals args' vis visit_stmts b in
-                    if f == f' && args == args' && b == b' then x else
-                    Decl_ProcDefn (f', args', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if f == f' && args == args' && b == b' && loc == loc' then x else
+                    Decl_ProcDefn (f', args', b', loc')
             | Decl_VarGetterType (ty, f, loc) ->
                     let ty' = visit_type vis ty in
                     let f'  = visit_var vis f in
-                    if ty == ty' && f == f' then x else
-                    Decl_VarGetterType (ty', f', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && f == f' && loc == loc' then x else
+                    Decl_VarGetterType (ty', f', loc')
             | Decl_VarGetterDefn (ty, f, b, loc) ->
                     let ty' = visit_type vis ty in
                     let f'  = visit_var vis f in
                     let b'  = visit_stmts vis b in
-                    if ty == ty' && f == f' && b == b' then x else
-                    Decl_VarGetterDefn (ty', f', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && f == f' && b == b' && loc == loc' then x else
+                    Decl_VarGetterDefn (ty', f', b', loc')
             | Decl_ArrayGetterType (ty, f, args, loc) ->
                     let ty'   = visit_type vis ty in
                     let f'    = visit_var vis f in
                     let args' = visit_args vis args in
-                    if ty == ty' && f == f' && args == args' then x else
-                    Decl_ArrayGetterType (ty', f', args', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && f == f' && args == args' && loc == loc' then x else
+                    Decl_ArrayGetterType (ty', f', args', loc')
             | Decl_ArrayGetterDefn (ty, f, args, b, loc) ->
                     let ty'   = visit_type vis ty in
                     let f'    = visit_var vis f in
                     let args' = visit_args vis args in
                     let b'    = with_locals args' vis visit_stmts b in
-                    if ty == ty' && f == f' && args == args' && b == b' then x else
-                    Decl_ArrayGetterDefn (ty', f', args', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && f == f' && args == args' && b == b' && loc == loc' then x else
+                    Decl_ArrayGetterDefn (ty', f', args', b', loc')
             | Decl_VarSetterType (f, ty, v, loc) ->
                     let f'  = visit_var vis f in
                     let ty' = visit_type vis ty in
                     let v'  = visit_var vis v in
-                    if f == f' && ty == ty' && v == v' then x else
-                    Decl_VarSetterType (f', ty', v', loc)
+                    let loc' = visit_loc vis loc in
+                    if f == f' && ty == ty' && v == v' && loc == loc' then x else
+                    Decl_VarSetterType (f', ty', v', loc')
             | Decl_VarSetterDefn (f, ty, v, b, loc) ->
                     let f'  = visit_var vis f in
                     let ty' = visit_type vis ty in
                     let v'  = visit_var vis v in
                     let b'  = with_locals [(ty', v')] vis visit_stmts b in
-                    if f == f' && ty == ty' && v == v' && b == b' then x else
-                    Decl_VarSetterDefn (f', ty', v', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if f == f' && ty == ty' && v == v' && b == b' && loc == loc' then x else
+                    Decl_VarSetterDefn (f', ty', v', b', loc')
             | Decl_ArraySetterType (f, args, ty, v, loc) ->
                     let f'    = visit_var vis f in
                     let args' = mapNoCopy (visit_sformal vis) args in
                     let ty'   = visit_type vis ty in
                     let v'    = visit_var vis v in
-                    if f == f' && args == args' && ty == ty' && v == v' then x else
-                    Decl_ArraySetterType (f', args', ty', v', loc)
+                    let loc' = visit_loc vis loc in
+                    if f == f' && args == args' && ty == ty' && v == v' && loc == loc' then x else
+                    Decl_ArraySetterType (f', args', ty', v', loc')
             | Decl_ArraySetterDefn (f, args, ty, v, b, loc) ->
                     let f'    = visit_var vis f in
                     let args' = mapNoCopy (visit_sformal vis) args in
@@ -653,59 +730,69 @@ let visit_decl (vis: #aslVisitor) (x: declaration): declaration =
                     let v'    = visit_var vis v in
                     let lvars = List.map arg_of_sformal args' @ [(ty', v')] in
                     let b'    = with_locals lvars vis visit_stmts b in
-                    if f == f' && args == args' && ty == ty' && v == v' && b == b' then x else
-                    Decl_ArraySetterDefn (f', args', ty', v', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if f == f' && args == args' && ty == ty' && v == v' && b == b' && loc == loc' then x else
+                    Decl_ArraySetterDefn (f', args', ty', v', b', loc')
             | Decl_InstructionDefn (d, es, opd, c, ex, loc) ->
                     let d'    = visit_var vis d in
                     let es'   = mapNoCopy (visit_encoding vis) es in
                     let lvars = List.concat (List.map args_of_encoding es) in
                     let opd'  = mapOptionNoCopy (with_locals lvars vis visit_stmts) opd in
                     let ex'   = with_locals lvars vis visit_stmts ex in
-                    if d == d' && es == es' && opd == opd' && ex == ex' then x else
-                    Decl_InstructionDefn (d', es', opd', c, ex', loc)
+                    let loc' = visit_loc vis loc in
+                    if d == d' && es == es' && opd == opd' && ex == ex' && loc == loc' then x else
+                    Decl_InstructionDefn (d', es', opd', c, ex', loc')
             | Decl_DecoderDefn (d, dc, loc) ->
                     let d'  = visit_var vis d in
                     let dc' = visit_decode_case vis dc in
-                    if d == d' && dc == dc' then x else
-                    Decl_DecoderDefn (d', dc', loc)
+                    let loc' = visit_loc vis loc in
+                    if d == d' && dc == dc' && loc == loc' then x else
+                    Decl_DecoderDefn (d', dc', loc')
             | Decl_Operator1 (op, vs, loc) ->
                     let vs' = mapNoCopy (visit_var vis) vs in
-                    if vs == vs' then x else
-                    Decl_Operator1 (op, vs', loc)
+                    let loc' = visit_loc vis loc in
+                    if vs == vs' && loc == loc' then x else
+                    Decl_Operator1 (op, vs', loc')
             | Decl_Operator2 (op, vs, loc) ->
                     let vs' = mapNoCopy (visit_var vis) vs in
-                    if vs == vs' then x else
-                    Decl_Operator2 (op, vs', loc)
+                    let loc' = visit_loc vis loc in
+                    if vs == vs' && loc == loc' then x else
+                    Decl_Operator2 (op, vs', loc')
             | Decl_NewEventDefn(v, args, loc) ->
                     let v'    = visit_var vis v in
                     let args' = visit_args vis args in
-                    if v == v' && args == args' then x else
-                    Decl_NewEventDefn(v', args', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && args == args' && loc == loc' then x else
+                    Decl_NewEventDefn(v', args', loc')
             | Decl_EventClause(v, b, loc) ->
                     let v'  = visit_var vis v in
                     let b'  = visit_stmts vis b in
-                    if v == v' && b == b' then x else
-                    Decl_EventClause(v', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && b == b' && loc == loc' then x else
+                    Decl_EventClause(v', b', loc')
             | Decl_NewMapDefn(ty, v, args, b, loc) ->
                     let ty'   = visit_type vis ty in
                     let v'    = visit_var vis v in
                     let args' = visit_args vis args in
                     let b'    = with_locals args' vis visit_stmts b in
-                    if v == v' && args == args' && b == b' then x else
-                    Decl_NewMapDefn(ty', v', args', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && args == args' && b == b' && loc == loc' then x else
+                    Decl_NewMapDefn(ty', v', args', b', loc')
             | Decl_MapClause(v, fs, oc, b, loc) ->
                     let v'  = visit_var vis v in
                     let fs' = mapNoCopy (visit_mapfield vis) fs in
                     let oc' = mapOptionNoCopy (visit_expr vis) oc in
                     let b'  = visit_stmts vis b in
-                    if v == v' && fs == fs' && oc == oc' && b == b' then x else
-                    Decl_MapClause(v', fs', oc', b', loc)
+                    let loc' = visit_loc vis loc in
+                    if v == v' && fs == fs' && oc == oc' && b == b' && loc == loc' then x else
+                    Decl_MapClause(v', fs', oc', b', loc')
             | Decl_Config(ty, v, e, loc) ->
                     let ty' = visit_type vis ty in
                     let v'  = visit_var vis v in
                     let e'  = visit_expr vis e in
-                    if ty == ty' && v == v' && e == e' then x else
-                    Decl_Config(ty', v', e', loc)
+                    let loc' = visit_loc vis loc in
+                    if ty == ty' && v == v' && e == e' && loc == loc' then x else
+                    Decl_Config(ty', v', e', loc')
             )
 
         in
@@ -724,6 +811,7 @@ let visit_decl (vis: #aslVisitor) (x: declaration): declaration =
 
 class nopAslVisitor : aslVisitor = object
 
+    method vloc      (_: l)              = DoChildren
     method vvar      (_: ident)          = DoChildren
     method ve_elsif  (_: e_elsif)        = DoChildren
     method vslice    (_: slice)          = DoChildren

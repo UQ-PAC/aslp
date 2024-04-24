@@ -65,6 +65,13 @@ let to_sorted_list (s: IdentSet.t): ident list =
 let bindings_domain (b: 'a Bindings.t): IdentSet.t =
   Bindings.fold (fun k _ -> IdentSet.add k) b IdentSet.empty
 
+module Loc = struct
+  type t = Asl_ast.l
+  let compare = compare
+end
+
+module LocationSet = Set.Make(Loc)
+
 (****************************************************************)
 (** {2 Equivalence classes}                                     *)
 (****************************************************************)
