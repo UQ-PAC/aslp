@@ -17,6 +17,8 @@ open Asl_visitor
 (** {2 Bindings and IdentSet}                                   *)
 (****************************************************************)
 
+type fun_sig = (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)
+
 (** {2 Bindings: maps indexed by identifiers} *)
 module Bindings = Map.Make(AST.Id)
 
@@ -475,6 +477,18 @@ class replaceExprClass (replace: expr -> expr option) = object
         )
 end
 
+(** Statement transformation class
+
+    Applies replace function to any substatement.               *)
+class replaceStmtClass (replace: stmt -> stmt option) = object
+    inherit nopAslVisitor
+    method! vstmt x =
+        (match replace x with
+        | Some r -> ChangeTo [r]
+        | None -> DoChildren
+        )
+end
+
 (****************************************************************)
 (** {2 Resugaring}                                              *)
 (****************************************************************)
@@ -529,6 +543,19 @@ let pp_decode_alt (DecoderAlt_Alt(ps, _): decode_alt) = "when (" ^ String.concat
 let pp_decode_case (DecoderCase_Case(slices,_,_): decode_case) = "case (" ^ String.concat ", " (List.map pp_decode_slice slices) ^ ")"
 
 let pp_instr_field (IField_Field(name,_,_)) = pprint_ident name
+
+let pp_fun_sig (nm: ident) ((rty, formals, _, _, l, stmts): fun_sig) =
+    let pp_formal (t,n) = pp_type t ^ " " ^ pprint_ident n in
+    let formals = String.concat ", " (List.map pp_formal formals) in
+    let stmts = String.concat "\n  " (List.map pp_stmt stmts) in
+    Printf.sprintf "%s(%s)\n  %s\n"
+        (pprint_ident nm)
+        formals
+        stmts
+
+
+
+
 
 
 (****************************************************************)

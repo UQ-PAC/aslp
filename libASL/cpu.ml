@@ -13,7 +13,7 @@ type gen_backend =
     | Ocaml
     | Cpp
 
-type gen_function = AST.ident -> Eval.fun_sig -> Eval.fun_sig Bindings.t -> Eval.fun_sig Bindings.t -> string -> unit
+type gen_function = AST.ident -> Asl_utils.fun_sig -> Asl_utils.fun_sig Bindings.t -> Asl_utils.fun_sig Bindings.t -> string -> unit
 
 type cpu = {
     env      : Eval.Env.t;
@@ -58,9 +58,13 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
     and sem (iset: string) (opcode: Primops.bigint): unit =
         let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
         let decoder = Eval.Env.getDecoder env (Ident iset) in
+        let stmts = (Dis.dis_decode_entry env denv decoder op) in
         List.iter
             (fun s -> Printf.printf "%s\n" (pp_stmt s))
-            (Dis.dis_decode_entry env denv decoder op)
+            stmts;
+        ignore @@ Transforms.TailCallSplitting.run stmts
+
+            
 
     and gen (iset: string) (pat: string) (backend: gen_backend) (dir: string): unit =
         if not (Sys.file_exists dir) then failwith ("Can't find target dir " ^ dir);

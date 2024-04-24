@@ -377,7 +377,7 @@ module DisEnv = struct
         } in
         ((),s,empty)
 
-    let getFun (loc: l) (x: ident): Eval.fun_sig option rws =
+    let getFun (loc: l) (x: ident): fun_sig option rws =
         reads (fun env -> Eval.Env.getFunOpt loc env x)
 
     let nextVarName (prefix: string): ident rws = fun env s ->

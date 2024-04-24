@@ -83,12 +83,9 @@ let copy_scope (s: scope): scope =
     in
     { bs = Bindings.map copy_ram s.bs }
 
-
 (****************************************************************)
 (** {2 Mutable bindings}                                        *)
 (****************************************************************)
-
-type fun_sig = (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)
 
 (** Environment representing both global and local state of the system *)
 module Env : sig

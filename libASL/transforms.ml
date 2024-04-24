@@ -1820,14 +1820,51 @@ end
 module TailCallSplitting = struct
 
   let max_expr_size = 8
-  let max_stmt_size = 5
+  let max_stmt_size = 10
 
+  (** handles early returns occuring within split functions.
+      functions created by splitting return a tuple (is_early, retval)
+      where is_early indicates to the caller whether it should return immediately
+      after the subfunctions. *)
+  let replace_early_returns (stmts: stmt list) =
+    let repl =
+      function
+        | Stmt_FunReturn (e,l) -> Some (Stmt_FunReturn (Expr_Tuple [expr_true; e], l))
+        | Stmt_ProcReturn (l) -> Some (Stmt_FunReturn (Expr_Tuple [expr_true; Expr_Tuple []], l))
+        | _ -> None
+    in
+    visit_stmts (new replaceStmtClass repl) stmts
+    @ [Stmt_FunReturn (Expr_Tuple [expr_false; Expr_Tuple []], Generated Unknown)]
 
-  class expr_splitter = object (this)
+  class splitter (fname: string) = object (this)
+
+    val mutable created : Asl_utils.fun_sig Bindings.t = Bindings.empty
+
+    method do_split ~(prefix: string) ~(handle_returns: bool) (rty: ty) (stmts: stmt list) =
+      let fvs = List.of_seq @@ IdentSet.to_seq @@ fv_stmts stmts in
+      let formals = List.map (fun x -> (type_unknown, x)) @@ List.sort Id.compare fvs in
+      let actuals = List.map (fun (_,v) -> Expr_Var v) formals in
+
+      let stmts = if handle_returns then replace_early_returns stmts else stmts in
+      let rty = if handle_returns then Type_Tuple [type_bool; rty] else rty in
+
+      let fn' : Asl_utils.fun_sig = (Some rty, formals, [], [], Generated Unknown, stmts) in
+      let fname' = Ident (fname ^ "_" ^ prefix ^ "_" ^ string_of_int (Bindings.cardinal created)) in
+      created <- Bindings.add fname' fn' created;
+      (fname', rty, fn', formals, actuals)
+
+    method split_expr rty e =
+      this#do_split ~prefix:"expr" ~handle_returns:false (rty) [Stmt_FunReturn (e, Generated Unknown)]
+    method split_stmt s =
+      this#do_split ~prefix:"stmt" ~handle_returns:true (Type_Tuple []) s
+
+    method get_created () = created
+  end
+
+  class expr_splitter (splitter : #splitter) = object
     inherit nopAslVisitor
 
-    val mutable size: int = 0
-    val mutable created = []
+    val mutable size = 0
 
     method! vstmt _ = failwith "expr_splitter should not visit statements."
     method! vexpr = function
@@ -1837,14 +1874,59 @@ module TailCallSplitting = struct
         (match infer_type e with
         | _ when size < max_expr_size -> e
         | None -> e
-        | Some ty -> e
-            (* let fvs = fv_expr e in *)
-            (* let fn' : Eval.fun_sig = (Some ty,2,3,4,5,6) in *)
-          (* created <-  *)
-
-            )
-  )
-
+        | Some ty ->
+            size <- 0;
+            let (fname', rty, fn', formals, actuals) = splitter#split_expr ty e in
+            Expr_TApply (fname', [], actuals)))
   end
+
+  (* MUST be used with backwards visitor! *)
+  class stmt_splitter (splitter : #splitter) = object
+    inherit nopAslVisitor
+
+    val mutable size = 0
+    val mutable stmts : stmt list = []
+
+    method! vstmt = function
+      | s -> ChangeDoChildrenPost ([s], fun s ->
+        size <- size + List.length s;
+        stmts <- List.rev s @ stmts;
+        if size < max_stmt_size then s
+        else begin
+          size <- 0;
+          let (fname', tys, fn', formals, actuals) = splitter#split_stmt (List.rev stmts) in
+          (* stmts <- []; *)
+          match tys with
+          | Type_Tuple tys ->
+            let vars = List.mapi (fun i ty -> (ty, Ident (pprint_ident fname' ^ "_" ^ string_of_int i))) tys in
+            let decls = List.map (fun (ty,name) -> Stmt_VarDeclsNoInit (ty, [name], Generated Unknown)) vars in
+            let earlyretvar = Expr_Var (snd @@ List.nth vars 0) in
+            stmts <- decls @ [
+              Stmt_Assign(
+                LExpr_Tuple(List.map (fun (_,nm) -> LExpr_Var nm) vars),
+                Expr_TApply(fname', [], actuals),
+                Generated Unknown);
+              Stmt_If(earlyretvar,
+                [Stmt_ProcReturn (Generated Unknown)], [], [], Generated Unknown)
+            ];
+            stmts
+          | _ -> failwith "a"
+        end)
+    method! vexpr e = ChangeTo (visit_expr (new expr_splitter splitter) e)
+
+    (* method! enter_scope vars = assert (stmts = []) *)
+    method! leave_scope () = stmts <- []
+  end
+
+  let run (stmts: stmt list) =
+    let splitter = new splitter "boop" in
+    let vis = new aslBackwardsVisitor (new stmt_splitter splitter) in
+    let stmts = vis#visit_stmts stmts in
+    let created = splitter#get_created () in
+    print_endline "TAIL CALL SPLITTING";
+    Bindings.iter (fun nm fn -> print_endline @@ Asl_utils.pp_fun_sig nm fn) created;
+    print_endline ">>>";
+    List.iter (fun x -> print_endline @@ pp_stmt x) stmts;
+    (stmts, created)
 
 end

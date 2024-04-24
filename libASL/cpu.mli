@@ -9,7 +9,7 @@ type gen_backend =
     | Ocaml
     | Cpp
 
-type gen_function = Asl_ast.ident -> Eval.fun_sig -> Eval.fun_sig Asl_utils.Bindings.t -> Eval.fun_sig Asl_utils.Bindings.t -> string -> unit
+type gen_function = Asl_ast.ident -> Asl_utils.fun_sig -> Asl_utils.fun_sig Asl_utils.Bindings.t -> Asl_utils.fun_sig Asl_utils.Bindings.t -> string -> unit
 
 type cpu = {
     env      : Eval.Env.t;
