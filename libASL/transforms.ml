@@ -1786,13 +1786,14 @@ module FixRedefinitions = struct
             this#add_bind b; DoChildren
         | Stmt_If (c, t, els, e, loc) ->
             let c'   = visit_expr this c in
-            this#push_scope () ;
+    (* Don't push or pop scopes anymore so that variables are also unique across branches *)
+            (*this#push_scope () ; *)
             let t'   = visit_stmts this t in
-            this#pop_scope (); this#push_scope () ;
+            (*this#pop_scope (); this#push_scope () ; *)
             let els' = mapNoCopy (visit_s_elsif this ) els in
-            this#pop_scope (); this#push_scope () ;
+            (*this#pop_scope (); this#push_scope () ; *)
             let e'   = visit_stmts this e in
-            this#pop_scope ();
+            (*this#pop_scope (); *)
             ChangeTo (Stmt_If (c', t', els', e', loc))
         (* Statements with child scopes that shouldn't appear towards the end of transform pipeline *)
         | Stmt_Case _ -> failwith "(FixRedefinitions) case not expected"
@@ -2053,7 +2054,9 @@ module DecoderChecks = struct
 
 end
 
+
 module BDDSimp = struct
+
   type abs = 
     Top |
     Val of MLBDD.t list |
@@ -2360,23 +2363,31 @@ module BDDSimp = struct
         Printf.printf "no value %s %s\n" (pp_expr e) (pp_abs cond);
         e
 
-  let rec eval_stmt s st =
+
+  class nopvis = object(self) 
+    method xf_stmt (x:stmt) (st:state) = x 
+  end
+
+  let nop_transform = new nopvis
+
+  let rec eval_stmt xf s st =
+    let ns = xf#xf_stmt s st in
     match s with
     | Stmt_VarDeclsNoInit(t, [v], loc) ->
         let st = add_var v Bot st in
-        write s st
+        write ns st
     | Stmt_VarDecl(t, v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        write s st
+        write ns st
     | Stmt_ConstDecl(t, v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        write s st
+        write ns st
     | Stmt_Assign(LExpr_Var v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        write s st
+        write ns st
 
     (* Eval the assert, attempt to discharge it & strengthen ctx *)
     | Stmt_Assert(e, loc) ->
@@ -2390,21 +2401,21 @@ module BDDSimp = struct
     (* State becomes bot - unreachable *)
     | Stmt_Throw _ -> 
         Printf.printf "%s : %s\n" (pp_stmt s) (pp_state st);
-        let st = write s st in
+        let st = write ns st in
         halt st
 
     (* If we can reduce c to true/false, collapse *)
     | Stmt_If(c, tstmts, [], fstmts, loc) ->
         let cond = eval_expr c st in
         if is_true cond st then  
-          eval_stmts tstmts st
+          eval_stmts xf tstmts st
         else if is_false cond st then
-          eval_stmts fstmts st
+          eval_stmts xf fstmts st
         else
           let c = rebuild_expr c cond st in
           let ncond = not_bool cond in
-          let tst = eval_stmts tstmts (restrict_ctx cond {st with stmts = []}) in
-          let fst = eval_stmts fstmts (restrict_ctx ncond {st with stmts = []}) in
+          let tst = eval_stmts xf tstmts (restrict_ctx cond {st with stmts = []}) in
+          let fst = eval_stmts xf fstmts (restrict_ctx ncond {st with stmts = []}) in
           let st' = join_state cond tst fst in
           let st' = writeall st.stmts st' in
           let st' = write (Stmt_If (c, tst.stmts, [], fst.stmts, loc)) st' in
@@ -2417,17 +2428,19 @@ module BDDSimp = struct
 
     | _ -> failwith "unknown stmt"
 
-  and eval_stmts stmts st =
-    List.fold_left (fun st s -> if MLBDD.is_false st.ctx then st else eval_stmt s st) st stmts
+  and eval_stmts xf stmts st =
+    List.fold_left (fun st s -> if MLBDD.is_false st.ctx then st else eval_stmt xf s st) st stmts
 
   let set_enc st =
     let enc = Val (List.rev (List.init 32 (MLBDD.ithvar st.man))) in
     {st with vars = Bindings.add (Ident "enc") enc st.vars}
 
+
+
   let do_transform fn stmts reach =
     let st = init_state reach in
     let st = set_enc st in
-    let st' = eval_stmts stmts st in
+    let st' = eval_stmts (new nopvis) stmts st in
     st'.stmts
 
 
