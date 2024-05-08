@@ -370,7 +370,8 @@ let run include_pc iset pat env =
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
 
   let decoder = Eval.Env.getDecoder env (Ident iset) in
-  let fns = Transforms.BDDSimp.transform_all fns decoder in
+  let decoderst : Transforms.DecoderChecks.st = Transforms.DecoderChecks.do_transform decoder in
+  let fns = Transforms.BDDSimp.transform_all fns decoderst in
   let (_,globals) = Dis.build_env env in
   let fns = Bindings.map (fnsig_upd_body (Transforms.RemoveUnused.remove_unused globals)) fns in
 
@@ -390,6 +391,9 @@ let run include_pc iset pat env =
   let offline_fns = Offline_transform.run fns env in
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.CopyProp.run k)) offline_fns in
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.DeadContextSwitch.run k)) offline_fns in
+
+  let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.RtCopyProp.run k (Bindings.find k decoderst.instrs) )) offline_fns in
+
   let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests offline_fns)) dsig in
   let dsig = fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) dsig in
   Printf.printf "\n";

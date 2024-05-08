@@ -464,7 +464,7 @@ module RtCopyProp = struct
 
   type xform = 
     | Prop 
-    | PropCond of MLBDD.t * MLBDD.t
+    | PropCond of MLBDD.t * MLBDD.t (* copyprop not allowed , should copyprop *)
     | No
 
   let read_var v (st,i) =
@@ -651,6 +651,9 @@ module RtCopyProp = struct
 
      You can implement constant-prop and dead code in a similar fashion, as long as your notions of conditional
      use / redefinition / loss of constant precision is purely in terms of the original enc.
+
+statement s is the only definition of x reaching u on every path from s to u there are no assignments to y 
+
    *)
   class copyprop_transform st = object
     inherit Asl_visitor.nopAslVisitor
@@ -662,10 +665,10 @@ module RtCopyProp = struct
     method! vstmt = function
       (* Transform runtime variable decls into expression decls *)
       | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f && candidate_var v st ->
-          ChangeDoChildrenPost(Stmt_VarDeclsNoInit(Offline_transform.rt_expr_ty, [v], loc), fun e -> e)
+        ChangeDoChildrenPost([Stmt_VarDeclsNoInit(Offline_transform.rt_expr_ty, [v], loc)], fun e -> e)
       (* Transform stores into assigns *)
       | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f && candidate_var v st ->
-          ChangeDoChildrenPost(Stmt_Assign(LExpr_Var v, e, loc), fun e -> e)
+        ChangeDoChildrenPost([Stmt_Assign(LExpr_Var v, e, loc)], fun e -> e)
       | _ -> DoChildren
   end
 
@@ -688,40 +691,90 @@ module RtCopyProp = struct
 
     (*
 
-    Cond proped = 
-
-      clobber reachable && read reachable  ==>  doesn't exclude clobber is subsequent to read
 
     *)
 
 
+  let cp_idents = function 
+    | Ident c -> Ident (c ^ "_nocopyprop") , Ident (c ^ "_copyprop")
+    | _ -> failwith "only copyprop vars"
+
+  type cand = {
+    typ: ty
+  }
+
   class cond_copyprop_transform cpst = object(self) 
     inherit Asl_visitor.nopAslVisitor
     val mutable rtst = None
-    val mutable candidates : expr Bindings.t = Bindings.empty
 
-    method xf_stmt (x:stmt) (st:Transforms.BDDSimp.state) = 
+    val mutable candidates : cand Bindings.t = Bindings.empty
+
+    method xf_stmt (x:stmt) (st:Transforms.BDDSimp.state) : stmt list = 
       rtst <- Some st; Asl_visitor.visit_stmt self x 
 
     method candidate v = (Prop = (cond_candidate v cpst (Option.get rtst)))
     method essential v = (No = (cond_candidate v cpst (Option.get rtst)))
 
-    method! vexpr = function
-      (* Transform loads into direct variable accesses *)
-      | Expr_TApply(f, [], [Expr_Var v]) when is_var_load f && (self#candidate v) ->
-          ChangeTo (Expr_Var v)
-      | _ -> DoChildren
+    method! vstmt s = ChangeDoChildrenPost (self#stmt_xform s, fun x -> x)
+    method! vexpr e = ChangeDoChildrenPost (self#expr_xform e, fun x -> x)
 
-    method vvisit_stmt : stmt -> stmt list = function
+    (*
+    For run-time variables that we have determined we can copyprop, 
+    pull them to lift-time variables so they can be conditionally 
+    copy-propagated at lift time. 
+    *)
+    method stmt_xform (s : stmt) : stmt list = match s with 
       (* Transform runtime variable decls into expression decls *)
-      | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f && (self#essential v) ->
-        [Stmt_VarDeclsNoInit(Offline_transform.rt_expr_ty, [v], loc)]
-      | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f && not (self#essential v) ->
-        [Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [v], loc)]
+      | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f  ->
+          candidates <- Bindings.add v {typ=t} candidates; 
+          (match (cond_candidate v cpst (Option.get rtst)) with 
+            (* essential, leave as-is *)
+            | No ->  [s] 
+              (* move run-time to lift-time *)
+            | Prop ->  [Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [v], loc)]  
+            | PropCond _ -> let ncp,cp = cp_idents v in
+              (* lift-time conditionally generates the copy-propagated or non-propagated form *)
+              [Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [ncp], loc); 
+              Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [cp], loc)]
+          )
       (* Transform stores into assigns *)
-      | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f && Prop = (cond_candidate v cpst (Option.get rtst)) ->
-        [(Stmt_Assign (LExpr_Var v, e, loc))]
+      | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f  ->
+          (match (cond_candidate v cpst (Option.get rtst)) with 
+            | No ->  [s]
+            | Prop ->  [(Stmt_Assign (LExpr_Var v, e, loc))]
+            | PropCond (no,yes) -> let nocp,cp = cp_idents v in
+              (*
+                 - if copy-prop'ed form is reachable then generate a store statement
+                 - if non-copyprop'ed form is reachable then generate an assignment statement
+              *)
+              (* can re-evaluating an expression have side effects? *)
+              (if (Transforms.BDDSimp.is_true (Val [no]) (Option.get rtst)) 
+              then [Stmt_TCall(f, [], [Expr_Var nocp; e], loc)]   (* gen store to rt variable *)
+              else [])  
+              @ 
+              (if (Transforms.BDDSimp.is_true (Val [yes]) (Option.get rtst)) 
+              then [Stmt_Assign(LExpr_Var cp, e, loc)] (* assign to rt variable for copyprop *)
+              else [])
+          )
       | _ -> []
+
+    method expr_xform (e:expr) : expr = match e with
+      | Expr_TApply(f, [], [Expr_Var v]) when is_var_load f ->
+          (match (cond_candidate v cpst (Option.get rtst)) with 
+          | No ->  e
+          | Prop ->  Expr_Var v
+          | PropCond (nocpcond,yescpcond) -> let ncp,cp = cp_idents v  in
+            let load = Expr_TApply(f, [], [Expr_Var ncp]) in
+            let prop = Expr_Var cp in
+            let bdd_to_cond c = Transforms.BDDSimp.rebuild_expr (Expr_Var (Ident "TRUE")) (Val [c]) (Option.get rtst) in
+            let nocpcond = bdd_to_cond nocpcond in
+            let yescpcond = bdd_to_cond yescpcond in
+            let vt = Bindings.find v candidates in
+            (* TODO: would be good to check that yes and no are disjoint *)
+            let e = Expr_If (vt.typ, yescpcond, prop, [E_Elsif_Cond (nocpcond, load)], e (* should be unreachable *)) in
+          e  
+        )
+      | _ -> e
   end
 
   let do_transform reachable copyprop_st stmts = 
@@ -731,8 +784,7 @@ module RtCopyProp = struct
     let st' = Transforms.BDDSimp.eval_stmts (copyprop_st) stmts st in
     st'.stmts
 
-
-  let run reachable fn body =
+  let run fn reachable  body =
     let st = init_state reachable in
     let st = walk_stmts body st in
     (* Printf.printf "%s : %s\n" (pprint_ident fn) (pp_essential st); *)

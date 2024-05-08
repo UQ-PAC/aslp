@@ -2049,7 +2049,7 @@ module DecoderChecks = struct
       (st,prior) ) (st,st.cur_enc) alts in
     st
 
-  let do_transform d =
+  let do_transform d : st =
     tf_decoder d init_state
 
 end
@@ -2333,6 +2333,31 @@ module BDDSimp = struct
       else true) a
 
 
+  let bdd_to_expr cond st =
+      let c = ctx_to_mask st.ctx in
+      let imps = MLBDD.allprime cond in
+      let imps = List.map (fun v -> clear_bits v c) imps in
+      let rebuild = List.fold_right (fun vars -> 
+        MLBDD.dor 
+        (List.fold_right (fun (b,v) -> 
+          MLBDD.(dand (if b then ithvar st.man v else dnot (ithvar st.man v)))
+        ) vars (MLBDD.dtrue st.man))
+      ) imps (MLBDD.dfalse st.man) in
+      let imps = MLBDD.allprime rebuild in
+      let masks = List.map DecoderChecks.implicant_to_mask imps in
+      (match masks with
+      | [b] ->
+        let bv = Value.to_mask Unknown (Value.from_maskLit b) in
+        sym_expr @@ sym_inmask Unknown (Exp (Expr_Var (Ident "enc"))) bv
+      | _ -> 
+          let try2 = MLBDD.dnot cond in
+          (if List.length (MLBDD.allprime try2) = 1 then
+            Printf.printf "Neg candidate  %s\n"  (Utils.pp_list DecoderChecks.implicant_to_mask (MLBDD.allprime try2))
+          else
+            Printf.eprintf "Can't simp %s\n"  (Utils.pp_list (fun i -> i) masks));
+            failwith (Printf.sprintf "Ctx %s\n" (Utils.pp_list DecoderChecks.implicant_to_mask (MLBDD.allprime st.ctx))))
+
+
   let rebuild_expr e cond st =
     match cond with
     | Val [cond] ->
@@ -2365,7 +2390,7 @@ module BDDSimp = struct
 
 
   class nopvis = object(self) 
-    method xf_stmt (x:stmt) (st:state) = x 
+    method xf_stmt (x:stmt) (st:state) : stmt list = [x]
   end
 
   let nop_transform = new nopvis
@@ -2375,19 +2400,19 @@ module BDDSimp = struct
     match s with
     | Stmt_VarDeclsNoInit(t, [v], loc) ->
         let st = add_var v Bot st in
-        write ns st
+        writeall ns st
     | Stmt_VarDecl(t, v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        write ns st
+        writeall ns st
     | Stmt_ConstDecl(t, v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        write ns st
+        writeall ns st
     | Stmt_Assign(LExpr_Var v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        write ns st
+        writeall ns st
 
     (* Eval the assert, attempt to discharge it & strengthen ctx *)
     | Stmt_Assert(e, loc) ->
@@ -2401,7 +2426,7 @@ module BDDSimp = struct
     (* State becomes bot - unreachable *)
     | Stmt_Throw _ -> 
         Printf.printf "%s : %s\n" (pp_stmt s) (pp_state st);
-        let st = write ns st in
+        let st = writeall ns st in
         halt st
 
     (* If we can reduce c to true/false, collapse *)
@@ -2478,8 +2503,7 @@ module BDDSimp = struct
         1 + (Int.max d1 d2)
       end
 
-  let transform_all instrs decoder =
-    let st = DecoderChecks.do_transform decoder in
+  let transform_all instrs (st:DecoderChecks.st)=
     (* get all prim implicants for each instruction, one list *)
     let imps = Bindings.fold (fun k e acc ->
       let imps = MLBDD.allprime e in
