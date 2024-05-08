@@ -377,7 +377,7 @@ module RtCopyProp = struct
     cond_read: (Transforms.BDDSimp.abs) Bindings.t; (* ident -> clobber condition (any dep updated) *)
     (* not used; stores dep sets for bindings (and the def reachability) *)
     cond_dep: (Transforms.BDDSimp.abs * IdentSet.t) Bindings.t;  (* binding -> condition * deps *)
-    (* the bdd context *)
+    (**)
     bdd: Transforms.BDDSimp.state;
   }
 
@@ -560,8 +560,6 @@ module RtCopyProp = struct
         decl_var v st 
       |> eval_post s
 
-
-
     (* Var assign *)
     | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f ->
         (* Collect reads and process them all *)
@@ -700,24 +698,30 @@ module RtCopyProp = struct
   class cond_copyprop_transform cpst = object(self) 
     inherit Asl_visitor.nopAslVisitor
     val mutable rtst = None
+    val mutable candidates : expr Bindings.t = Bindings.empty
 
     method xf_stmt (x:stmt) (st:Transforms.BDDSimp.state) = 
       rtst <- Some st; Asl_visitor.visit_stmt self x 
 
+    method candidate v = (Prop = (cond_candidate v cpst (Option.get rtst)))
+    method essential v = (No = (cond_candidate v cpst (Option.get rtst)))
+
     method! vexpr = function
       (* Transform loads into direct variable accesses *)
-      | Expr_TApply(f, [], [Expr_Var v]) when is_var_load f && Prop = (cond_candidate v cpst (Option.get rtst)) ->
+      | Expr_TApply(f, [], [Expr_Var v]) when is_var_load f && (self#candidate v) ->
           ChangeTo (Expr_Var v)
       | _ -> DoChildren
 
-    method! vstmt = function
+    method vvisit_stmt : stmt -> stmt list = function
       (* Transform runtime variable decls into expression decls *)
-      | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f && Prop = (cond_candidate v cpst (Option.get rtst)) ->
-          ChangeDoChildrenPost(Stmt_VarDeclsNoInit(Offline_transform.rt_expr_ty, [v], loc), fun e -> e)
+      | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f && (self#essential v) ->
+        [Stmt_VarDeclsNoInit(Offline_transform.rt_expr_ty, [v], loc)]
+      | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f && not (self#essential v) ->
+        [Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [v], loc)]
       (* Transform stores into assigns *)
       | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f && Prop = (cond_candidate v cpst (Option.get rtst)) ->
-          ChangeDoChildrenPost(Stmt_Assign(LExpr_Var v, e, loc), fun e -> e)
-      | _ -> DoChildren
+        [(Stmt_Assign (LExpr_Var v, e, loc))]
+      | _ -> []
   end
 
   let do_transform reachable copyprop_st stmts = 
