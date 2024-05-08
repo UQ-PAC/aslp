@@ -2308,10 +2308,10 @@ module BDDSimp = struct
         let wd = int_of_string wd in
         let e = eval_expr e st in
         extract_bits e lo wd
-    | Expr_Slices(e, [Slice_LoWd(lo,wd)]) ->
-        Top
+    | Expr_Slices(e, [Slice_LoWd(lo,wd)]) -> Top
+    | Expr_Unknown t -> Top
 
-    | _ -> failwith @@ "unexpected expr: " ^ (pp_expr e)
+    | _ -> Printf.printf "BDDSimp eval_expr: unexpected expr: %s\n"  (pp_expr e) ; Top
 
   (****************************************************************)
   (** Stmt Walk                                                   *)

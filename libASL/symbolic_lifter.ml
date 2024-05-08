@@ -392,7 +392,16 @@ let run include_pc iset pat env =
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.CopyProp.run k)) offline_fns in
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.DeadContextSwitch.run k)) offline_fns in
 
-  let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.RtCopyProp.run k (Bindings.find k decoderst.instrs) )) offline_fns in
+  let useoffline = true in
+
+  let freachable k = 
+    let k = match k with 
+      | FIdent (n, _) -> Ident n
+      | n -> n in
+    Bindings.find k decoderst.instrs 
+  in
+
+  let offline_fns = if useoffline then (Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.RtCopyProp.run k (freachable k))) offline_fns) else offline_fns in
 
   let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests offline_fns)) dsig in
   let dsig = fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) dsig in

@@ -180,7 +180,7 @@ module CopyProp = struct
           self#add_dep impure_ident;
           let _ = List.map (self#vexpr) es in
           SkipChildren
-      | e -> failwith @@ "Unknown runtime expression: " ^ (pp_expr e)
+    | e -> (Printf.printf "Unknown runtime expression: %s\n"  (pp_expr e)); DoChildren
   end
 
   let get_deps e =
@@ -374,7 +374,7 @@ module RtCopyProp = struct
     (* maps idents to the condution under which they are clobbered *)
     cond_clobbered: (Transforms.BDDSimp.abs) Bindings.t; (* ident -> clobber condition (any dep updated) *)
     (* maps idents to the condition under which they are read after clobbering *)
-    cond_read: (Transforms.BDDSimp.abs) Bindings.t; (* ident -> clobber condition (any dep updated) *)
+    cond_read_after_clobber: (Transforms.BDDSimp.abs) Bindings.t; (* ident -> clobber condition (any dep updated) *)
     (* not used; stores dep sets for bindings (and the def reachability) *)
     cond_dep: (Transforms.BDDSimp.abs * IdentSet.t) Bindings.t;  (* binding -> condition * deps *)
     (**)
@@ -416,7 +416,6 @@ module RtCopyProp = struct
   let get_var v st = Bindings.find_opt v st.var_clas
 
   let merge_st cond a b =
-    assert (a.ctx = b.ctx);
     let ctx = a.ctx in
     let merged_bdd a b = Bindings.merge (fun (k:ident) (a:Transforms.BDDSimp.abs option) (b:Transforms.BDDSimp.abs option) -> match a,b with 
       | Some a, Some b -> Some (Transforms.BDDSimp.join_abs cond a b)
@@ -424,7 +423,7 @@ module RtCopyProp = struct
       | None, Some a -> Some a
       | None, None -> None)  a b in
     let cond_clobbered = merged_bdd a.cond_clobbered b.cond_clobbered in
-    let cond_read = merged_bdd a.cond_read b.cond_read in
+    let cond_read_after_clobber = merged_bdd a.cond_read_after_clobber b.cond_read_after_clobber in
     let cond_dep = Bindings.merge (fun k a b -> match a,b with 
         | Some (isa, a), Some (isb, b) -> Some (Transforms.BDDSimp.join_abs cond isa isb, IdentSet.union a b)
         | Some a, None -> Some a
@@ -438,11 +437,11 @@ module RtCopyProp = struct
       | None, Some a -> Some a
       | None, None -> None) a.var_clas b.var_clas in
     let bdd = Transforms.BDDSimp.join_state cond a.bdd b.bdd in
-    { bdd; var_clas ; ctx ; cond_clobbered;  cond_read; cond_dep }
+    { bdd; var_clas ; ctx ; cond_clobbered;  cond_read_after_clobber; cond_dep }
   let init_state reachable = {bdd=Transforms.BDDSimp.init_state reachable; 
     var_clas = Bindings.empty; ctx = []; 
     cond_clobbered = Bindings.empty ; 
-    cond_read = Bindings.empty ; 
+    cond_read_after_clobber = Bindings.empty ; 
     cond_dep = Bindings.empty}
   let push_context m st = { st with ctx = m::st.ctx }
   let peek_context st = match st.ctx with x::xs -> x | _ -> invalid_arg "peek_context"
@@ -461,26 +460,24 @@ module RtCopyProp = struct
     in
     {r with cond_dep }
 
-
   type xform = 
     | Prop 
-    | PropCond of MLBDD.t * MLBDD.t (* copyprop not allowed , should copyprop *)
+    | PropCond of Transforms.BDDSimp.abs (* copyprop not allowed , should copyprop *)
     | No
 
   let read_var v (st,i) =
-    (* record read reachability *)
-    let st = {st with cond_read = (add_cond v (Val [st.bdd.ctx]) st.cond_read)} in
     match get_var v st with
     (* Reading undeclared generally means a value that is gradually constructed through partial updates *)
     | Some (Declared) ->
         (set_var v Essential st, i)
     (* Reading clobbered implies we cannot reorder *)
-    | Some (Clobbered) ->
-      (* TODO: only record read ctx in when read is subsequent to clobber; ie we are conditionally essential  *)
-        let clobbered = (match (Bindings.find_opt v st.cond_clobbered) with 
-        | Some x -> Transforms.BDDSimp.is_true x st.bdd
-        | None -> failwith "unreachable?") 
-    in if clobbered then (set_var v Essential st, i) else st, i
+    | Some (Clobbered) -> (
+        (* record read reachability *)
+        let clobbered = (Bindings.find v st.cond_clobbered)  in
+        let read_after_clobber = Transforms.BDDSimp.and_bits clobbered (Val [st.bdd.ctx]) in
+        let st = {st with cond_read_after_clobber = (add_cond v read_after_clobber st.cond_read_after_clobber)} in
+        st, i )
+        (*if (Transforms.BDDSimp.is_true clobbered st.bdd) then (set_var v Essential st, i) else st, i) *)
     (* Collect ids for transitive walk given a defined variable *)
     | Some (Defined ids) ->
         (st, IdentSet.union i ids)
@@ -538,7 +535,7 @@ module RtCopyProp = struct
           self#add_dep impure_ident;
           let _ = List.map (self#vexpr) es in
           SkipChildren
-      | e -> failwith @@ "Unknown runtime expression: " ^ (pp_expr e)
+      | e -> (Printf.printf "Unknown runtime expression: %s\n"  (pp_expr e)); DoChildren
   end
 
   let get_deps e =
@@ -672,27 +669,21 @@ statement s is the only definition of x reaching u on every path from s to u t
       | _ -> DoChildren
   end
 
+
   (*
-    Decl of candidate -> decl of expr ref + decl of tmp (unless its never clobbered)
-    Write to candidate -> if !clobbered, write to expr ref, else write to tmp
-    Read of candidate -> Wrap whole statement in same test, read from appropriate var
+    variable is not clobbered then read
   *)
   let cond_candidate v st rtst = 
     match get_var v st with
     | Some Essential -> No
-    | Some Clobbered -> let c = Bindings.find_opt v st.cond_clobbered in
+    | Some Clobbered ->
+        let c = Bindings.find_opt v st.cond_read_after_clobber in
         (match c with
-          | Some x -> 
-            if (Transforms.BDDSimp.is_true x rtst) then No else (No)
+          | Some x -> PropCond x
           | None -> No)
-    | None -> Prop
-    | _ -> Prop
-
-
-    (*
-
-
-    *)
+    | Some Defined _ -> Prop
+    | Some Declared -> No 
+    | None -> No 
 
 
   let cp_idents = function 
@@ -718,12 +709,21 @@ statement s is the only definition of x reaching u on every path from s to u t
     method! vstmt s = ChangeDoChildrenPost (self#stmt_xform s, fun x -> x)
     method! vexpr e = ChangeDoChildrenPost (self#expr_xform e, fun x -> x)
 
+
+  (*
+    Decl of candidate -> decl of expr ref + decl of tmp (unless its never clobbered)
+    Write to candidate -> if !clobbered, write to expr ref, else write to tmp
+    Read of candidate -> Wrap whole statement in same test, read from appropriate var
+  *)
+
     (*
     For run-time variables that we have determined we can copyprop, 
     pull them to lift-time variables so they can be conditionally 
     copy-propagated at lift time. 
     *)
-    method stmt_xform (s : stmt) : stmt list = match s with 
+    method stmt_xform (s : stmt) : stmt list = 
+    let cp_cond c = Transforms.BDDSimp.rebuild_expr (Expr_Var (Ident "TRUE")) (c) (Option.get rtst) in
+    match s with 
       (* Transform runtime variable decls into expression decls *)
       | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f  ->
           candidates <- Bindings.add v {typ=t} candidates; 
@@ -732,46 +732,47 @@ statement s is the only definition of x reaching u on every path from s to u t
             | No ->  [s] 
               (* move run-time to lift-time *)
             | Prop ->  [Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [v], loc)]  
-            | PropCond _ -> let ncp,cp = cp_idents v in
+            | PropCond cond -> let ncp,cp = cp_idents v in
+              let c = cp_cond cond in
+              let rt_decl = Stmt_If (c, [], [] , [Stmt_Assign (LExpr_Var ncp, Expr_TApply(f, [], args), Unknown)], Unknown) in
               (* lift-time conditionally generates the copy-propagated or non-propagated form *)
-              [Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [ncp], loc); 
-              Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [cp], loc)]
+              [ 
+                Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [ncp], loc);
+                Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [cp], loc);
+                rt_decl
+              ]
           )
       (* Transform stores into assigns *)
       | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f  ->
           (match (cond_candidate v cpst (Option.get rtst)) with 
             | No ->  [s]
             | Prop ->  [(Stmt_Assign (LExpr_Var v, e, loc))]
-            | PropCond (no,yes) -> let nocp,cp = cp_idents v in
+            | PropCond cond -> let nocp,cp = cp_idents v in
               (*
                  - if copy-prop'ed form is reachable then generate a store statement
                  - if non-copyprop'ed form is reachable then generate an assignment statement
               *)
               (* can re-evaluating an expression have side effects? *)
-              (if (Transforms.BDDSimp.is_true (Val [no]) (Option.get rtst)) 
-              then [Stmt_TCall(f, [], [Expr_Var nocp; e], loc)]   (* gen store to rt variable *)
-              else [])  
-              @ 
-              (if (Transforms.BDDSimp.is_true (Val [yes]) (Option.get rtst)) 
-              then [Stmt_Assign(LExpr_Var cp, e, loc)] (* assign to rt variable for copyprop *)
-              else [])
-          )
-      | _ -> []
+
+              let gen_store_rt_var = Stmt_TCall(f, [], [Expr_Var nocp; e], loc) in
+              let assign_lt_var = Stmt_Assign(LExpr_Var cp, e, loc) in
+              (* TODO: could further narrow cases here using bdd*)
+              [Stmt_If ( cp_cond cond, [gen_store_rt_var], [], [assign_lt_var], Unknown)]
+        )
+      | _ -> [s]
 
     method expr_xform (e:expr) : expr = match e with
       | Expr_TApply(f, [], [Expr_Var v]) when is_var_load f ->
           (match (cond_candidate v cpst (Option.get rtst)) with 
           | No ->  e
           | Prop ->  Expr_Var v
-          | PropCond (nocpcond,yescpcond) -> let ncp,cp = cp_idents v  in
+          | PropCond cpcond -> let ncp,cp = cp_idents v  in
             let load = Expr_TApply(f, [], [Expr_Var ncp]) in
             let prop = Expr_Var cp in
-            let bdd_to_cond c = Transforms.BDDSimp.rebuild_expr (Expr_Var (Ident "TRUE")) (Val [c]) (Option.get rtst) in
-            let nocpcond = bdd_to_cond nocpcond in
-            let yescpcond = bdd_to_cond yescpcond in
+            let yescpcond = Transforms.BDDSimp.rebuild_expr (Expr_Var (Ident "TRUE")) cpcond (Option.get rtst) in
             let vt = Bindings.find v candidates in
-            (* TODO: would be good to check that yes and no are disjoint *)
-            let e = Expr_If (vt.typ, yescpcond, prop, [E_Elsif_Cond (nocpcond, load)], e (* should be unreachable *)) in
+            (* TODO: might be good to check that yes and no are disjoint here *)
+            let e = Expr_If (vt.typ, yescpcond, prop, [] , load) in
           e  
         )
       | _ -> e

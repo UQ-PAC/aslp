@@ -29,7 +29,9 @@ let opt_verbose = ref false
 let opt_debug_level = ref (-1)
 
 
-let () = Printexc.register_printer
+let () = 
+    Printexc.record_backtrace true ;
+    Printexc.register_printer
     (function
     | Value.EvalError (loc, msg) ->
         Some (Printf.sprintf "EvalError at %s: %s" (pp_loc loc) msg)
