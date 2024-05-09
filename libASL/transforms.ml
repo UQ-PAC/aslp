@@ -2054,6 +2054,12 @@ module DecoderChecks = struct
 
 end
 
+module type RTAnalysisLattice = sig
+  type rt (* RT lattice type *)
+  type olt  (* LT lattice type *)
+  val xfer_stmt : olt -> rt  -> stmt -> rt*stmt list
+  val join: olt -> rt -> rt  -> rt
+end
 
 module BDDSimp = struct
 
@@ -2068,6 +2074,17 @@ module BDDSimp = struct
     ctx: MLBDD.t;
     stmts: stmt list;
   }
+
+  module type Lattice = RTAnalysisLattice with type olt = state
+
+  module NopAnalysis = struct  
+    type rt = unit
+    type olt = state 
+    let xfer_stmt o r s = r,[s]
+    let join o r ro = ()
+    let init _ = ()
+  end
+
 
   let init_state (ctx : MLBDD.t) = {
     man = MLBDD.manager ctx;
@@ -2303,15 +2320,22 @@ module BDDSimp = struct
     | Expr_TApply (FIdent (f, 0), tes, es) ->
         let es = List.map (fun e -> eval_expr e st) es in
         eval_prim f tes es st
-    | Expr_Slices(e, [Slice_LoWd(Expr_LitInt lo,Expr_LitInt wd)]) ->
+    | Expr_Slices(e, [Slice_LoWd(Expr_LitInt lo, Expr_LitInt wd)]) ->
         let lo = int_of_string lo in
         let wd = int_of_string wd in
         let e = eval_expr e st in
         extract_bits e lo wd
     | Expr_Slices(e, [Slice_LoWd(lo,wd)]) -> Top
-    | Expr_Unknown t -> Top
+    | Expr_Parens(e) -> eval_expr e st
+    | Expr_Fields _ -> Printf.printf "unexpected Expr_Fields %s" (pp_expr e); Top
+    | Expr_In _ -> Printf.printf "unexpected Expr_In %s" (pp_expr e); Top
+    | Expr_Unop _ -> Printf.printf "unexpected Expr_Unop %s" (pp_expr e); Top
+    | Expr_Unknown _ -> Printf.printf "unexpected Expr_Unkonwn %s" (pp_expr e); Top
+    | Expr_ImpDef _ -> Printf.printf "unexpected Expr_ImpDef %s" (pp_expr e); Top
+    | Expr_LitString _ -> Printf.printf "unexpected Expr_LitString %s" (pp_expr e); Top
+    | Expr_If _ -> Printf.printf "unexpected Expr_If %s" (pp_expr e); Top
 
-    | _ -> Printf.printf "BDDSimp eval_expr: unexpected expr: %s\n"  (pp_expr e) ; Top
+    | _ -> failwith @@ Printf.sprintf "BDDSimp eval_expr: unexpected expr: %s\n"  (pp_expr e)  
 
   (****************************************************************)
   (** Stmt Walk                                                   *)
@@ -2395,77 +2419,87 @@ module BDDSimp = struct
 
   let nop_transform = new nopvis
 
-  let rec eval_stmt xf s st =
-    let ns = xf#xf_stmt s st in
+  module EvalWithXfer (Xf: Lattice) = struct 
+
+  let rec eval_stmt (xs:Xf.rt) (s:stmt) (st:state) =
+    let xs,ns = Xf.xfer_stmt st xs s in
     match s with
     | Stmt_VarDeclsNoInit(t, [v], loc) ->
         let st = add_var v Bot st in
-        writeall ns st
+        writeall ns st, xs
     | Stmt_VarDecl(t, v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        writeall ns st
+        writeall ns st, xs
     | Stmt_ConstDecl(t, v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        writeall ns st
+        writeall ns st,xs
     | Stmt_Assign(LExpr_Var v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        writeall ns st
+        writeall ns st,xs
 
     (* Eval the assert, attempt to discharge it & strengthen ctx *)
     | Stmt_Assert(e, loc) ->
         let abs = eval_expr e st in
-        if is_false abs st then st
+        if is_false abs st then st,xs
         else
           let e = rebuild_expr e abs st in
           let st = write (Stmt_Assert(e,loc)) st in
-          restrict_ctx abs st
+          restrict_ctx abs st, xs
 
     (* State becomes bot - unreachable *)
     | Stmt_Throw _ -> 
         Printf.printf "%s : %s\n" (pp_stmt s) (pp_state st);
         let st = writeall ns st in
-        halt st
+        halt st,xs
 
     (* If we can reduce c to true/false, collapse *)
     | Stmt_If(c, tstmts, [], fstmts, loc) ->
         let cond = eval_expr c st in
+
         if is_true cond st then  
-          eval_stmts xf tstmts st
+          eval_stmts xs tstmts st
         else if is_false cond st then
-          eval_stmts xf fstmts st
+          eval_stmts xs fstmts st
         else
           let c = rebuild_expr c cond st in
           let ncond = not_bool cond in
-          let tst = eval_stmts xf tstmts (restrict_ctx cond {st with stmts = []}) in
-          let fst = eval_stmts xf fstmts (restrict_ctx ncond {st with stmts = []}) in
+
+          let tst,xsa = eval_stmts xs tstmts (restrict_ctx cond {st with stmts = []}) in
+          let fst,xsb = eval_stmts xs fstmts (restrict_ctx ncond {st with stmts = []}) in
           let st' = join_state cond tst fst in
+          let xs = Xf.join st' xsa xsb in
+
           let st' = writeall st.stmts st' in
           let st' = write (Stmt_If (c, tst.stmts, [], fst.stmts, loc)) st' in
-          st'
+          st',xs
 
     (* Can't do anything here *)
     | Stmt_Assign _
     | Stmt_TCall _ -> 
-        write s st
+        write s st,xs
 
     | _ -> failwith "unknown stmt"
 
-  and eval_stmts xf stmts st =
-    List.fold_left (fun st s -> if MLBDD.is_false st.ctx then st else eval_stmt xf s st) st stmts
+  and eval_stmts xs stmts st =
+    List.fold_left (fun (st,xs) s -> if MLBDD.is_false st.ctx then st,xs else (eval_stmt xs s st)) (st,xs) stmts
+
+  end
 
   let set_enc st =
     let enc = Val (List.rev (List.init 32 (MLBDD.ithvar st.man))) in
     {st with vars = Bindings.add (Ident "enc") enc st.vars}
 
+  module Eval = EvalWithXfer(NopAnalysis) 
 
+  let just_eval a b c = fst (Eval.eval_stmts (NopAnalysis.init ()) a b)
 
   let do_transform fn stmts reach =
     let st = init_state reach in
     let st = set_enc st in
-    let st' = eval_stmts (new nopvis) stmts st in
+    let st',xs = Eval.eval_stmts (NopAnalysis.init ()) stmts st in
     st'.stmts
 
 
