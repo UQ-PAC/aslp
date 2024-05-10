@@ -707,11 +707,21 @@ statement s is the only definition of x reaching u on every path from s to u t
     | Some Clobbered deps ->
         let c = Bindings.find_opt v st.cond_read_after_clobber in
         (match c with
-          | Some x -> PropCond x
-          | None -> No)
+        | Some x -> (if (Transforms.BDDSimp.is_true (Val [x]) rtst) then (
+            (* we don't need to generate a condition at read if we know statically *)
+            Printf.printf "Condcopyprop: var %s BDD %s simplifies to TRUE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [x]));
+            No) 
+          else if (Transforms.BDDSimp.is_false (Val [x]) rtst) then (
+            Printf.printf "Condcopyprop: var %s BDD %s simplifies to FALSE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [x])) ;
+            Prop
+            ) 
+          else PropCond (MLBDD.dnot x))
+          | None -> Printf.printf "Condcopyprop: Clobbered variable missing cond read %s\n" (pprint_ident v); 
+            No) (* TODO: clobbered but not subsequently read? *)
     | Some Defined _ -> Prop
     | Some Declared -> No 
-    | None -> No 
+    | None -> Printf.printf "Unexpected variable with no candidate decision status %s\n" (pprint_ident v); No 
+
 
 
   let cp_idents = function 
@@ -743,8 +753,8 @@ statement s is the only definition of x reaching u on every path from s to u t
     method candidate v = (Prop = (cond_candidate v cpst (Option.get rtst)))
     method essential v = (No = (cond_candidate v cpst (Option.get rtst)))
 
-    method! vstmt s = ChangeDoChildrenPost (self#stmt_xform s, fun x -> x)
-    method! vexpr e = ChangeDoChildrenPost (self#expr_xform e, fun x -> x)
+  method! vstmt s = ChangeDoChildrenPost ([s], fun s -> List.concat_map self#stmt_xform s)
+  method! vexpr e = ChangeDoChildrenPost (e, fun e -> self#expr_xform e)
 
 
   (*
@@ -759,32 +769,39 @@ statement s is the only definition of x reaching u on every path from s to u t
     copy-propagated at lift time. 
     *)
     method stmt_xform (s : stmt) : stmt list = 
-      let cp_cond c = Transforms.BDDSimp.rebuild_expr (Expr_Var (Ident "TRUE")) (Val [MLBDD.dnot c]) (Option.get rtst) in
+    let cp_cond c = Transforms.BDDSimp.bdd_to_expr (c) (Option.get rtst) in
     match s with 
       (* Transform runtime variable decls into expression decls *)
       | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f  ->
           candidates <- Bindings.add v {typ=t} candidates; 
           (match (cond_candidate v cpst (Option.get rtst)) with 
             (* essential, leave as-is *)
-            | No ->  [s] 
+            | No ->  
+                Printf.printf "Condcopyprop: NOT PROP at DEFINITION of var %s\n " (pprint_ident v);
+                [s] 
               (* move run-time to lift-time *)
-            | Prop ->  [Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [v], loc)]  
+            | Prop ->  
+                  Printf.printf "Condcopyprop: UNCOND prop at DEFINITION of var %s\n " (pprint_ident v);
+                  [Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [snd (cp_idents v)], Unknown)]  
             | PropCond cond -> let ncp,cp = cp_idents v in
+              Printf.printf "Condcopyprop: CONDITIONAL prop at DEFINITION : %s\n " (Transforms.BDDSimp.pp_abs (Val [cond]));
               let c = cp_cond cond in
-              let rt_decl = Stmt_If (c, [Stmt_Assign (LExpr_Var ncp, Expr_TApply(f, [], args), Unknown)], [], [],  Unknown) in
+              (Printf.printf("Successfully simplified bdd cond to %s on stmt %s \n") (pp_expr c) (pp_stmt s) ;
               (* lift-time conditionally generates the copy-propagated or non-propagated form *)
               [ 
-                Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [ncp], loc);
-                Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [cp], loc);
-                rt_decl
-              ]
+                Stmt_ConstDecl (Offline_transform.rt_expr_ty, ncp, Expr_TApply(f, [], args), Unknown);
+                Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [cp], Unknown);
+              ])
           )
       (* Transform stores into assigns *)
       | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f  ->
           (match (cond_candidate v cpst (Option.get rtst)) with 
-            | No ->  [s]
-            | Prop ->  [(Stmt_Assign (LExpr_Var v, e, loc))]
+            | No -> (Printf.printf "Condcopyprop: UNCOND DISABLE PROP on STORE of var %s\n " (pprint_ident v));  [s]
+            | Prop -> 
+                  (Printf.printf "Condcopyprop: UNCOND RT PROP on STORE of var %s\n " (pprint_ident v);
+                  [(Stmt_Assign (LExpr_Var (snd (cp_idents v)), e, loc))])
             | PropCond cond -> let nocp,cp = cp_idents v in
+                  Printf.printf "Condcopyprop: CONDITIONAL rt prop on STORE of var %s\n " (pprint_ident v);
               (*
                  - if copy-prop'ed form is reachable then generate a store statement
                  - if non-copyprop'ed form is reachable then generate an assignment statement
@@ -796,22 +813,25 @@ statement s is the only definition of x reaching u on every path from s to u t
               (* TODO: could further narrow cases here using bdd*)
               [Stmt_If ( cp_cond cond, [assign_lt_var], [], [gen_store_rt_var], Unknown)]
         )
+      | Stmt_TCall(f, _, _, _) when is_var_store f  -> failwith "unhandled store"
       | _ -> [s]
 
     method expr_xform (e:expr) : expr = match e with
       | Expr_TApply(f, [], [Expr_Var v]) when is_var_load f ->
           (match (cond_candidate v cpst (Option.get rtst)) with 
           | No ->  e
-          | Prop ->  Expr_Var v
+          | Prop ->  Expr_Var (snd (cp_idents v))
           | PropCond cpcond -> let ncp,cp = cp_idents v  in
             let load = Expr_TApply(f, [], [Expr_Var ncp]) in
             let prop = Expr_Var cp in
-            let yescpcond = Transforms.BDDSimp.rebuild_expr (Expr_Var (Ident "TRUE")) (Val [cpcond]) (Option.get rtst) in
+            let yescpcond = Transforms.BDDSimp.bdd_to_expr cpcond (Option.get rtst) in
             let vt = Bindings.find v candidates in
             (* TODO: might be good to check that yes and no are disjoint here *)
             let e = Expr_If (vt.typ, yescpcond, prop, [] , load) in
           e  
         )
+
+      | Expr_TApply(f, [], [Expr_Var v; e]) when is_var_store f  -> failwith "store expression";
       | _ -> e
   end
 
@@ -819,7 +839,7 @@ statement s is the only definition of x reaching u on every path from s to u t
   module AnalysisLat = struct 
     type rt = state
     type olt = Transforms.BDDSimp.state
-    let xfer_stmt (l:olt) (r:rt) (s:stmt) : rt * stmt list = walk_stmt s r,[s]
+    let xfer_stmt (l:olt) (r:rt) (s:stmt) : rt * stmt list = Printf.printf "%s ::\n%s\n" (pp_stmt s) (Transforms.BDDSimp.pp_state l); (walk_stmt s r,[s])
     let join (ol:olt) (rta: rt) (rtb: rt) = merge_st (Val[ol.ctx]) rta rtb
     let init s = init_state s 
   end
@@ -839,14 +859,16 @@ statement s is the only definition of x reaching u on every path from s to u t
   let do_transform reachable copyprop_st stmts = 
     (* apply BDD AI a second time to compare reachability with candidates in analysis pass *)
     let st = Transforms.BDDSimp.init_state reachable in
-    let st = Transforms.BDDSimp.set_enc st in
+    let st = Transforms.BDDSimp.set_enc st in 
     let olt,ort = BDDTransform.eval_stmts (TransformLat.init copyprop_st) stmts st in
     olt.stmts
 
   let run fn reachable  body =
+    flush stdout;
+    Printf.printf "transforming %s\n" (pprint_ident fn);
     let st : AnalysisLat.rt = init_state reachable in
     let rtst = Transforms.BDDSimp.init_state reachable in
-    let rtst = Transforms.BDDSimp.set_enc rtst in
+    let rtst = Transforms.BDDSimp.set_enc rtst in 
     (*let st = walk_stmts body st in *)
     let a,b = BDDAnalysis.eval_stmts st body rtst in
     (* Printf.printf "%s : %s\n" (pprint_ident fn) (pp_essential st); *)

@@ -364,8 +364,11 @@ let run include_pc iset pat env =
   let env' = Eval.Env.copy env in
   Bindings.iter (fun  fn fnsig  -> Eval.Env.addFun Unknown env' fn fnsig) fns;
   (* Run dis over the entry set identifiers with this new environment *)
+
+  let debug = false in
+
   let fns = Bindings.filter_map (fun fn fnsig ->
-    if not (Bindings.mem fn instrs) then None
+    if (debug && (fn <> (FIdent ("aarch64_branch_unconditional_register", 0)))) || (not (Bindings.mem fn instrs))  then None
     else Option.map (fnsig_set_body fnsig) (dis_wrapper fn fnsig env')) fns in
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
 
@@ -392,7 +395,7 @@ let run include_pc iset pat env =
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.CopyProp.run k)) offline_fns in
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.DeadContextSwitch.run k)) offline_fns in
 
-  let useoffline = true in
+  let use_rt_copyprop = true in
 
   let freachable k = 
     let k = match k with 
@@ -401,7 +404,7 @@ let run include_pc iset pat env =
     Bindings.find k decoderst.instrs 
   in
 
-  let offline_fns = if useoffline then (Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.RtCopyProp.run k (freachable k))) offline_fns) else offline_fns in
+  let offline_fns = if use_rt_copyprop then (Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.RtCopyProp.run k (freachable k))) offline_fns) else offline_fns in
 
   let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests offline_fns)) dsig in
   let dsig = fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) dsig in
