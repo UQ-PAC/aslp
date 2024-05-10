@@ -839,7 +839,9 @@ statement s is the only definition of x reaching u on every path from s to u t
   module AnalysisLat = struct 
     type rt = state
     type olt = Transforms.BDDSimp.state
-    let xfer_stmt (l:olt) (r:rt) (s:stmt) : rt * stmt list = Printf.printf "%s ::\n%s\n" (pp_stmt s) (Transforms.BDDSimp.pp_state l); (walk_stmt s r,[s])
+    let xfer_stmt (l:olt) (r:rt) (s:stmt) : rt * stmt list = 
+      (*Printf.printf "%s ::\n%s\n" (pp_stmt s) (Transforms.BDDSimp.pp_state l);*) 
+      (walk_stmt s r,[s])
     let join (ol:olt) (rta: rt) (rtb: rt) = merge_st (Val[ol.ctx]) rta rtb
     let init s = init_state s 
   end

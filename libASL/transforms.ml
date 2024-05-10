@@ -2264,30 +2264,23 @@ module BDDSimp = struct
         let start = List.length v - lo - wd in
         Val (sublist v start wd)
 
-  (****************************************************************)
-  (** Expr Walk                                                   *)
-  (****************************************************************)
-
-
-  let half_add_bit l r = MLBDD.dand l r, MLBDD.xor l r  (* carry, sum *)
 
   let twos_comp_add (xs : MLBDD.t list) (ys: MLBDD.t list) : MLBDD.t * (MLBDD.t list)= 
+      let half_add_bit l r = MLBDD.dand l r, MLBDD.xor l r  (* carry, sum *) in
       let full_add_bit l r carry = 
         let s1,c1 = half_add_bit l r in
         let o, c2 = half_add_bit s1 carry in
         let ocarry = MLBDD.dor c1 c2 in
         o,ocarry 
     in
-      match (List.rev xs),(List.rev ys) with 
-        | [x],[y] -> let c , s = half_add_bit x y in c, [s]
+      let xs = List.rev xs in let ys = List.rev ys in
+      match xs,ys with 
         | hx::tlx,hy::tly ->  
           let lsb,lscarry = half_add_bit hx hy in
-          let xs = List.rev tlx in let ys = List.rev tly in
-          let bits,carry = 
-            List.fold_right2 
-            (fun (l:MLBDD.t) (r:MLBDD.t) (acc,carry) -> let o,carry = (full_add_bit l r carry) in o::acc, carry) 
-            xs ys ([], lscarry) 
-          in carry,bits@[lsb]
+          let bits,carry = List.fold_left2
+            (fun (acc,carry) (l:MLBDD.t) (r:MLBDD.t)  -> let o,carry = (full_add_bit l r carry) in o::acc, carry) 
+            ([lsb], lscarry) tlx tly
+          in carry,bits
         | _,_ -> failwith "invalid bit strings"
 
   let signed_add_wrap x y = let _,bits = twos_comp_add x y in bits
@@ -2317,6 +2310,14 @@ module BDDSimp = struct
 
   let twos_comp_sub man (xs : MLBDD.t list) (ys: MLBDD.t list) = ()
 
+  let replicate_bits newlen bits = match bits with 
+    | Val bits -> if Int.rem newlen (List.length bits) <> 0 then failwith "indivisible rep length"  ;
+      let repeats = newlen / (List.length bits) in Val (List.concat (List.init repeats (fun i -> bits)))
+    | _ -> Top
+
+  (****************************************************************)
+  (** Expr Walk                                                   *)
+  (****************************************************************)
 
 
   let eval_prim f tes es st = 
@@ -2334,7 +2335,8 @@ module BDDSimp = struct
     | "ne_bits",  [w], [x; y] -> ne_bits  x y
     | "eor_bits", [w], [x; y] -> eor_bits x y
 
-    | "append_bits", [w;w'], [x; y] -> append_bits x y
+    | "append_bits",    [w;w'], [x; y] -> append_bits x y
+    (*| "replicate_bits", [w;Expr_LitInt nw], [x;times] -> replicate_bits (int_of_string nw) x *)
 
     | "ZeroExtend", [w;Expr_LitInt nw], [x; y] ->
         zero_extend_bits x (int_of_string nw) st
@@ -2344,9 +2346,12 @@ module BDDSimp = struct
     | "sle_bits", [w], [x; y] -> (match x,y with 
         | Val x, Val y -> Val (signed_lte_bits x y)
         | _,_ -> Top)
-    | "add_bits", [w], [x; y] -> (match x,y with 
-        | Val x, Val y -> Val (signed_add_wrap x y)
+    | "add_bits", [Expr_LitInt w], [x; y] -> (match x,y with 
+      | Val x, Val y -> let r = (signed_add_wrap x y) in assert (List.length r == (int_of_string w)); Val r
         | _,_ -> Top)
+    | "sub_bits", [w], [x; y] -> (match x,y with 
+        | Val x, Val y -> Val (signed_add_wrap x (signed_negation y))
+        | _,_ -> Top) 
     | "lsr_bits", [w;w'], [x; y] -> Top
 
     | _, _, _ -> 
@@ -2363,7 +2368,7 @@ module BDDSimp = struct
           | '1' -> (MLBDD.dtrue st.man)::acc
           | '0' -> (MLBDD.dfalse st.man)::acc
           | _ -> acc) b [])
-    | Expr_LitInt e -> Printf.printf "Overapprox litint %s\n" (e);Top
+    | Expr_LitInt e -> Top
 
     | Expr_Var id -> get_var id st
 
