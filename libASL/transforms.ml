@@ -1723,6 +1723,7 @@ module type ScopedBindings = sig
     val add_bind : 'elt t  -> ident -> 'elt -> unit 
     val find_binding : 'elt t -> ident -> 'elt option 
     val current_scope_bindings : 'elt t -> 'elt Bindings.t
+    val init: unit -> 'elt t  
 end
 
 module ScopedBindings : ScopedBindings = struct 
@@ -1731,13 +1732,13 @@ module ScopedBindings : ScopedBindings = struct
   let pop_scope (b:'elt t) (_:unit) : unit = Stack.pop_opt b |> ignore 
   let add_bind (b:'elt t) k v : unit = Stack.push (Bindings.add k v (Stack.pop b)) b 
   let find_binding (b:'elt t) (i) : 'a option = Seq.find_map (fun s -> Bindings.find_opt i s) (Stack.to_seq b)
+  let init (u:unit) : 'elt t = let s = Stack.create () in Stack.push (Bindings.empty) s; s
 
-  
-  (** returns a flattened view of bindings accessible from the current (innermost) scope. *)
-  let current_scope_bindings (b:'elt t) : 'elt Bindings.t =
-    (* inner bindings shadow outer bindings. *)
-    let join = Bindings.union (fun _ inner _outer -> Some inner) in
-    Seq.fold_left join Bindings.empty (Stack.to_seq b)
+  let current_scope_bindings (b:'elt t) : 'elt Bindings.t = 
+    let keyset c = IdentSet.of_list (Bindings.bindings c |> List.map fst) in
+    let keysdiff a b = IdentSet.diff (keyset a) (keyset b) in
+    let join bas bbs = Bindings.add_seq (Seq.map (fun i -> i, Bindings.find i bbs) (IdentSet.to_seq (keysdiff bbs bas))) bas in
+    List.fold_left join Bindings.empty (List.of_seq (Stack.to_seq b))
 end
 
 module FixRedefinitions = struct
@@ -1808,7 +1809,6 @@ module FixRedefinitions = struct
        (match (this#existing_binding e) with
           | Some e -> ChangeTo (ident_for_v e)
           | None -> SkipChildren)
-
     end
 
   let run (g: IdentSet.t) (s:stmt list) : stmt list =

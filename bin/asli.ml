@@ -60,6 +60,7 @@ let help_msg = [
 let gen_backends = [
     ("ocaml", (Cpu.Ocaml, "offlineASL"));
     ("cpp",   (Cpu.Cpp, "offlineASL-cpp"));
+    ("scala",   (Cpu.Scala, "offlineASL-cpp"));
 ]
 
 let flags = [
