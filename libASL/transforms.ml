@@ -1755,13 +1755,13 @@ module FixRedefinitions = struct
             this#add_bind b; DoChildren
         | Stmt_If (c, t, els, e, loc) ->
             let c'   = visit_expr this c in
-            this#push_scope () ;
+            (*this#push_scope () ; *)
             let t'   = visit_stmts this t in
-            this#pop_scope (); this#push_scope () ;
+            (*this#pop_scope (); this#push_scope () ; *)
             let els' = mapNoCopy (visit_s_elsif this ) els in
-            this#pop_scope (); this#push_scope () ;
+            (*this#pop_scope (); this#push_scope () ; *)
             let e'   = visit_stmts this e in
-            this#pop_scope ();
+            (*this#pop_scope (); *)
             ChangeTo (Stmt_If (c', t', els', e', loc))
         | Stmt_For (var, start, dir, stop, body, loc) ->
             let start' = visit_expr this start in

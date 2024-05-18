@@ -357,6 +357,7 @@ let run iset pat env =
   let fns = Bindings.filter_map (fun fn fnsig ->
     if not (Bindings.mem fn instrs) then None
     else Option.map (fnsig_set_body fnsig) (dis_wrapper fn fnsig env')) fns in
+
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
 
   Printf.printf "Stmt Counts\n";
@@ -372,6 +373,7 @@ let run iset pat env =
   let tests = Bindings.map (fun s -> fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) s) tests in
   Printf.printf "\n";
 
+
   (* Perform offline PE *)
   Printf.printf "Stages 7-8: Offline Transform\n";
   flush stdout;
@@ -381,5 +383,9 @@ let run iset pat env =
   let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests offline_fns)) dsig in
   let dsig = fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) dsig in
   Printf.printf "\n";
+
+  let offline_fns = List.concat_map (fun (name,fn) -> Offline_opt.TailCallForm.outline 2000 name fn ) (Bindings.bindings offline_fns) in 
+  let offline_fns = Bindings.of_seq (List.to_seq offline_fns) in
+
 
   (did,dsig,tests,offline_fns)

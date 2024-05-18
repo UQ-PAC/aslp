@@ -290,6 +290,103 @@ module CopyProp = struct
 
 end
 
+module TailCallForm = struct
+
+  (*
+  Enforce size threshold of procedures by putting in the form; 
+    a + f1 ( b + f2 (c + f3 (d + f4 (return x))))
+  *)
+
+  class stmt_counter = object(this)
+    inherit Asl_visitor.nopAslVisitor
+    val mutable stmt_count: int  = 0
+    val mutable expr_count: int  = 0
+
+    method !vstmt s = stmt_count <- stmt_count + 1; DoChildren
+
+    method !vexpr s = expr_count <- expr_count + 1; DoChildren
+
+    method count (s:stmt) : int = stmt_count <- 0; (Asl_visitor.visit_stmt this s) |> ignore; stmt_count
+
+    method expr_count (e:expr) : int = expr_count <- 0; (Asl_visitor.visit_expr this e) |> ignore ; expr_count
+    method gexpr_count = expr_count
+  end
+
+  type st = {
+    const_var_types: ty Bindings.t; (* not here means global *)
+    live_vars: IdentSet.t;
+  }
+
+  let s_count s = (new stmt_counter)#count s 
+
+  let uniq_counter : int ref = ref 0
+  let new_index _ : int = uniq_counter := !uniq_counter + 1 ; !uniq_counter
+  let new_name pref = match pref with 
+    | Ident pref ->  Ident ( pref ^ "_split" ^ (string_of_int (new_index ())))
+    | FIdent (pref, _) ->  FIdent ( pref ^ "_split" ^ (string_of_int (new_index ())), 0)
+  let new_indexs (b: string) : string = b ^ (string_of_int (new_index ()))
+
+  type fn = {
+    name: ident; 
+    targs: (ident) list;
+    args: (ty * ident) list;
+    returning: bool;
+    body: stmt list;
+  }
+
+    (* backwards walk, assuming rem has body in reverse order *)
+    let rec walk_stmts threshold (st:st) (rem:fn) (accl:stmt list) (acc:fn list) count returning =
+    (* TODO: also outline if statement bodies*)
+      match rem.body with 
+        | [] -> {rem with body = accl}::acc
+        | s::tl -> 
+          let returning = match s with 
+            | Stmt_FunReturn _ -> true
+            | _ -> returning
+          in 
+        let scount = (s_count s) in
+        let count = count + scount  in
+        let st' = {st with live_vars = IdentSet.union (fv_stmt s) st.live_vars} in
+        if (count > threshold) then 
+          let nfname = new_name (rem.name)  in
+          let arglist = IdentSet.filter (fun i -> (Bindings.mem i st.const_var_types)) st.live_vars in
+          let arglist = IdentSet.to_seq arglist |> List.of_seq in
+          let newfun : fn = {name=nfname; targs=[]; args=List.map (fun i -> Bindings.find i st.const_var_types, i) arglist; 
+            returning; 
+            body=s::accl} 
+          in
+          let argslist = List.map (fun i -> Expr_Var i) arglist in
+          let call =  if returning 
+            then Stmt_FunReturn (Expr_TApply (newfun.name, [], argslist), Unknown) 
+            else Stmt_TCall (newfun.name, [], argslist, Unknown) in
+          (walk_stmts threshold st' {rem with body = tl; returning = returning} [s; call] (newfun::acc) 
+          (if scount < threshold then scount else (Printf.printf "warn: single statement over outline threshold %d in %s\n" scount (pprint_ident rem.name); 0 ))
+          returning)
+        else
+          (walk_stmts threshold st' {rem with body = tl; returning = returning} (s::accl) acc count returning)
+
+  let outline threshold name (fn: Eval.fun_sig) : (ident * Eval.fun_sig) list =  
+    let f = {name=name; 
+      returning=Option.is_some (fnsig_get_rt fn);
+      targs=fnsig_get_targs fn;
+      args=fnsig_get_typed_args fn; 
+      body=List.rev (fnsig_get_body fn);
+    } in 
+    (* TODO: handle mutable parameters (probably just another identset)*)
+    let defs = locals_of_stmts (fnsig_get_body fn) in
+    let ns =  {const_var_types = defs; live_vars = IdentSet.empty} in 
+    let upd x y = x  in
+    let funcs = walk_stmts threshold ns f [] [] 0 false  in
+    List.map (fun f -> f.name, 
+      (let fn = fnsig_upd_body (upd (f.body)) fn in
+      let fn = fnsig_upd_typed_args (upd f.args) fn in  
+      let fn = fnsig_upd_args (upd (List.map snd f.args)) fn in
+      let fn = fnsig_upd_targs (upd f.targs) fn in
+      fn)
+    ) funcs
+end
+
+
 module DeadContextSwitch = struct
   (* Backwards walk to reduce consecutive context switches.
      Could be extended to any context switches with no rt gen operations between,

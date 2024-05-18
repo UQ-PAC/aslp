@@ -265,10 +265,17 @@ let assigned_vars_of_decl decl =
 class localsClass = object (self)
     inherit nopAslVisitor
 
-    val mutable stack = [(Bindings.empty : ty Bindings.t)]
+    val mutable stack = [(Bindings.empty : (ty * bool) Bindings.t)]
+
+    method mutable_locals =
+        let merge _ x y = Some x in
+        List.fold_right (Bindings.union merge) stack Bindings.empty |>
+        Bindings.filter (fun _ (_,b) -> b)
+
     method locals =
         let merge _ x y = Some x in
-        List.fold_right (Bindings.union merge) stack Bindings.empty
+        List.fold_right (Bindings.union merge) stack Bindings.empty |>
+        Bindings.map fst 
 
     method add_local (ty, id) =
         match stack with
@@ -276,18 +283,17 @@ class localsClass = object (self)
         | [] -> failwith "addLocal: empty stack"
     method! enter_scope vars =
         stack <- Bindings.empty :: stack;
-        List.iter self#add_local vars
+        (* assume locals bound through with_locals are mutable *)
+        List.iter self#add_local (List.map (fun (t,i) -> (t, true), i) vars)
     method! leave_scope () =
         match stack with
         | s :: ss -> stack <- ss
         | [] -> failwith "leave_scope: empty stack"
     method! vstmt = function
-        | Stmt_VarDecl (ty, id, _, _)
-        | Stmt_ConstDecl (ty, id, _, _) ->
-            self#add_local (ty, id);
-            DoChildren
+        | Stmt_VarDecl (ty, id, _, _) -> self#add_local ((ty, true), id); DoChildren
+        | Stmt_ConstDecl (ty, id, _, _) -> self#add_local ((ty, false), id); DoChildren
         | Stmt_VarDeclsNoInit (ty, ids, _) ->
-            List.iter (fun id -> self#add_local (ty, id)) ids;
+            List.iter (fun id -> self#add_local ((ty, false), id)) ids;
             DoChildren
         | _ ->
             DoChildren
