@@ -24,6 +24,7 @@
    symbolic_lifter decoder_program call_graph req_analysis
    offline_transform ocaml_backend dis_tc
    offline_opt
+   cpp_backend
    )
  (libraries pprint zarith z3 str pcre  dune-site))
 
