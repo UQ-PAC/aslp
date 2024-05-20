@@ -545,6 +545,35 @@ let masklength (x: string): int =
     String.iter (function ' ' -> () | _ -> r := !r + 1) x;
     !r
 
+(* Location of a statement *)
+let get_loc s =
+  match s with
+  | Stmt_If(_, _, _, _, loc)
+  | Stmt_VarDeclsNoInit(_, _, loc)
+  | Stmt_VarDecl(_, _, _, loc)
+  | Stmt_ConstDecl(_, _, _, loc)
+  | Stmt_Assign(_,_,loc)
+  | Stmt_FunReturn(_,loc)
+  | Stmt_ProcReturn(loc)
+  | Stmt_Assert(_, loc)
+  | Stmt_Unpred loc
+  | Stmt_ConstrainedUnpred loc
+  | Stmt_ImpDef (_, loc)
+  | Stmt_Undefined loc
+  | Stmt_ExceptionTaken loc
+  | Stmt_Dep_Unpred loc
+  | Stmt_Dep_Undefined loc
+  | Stmt_See (_,loc)
+  | Stmt_Throw (_, loc)
+  | Stmt_DecodeExecute (_, _, loc)
+  | Stmt_TCall (_, _, _, loc)
+  | Stmt_Case (_, _, _, loc)
+  | Stmt_For (_, _, _, _, _, loc)
+  | Stmt_While (_, _, loc)
+  | Stmt_Repeat (_, _, loc)
+  | Stmt_Try (_, _, _, _, loc)
+  | Stmt_Dep_ImpDef (_, loc) -> loc
+
 (****************************************************************)
 (** {2 Function signature accessors}                            *)
 (****************************************************************)

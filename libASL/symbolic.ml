@@ -252,16 +252,6 @@ let sym_eq_bits  = prim_binop "eq_bits"
 
 let sym_eq_real  = prim_binop "eq_real"
 
-let sym_inmask loc v mask =
-  match v with
-  | Val x -> Val (VBool (prim_in_mask (to_bits loc x) mask))
-  | Exp e ->
-      let n = mask.n in
-      let ne = Expr_LitInt (string_of_int n) in
-      let m = val_expr (VBits {v = mask.m; n}) in
-      let v = val_expr (VBits {v = mask.v; n}) in
-      Exp (Expr_TApply (FIdent ("eq_bits", 0), [ne], [(Expr_TApply (FIdent ("and_bits", 0), [ne], [e; m]));v]))
-
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
   (match (x,y) with
   | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
@@ -418,6 +408,16 @@ let sym_and_bits loc w (x: sym) (y: sym) =
   | Val x, y when is_one_bits x -> y
   | x, Val y when is_one_bits y -> x
   | _ -> Exp (Expr_TApply (FIdent ("and_bits", 0), [w], [sym_expr x; sym_expr y]) )
+
+let sym_inmask loc v mask =
+  match v with
+  | Val x -> Val (VBool (prim_in_mask (to_bits loc x) mask))
+  | Exp e ->
+      let n = mask.n in
+      let ne = Expr_LitInt (string_of_int n) in
+      let m = Val (VBits {v = mask.m; n}) in
+      let v = Val (VBits {v = mask.v; n}) in
+      sym_eq_bits loc (sym_and_bits loc ne (Exp e) m) v
 
 let sym_or_bits loc w (x: sym) (y: sym) =
   match x, y with
