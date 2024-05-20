@@ -2386,32 +2386,41 @@ module BDDSimp = struct
 
 
   let rebuild_expr e cond st =
+    let bd_to_test b = 
+        let bv = Value.to_mask Unknown (Value.from_maskLit b) in
+        sym_expr @@ sym_inmask Unknown (Exp (Expr_Var (Ident "enc"))) bv
+      in
     match cond with
     | Val [cond] ->
-        let c = ctx_to_mask st.ctx in
         let imps = MLBDD.allprime cond in
+        (*
+        Does not work;
+
+        let c = ctx_to_mask st.ctx in
         let imps = List.map (fun v -> clear_bits v c) imps in
-        let rebuild = List.fold_right (fun vars -> 
-          MLBDD.dor 
-          (List.fold_right (fun (b,v) -> 
+        *)
+
+        let rebuild = List.fold_right (fun vars ->
+          MLBDD.dor
+          (List.fold_right (fun (b,v) ->
             MLBDD.(dand (if b then ithvar st.man v else dnot (ithvar st.man v)))
           ) vars (MLBDD.dtrue st.man))
         ) imps (MLBDD.dfalse st.man) in
         let imps = MLBDD.allprime rebuild in
         let masks = List.map DecoderChecks.implicant_to_mask imps in
         (match masks with
-        | [b] ->
-          let bv = Value.to_mask Unknown (Value.from_maskLit b) in
-          sym_expr @@ sym_inmask Unknown (Exp (Expr_Var (Ident "enc"))) bv
-        | _ -> 
-            let try2 = MLBDD.dnot cond in
-            (if List.length (MLBDD.allprime try2) = 1 then
-              Printf.printf "Neg candidate %s %s\n" (pp_expr e) (Utils.pp_list DecoderChecks.implicant_to_mask (MLBDD.allprime try2))
-            else
-              Printf.printf "Can't simp %s %s\n" (pp_expr e) (Utils.pp_list (fun i -> i) masks));
-              Printf.printf "Ctx %s\n" (Utils.pp_list DecoderChecks.implicant_to_mask (MLBDD.allprime st.ctx));
-            e)
-    | _ -> 
+        | [] -> Printf.printf "Unsat bdd formula\n" ; e
+        | [b] -> bd_to_test b
+        | b::bs  ->
+              let try2 = MLBDD.dnot cond |> MLBDD.allprime |> List.map DecoderChecks.implicant_to_mask in
+              match try2 with
+                | [b] -> Expr_TApply (FIdent ("not_bool", 0), [], [bd_to_test b])
+                | _ ->  (let r = (let tests = (List.map bd_to_test (b::bs)) in
+              let bool_or x y = Expr_TApply(FIdent("or_bool", 0), [], [x;y]) in
+              List.fold_left bool_or (List.hd tests) (List.tl tests)) in
+              r)
+          )
+    | _ ->
         Printf.printf "no value %s %s\n" (pp_expr e) (pp_abs cond);
         e
 
