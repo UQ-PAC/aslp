@@ -2322,32 +2322,32 @@ module BDDSimp = struct
 
   let half_add_bit l r = MLBDD.dand l r, MLBDD.xor l r  (* carry, sum *) 
   let full_add_bit l r carry = 
-    let s1,c1 = half_add_bit l r in
-    let o, c2 = half_add_bit s1 carry in
+    let c1,s1 = half_add_bit l r in
+    let c2,o = half_add_bit s1 carry in
     let ocarry = MLBDD.dor c1 c2 in
-    o,ocarry 
+    ocarry,o
 
   let twos_comp_add (xs : MLBDD.t list) (ys: MLBDD.t list) : MLBDD.t * (MLBDD.t list)= 
       let xs = List.rev xs in let ys = List.rev ys in
       match xs,ys with 
         | hx::tlx,hy::tly ->  
-          let lsb,lscarry = half_add_bit hx hy in
+          let lscarry,lsb = half_add_bit hx hy in
           let bits,carry = List.fold_left2
-            (fun (acc,carry) (l:MLBDD.t) (r:MLBDD.t)  -> let o,carry = (full_add_bit l r carry) in o::acc, carry) 
+          (fun (acc,carry) (l:MLBDD.t) (r:MLBDD.t)  -> let carry,o = (full_add_bit l r carry) in o::acc , carry) 
             ([lsb], lscarry) tlx tly
           in carry,bits
         | _,_ -> failwith "invalid bit strings"
 
-  let signed_add_wrap x y = Printf.printf "SIGNED ADD WRAP\n"; let _,bits = twos_comp_add x y in bits
+  let signed_add_wrap x y = let _,bits = twos_comp_add x y in bits
 
-
+  
   let addone m xs  = let one = MLBDD.dtrue m in
       let xs = List.rev xs  in
       let c,rs = match xs with 
         | hx::tlx ->  
-          let lsb,lscarry = half_add_bit hx one in
+          let lscarry,lsb = half_add_bit hx one in
           let bits,carry = List.fold_left
-            (fun (acc,carry) (l:MLBDD.t) -> let o,carry = (half_add_bit l carry) in o::acc, carry) 
+            (fun (acc,carry) (l:MLBDD.t) -> let carry,o = (half_add_bit l carry) in o::acc, carry) 
             ([lsb], lscarry) tlx
           in carry,bits
         | _ -> failwith "no"
@@ -2380,11 +2380,18 @@ module BDDSimp = struct
   (* https://cs.nyu.edu/pipermail/smt-lib/2007/000182.html *)
 
 
-  let bvugt m x y : MLBDD.t = List.fold_left2 (fun acc x y -> MLBDD.dor acc (MLBDD.dand (MLBDD.dnot acc) (MLBDD.dand x (MLBDD.dnot y)))) (MLBDD.dfalse m) x y
+  let eq_bit a b = MLBDD.dnot (MLBDD.xor a b)
+
+  let bvugt m s t : MLBDD.t = let a, b = (List.fold_left2 (fun (gt, bnotsetfirst) a b ->
+      MLBDD.dor gt (MLBDD.dand (bnotsetfirst) ((MLBDD.dand a (MLBDD.dnot b)))), (* false until a > b*)
+      MLBDD.dand bnotsetfirst (MLBDD.dnot (MLBDD.dand (MLBDD.dnot gt) (MLBDD.dand b (MLBDD.dnot a)))) (* true until a < b*)
+     )
+      (MLBDD.dfalse m, MLBDD.dtrue m) (s) (t))
+  in (MLBDD.dand a b)
+
   let bvult m x y : MLBDD.t = bvugt m y x 
   let bvule m x y = MLBDD.dor (bvult m x y) (eq_bvs x y)
   let bvuge m x y = MLBDD.dor (bvugt m x y) (eq_bvs x y)
-  let eq_bit a b = MLBDD.dnot (MLBDD.xor a b)
 
   let bvslt m x y = MLBDD.dor 
     (MLBDD.dand (List.hd x) (MLBDD.dnot (List.hd y)))
@@ -2453,11 +2460,10 @@ module BDDSimp = struct
     | "uge_bits", [w], [x; y] -> wrap_bv_bool bvuge st.man x y  
     | "sle_bits", [w], [x; y] -> wrap_bv_bool bvsle st.man x y  
     | "sge_bits", [w], [x; y] -> wrap_bv_bool bvsge st.man x y  
-
-
-    (*
     | "slt_bits", [w], [x; y] -> wrap_bv_bool bvslt st.man x y  
     | "sgt_bits", [w], [x; y] -> wrap_bv_bool bvsgt st.man x y  
+
+    (*
 
     | "lsl_bits", [w], [x; y] -> Top
     | "lsr_bits", [w], [x; y] -> Top
