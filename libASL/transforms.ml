@@ -2320,14 +2320,14 @@ module BDDSimp = struct
         Val (sublist v start wd)
 
 
+  let half_add_bit l r = MLBDD.dand l r, MLBDD.xor l r  (* carry, sum *) 
+  let full_add_bit l r carry = 
+    let s1,c1 = half_add_bit l r in
+    let o, c2 = half_add_bit s1 carry in
+    let ocarry = MLBDD.dor c1 c2 in
+    o,ocarry 
+
   let twos_comp_add (xs : MLBDD.t list) (ys: MLBDD.t list) : MLBDD.t * (MLBDD.t list)= 
-      let half_add_bit l r = MLBDD.dand l r, MLBDD.xor l r  (* carry, sum *) in
-      let full_add_bit l r carry = 
-        let s1,c1 = half_add_bit l r in
-        let o, c2 = half_add_bit s1 carry in
-        let ocarry = MLBDD.dor c1 c2 in
-        o,ocarry 
-    in
       let xs = List.rev xs in let ys = List.rev ys in
       match xs,ys with 
         | hx::tlx,hy::tly ->  
@@ -2338,20 +2338,33 @@ module BDDSimp = struct
           in carry,bits
         | _,_ -> failwith "invalid bit strings"
 
-  let signed_add_wrap x y = let _,bits = twos_comp_add x y in bits
-  let signed_negation x =  (List.map MLBDD.dnot x)
+  let signed_add_wrap x y = Printf.printf "SIGNED ADD WRAP\n"; let _,bits = twos_comp_add x y in bits
 
-  let signed_sub_wrap x y = let _,bits = twos_comp_add x (signed_negation y) in bits
 
-  let signed_lt x y =  
-    let xneg = List.hd x  in let yneg = List.hd y in
-    let carry,subbits = (twos_comp_add x (signed_negation y)) in
-    let b = MLBDD.dand xneg (MLBDD.dnot yneg) in (* x < 0 < y*)
-    let b1 = MLBDD.dand (MLBDD.dand xneg  yneg) (List.hd subbits) in  (* x < y < 0*)
-    let b2 = MLBDD.dand (MLBDD.dnot (MLBDD.dor xneg yneg)) (MLBDD.dnot (List.hd subbits)) (* 0 < x < y*)
-    in [MLBDD.dor b (MLBDD.dor b1 b2)]
+  let addone m xs  = let one = MLBDD.dtrue m in
+      let xs = List.rev xs  in
+      let c,rs = match xs with 
+        | hx::tlx ->  
+          let lsb,lscarry = half_add_bit hx one in
+          let bits,carry = List.fold_left
+            (fun (acc,carry) (l:MLBDD.t) -> let o,carry = (half_add_bit l carry) in o::acc, carry) 
+            ([lsb], lscarry) tlx
+          in carry,bits
+        | _ -> failwith "no"
+      in rs
+    
 
-  let signed_gt x y = List.map MLBDD.dnot (signed_lt x y)
+  let signed_negation m (x:MLBDD.t list) =  addone m (List.map MLBDD.dnot x)
+
+  let signed_sub_wrap m x y = let _,bits = twos_comp_add x (signed_negation m y) in bits
+
+(*
+  let signed_lt m x y =  
+
+  let signed_gt m x y = List.map MLBDD.dnot (signed_lt m x y)
+  *)
+
+
 
   let eq_bvs a b = 
     let bits = List.map2 MLBDD.eq a b in
@@ -2359,8 +2372,39 @@ module BDDSimp = struct
       | x::xs -> List.fold_right MLBDD.dand xs x
       | _ -> failwith "bad bits width"
 
-    let signed_lte_bits x y = [MLBDD.dor (eq_bvs x y) (List.hd (signed_lt x y))]
-    let signed_gte_bits x y = [MLBDD.dor (eq_bvs x y) (List.hd (signed_gt x y))]
+    let sle_bits m x y = 
+      MLBDD.dor 
+        (MLBDD.dand (List.hd x) (MLBDD.dnot (List.hd y)))
+        (MLBDD.dnot (MLBDD.xor (List.hd x) (List.hd y)) )
+
+  (* https://cs.nyu.edu/pipermail/smt-lib/2007/000182.html *)
+
+
+  let bvugt m x y : MLBDD.t = List.fold_left2 (fun acc x y -> MLBDD.dor acc (MLBDD.dand (MLBDD.dnot acc) (MLBDD.dand x (MLBDD.dnot y)))) (MLBDD.dfalse m) x y
+  let bvult m x y : MLBDD.t = bvugt m y x 
+  let bvule m x y = MLBDD.dor (bvult m x y) (eq_bvs x y)
+  let bvuge m x y = MLBDD.dor (bvugt m x y) (eq_bvs x y)
+  let eq_bit a b = MLBDD.dnot (MLBDD.xor a b)
+
+  let bvslt m x y = MLBDD.dor 
+    (MLBDD.dand (List.hd x) (MLBDD.dnot (List.hd y)))
+    (MLBDD.dand (eq_bit (List.hd x) (List.hd y)) (bvult m x y))
+
+  let bvsgt m x y = bvslt m y x
+
+  let bvsle m x y = MLBDD.dor 
+    (MLBDD.dand (List.hd x) (MLBDD.dnot (List.hd y)))
+    (MLBDD.dand (eq_bit (List.hd x) (List.hd y)) (bvule m x y))
+
+  let bvsge m x y = bvsle m y x 
+
+  let wrap_bv_bool f m x y  =  match x , y with 
+      | Val x, Val y -> Val [(f m x y)]
+      | _,_ -> Top
+
+  (*
+    let signed_gte_bits m x y = [MLBDD.dor (eq_bvs x y) (List.hd (signed_gt m x y))]
+  *)
 
 
   let twos_comp_sub man (xs : MLBDD.t list) (ys: MLBDD.t list) = ()
@@ -2397,17 +2441,29 @@ module BDDSimp = struct
         zero_extend_bits x (int_of_string nw) st
     | "SignExtend", [w;Expr_LitInt nw], [x; y] ->
         sign_extend_bits x (int_of_string nw) st
-
-    | "sle_bits", [w], [x; y] -> (match x,y with 
-        | Val x, Val y -> Val (signed_lte_bits x y)
-        | _,_ -> Top)
+      
     | "add_bits", [Expr_LitInt w], [x; y] -> (match x,y with 
       | Val x, Val y -> let r = (signed_add_wrap x y) in assert (List.length r == (int_of_string w)); Val r
         | _,_ -> Top)
     | "sub_bits", [w], [x; y] -> (match x,y with 
-        | Val x, Val y -> Val (signed_add_wrap x (signed_negation y))
+        | Val x, Val y -> Val (signed_add_wrap x (signed_negation st.man y))
         | _,_ -> Top) 
-    | "lsr_bits", [w;w'], [x; y] -> Top
+        
+    | "ule_bits", [w], [x; y] -> wrap_bv_bool bvule st.man x y  
+    | "uge_bits", [w], [x; y] -> wrap_bv_bool bvuge st.man x y  
+    | "sle_bits", [w], [x; y] -> wrap_bv_bool bvsle st.man x y  
+    | "sge_bits", [w], [x; y] -> wrap_bv_bool bvsge st.man x y  
+
+
+    (*
+    | "slt_bits", [w], [x; y] -> wrap_bv_bool bvslt st.man x y  
+    | "sgt_bits", [w], [x; y] -> wrap_bv_bool bvsgt st.man x y  
+
+    | "lsl_bits", [w], [x; y] -> Top
+    | "lsr_bits", [w], [x; y] -> Top
+    | "asr_bits", [w], [x; y] -> Top
+    | "mul_bits", _, [x; y] -> Top
+      *)
 
     | _, _, _ -> 
         Printf.printf "unknown prim %s\n" f;
@@ -2473,58 +2529,38 @@ module BDDSimp = struct
 
 
   let bdd_to_expr cond st =
-      let c = ctx_to_mask st.ctx in
-      let imps = MLBDD.allprime cond in
-      let imps = List.map (fun v -> clear_bits v c) imps in
-      (*let rebuild = List.fold_right (fun vars -> 
-        MLBDD.dor 
-        (List.fold_right (fun (b,v) -> 
-          MLBDD.(dand (if b then ithvar st.man v else dnot (ithvar st.man v)))
-        ) vars (MLBDD.dtrue st.man))
-      ) imps (MLBDD.dfalse st.man) in 
-      let imps = MLBDD.allprime rebuild in *)
-      let masks = List.map DecoderChecks.implicant_to_mask imps in
-      let bd_to_test b = 
-      (*("and_bits",          [VInt n], [VBits x; VBits y    ])*)
+    let bd_to_test b = 
         let bv = Value.to_mask Unknown (Value.from_maskLit b) in
         sym_expr @@ sym_inmask Unknown (Exp (Expr_Var (Ident "enc"))) bv
       in
-      (match masks with
-      | [b] -> bd_to_test b
-      | bs -> let tests = (List.map bd_to_test (List.tl bs)) in
-        let boolor a b = Expr_TApply(FIdent("or_bool", 0), [], [a;b]) in
-        List.fold_left boolor (List.hd tests) (List.tl tests))
-
-  let rebuild_expr e cond st =
     match cond with
     | Val [cond] ->
-        let c = ctx_to_mask st.ctx in
         let imps = MLBDD.allprime cond in
-        let imps = List.map (fun v -> clear_bits v c) imps in
-        let rebuild = List.fold_right (fun vars -> 
-          MLBDD.dor 
-          (List.fold_right (fun (b,v) -> 
+        let rebuild = List.fold_right (fun vars ->
+          MLBDD.dor
+          (List.fold_right (fun (b,v) ->
             MLBDD.(dand (if b then ithvar st.man v else dnot (ithvar st.man v)))
           ) vars (MLBDD.dtrue st.man))
         ) imps (MLBDD.dfalse st.man) in
         let imps = MLBDD.allprime rebuild in
         let masks = List.map DecoderChecks.implicant_to_mask imps in
         (match masks with
-        | [b] ->
-          let bv = Value.to_mask Unknown (Value.from_maskLit b) in
-          sym_expr @@ sym_inmask Unknown (Exp (Expr_Var (Ident "enc"))) bv
-        | _ -> 
-            (*
-            let try2 = MLBDD.dnot cond in
-            (if List.length (MLBDD.allprime try2) = 1 then
-              Printf.printf "Neg candidate %s %s\n" (pp_expr e) (Utils.pp_list DecoderChecks.implicant_to_mask (MLBDD.allprime try2))
-            else
-              Printf.printf "Can't simp %s %s\n" (pp_expr e) (Utils.pp_list (fun i -> i) masks));
-              Printf.printf "Ctx %s\n" (Utils.pp_list DecoderChecks.implicant_to_mask (MLBDD.allprime st.ctx)); *)
-            e)
-    | _ -> 
-        Printf.printf "no value %s %s\n" (pp_expr e) (pp_abs cond);
-        e
+        | [] -> None
+        | [b] -> Some (bd_to_test b)
+        | b::bs  ->
+              let try2 = MLBDD.dnot cond |> MLBDD.allprime |> List.map DecoderChecks.implicant_to_mask in
+              match try2 with
+                | [b] -> Some (Expr_TApply (FIdent ("not_bool", 0), [], [bd_to_test b]))
+                | _ ->  (let r = (let tests = (List.map bd_to_test (b::bs)) in
+              let bool_or x y = Expr_TApply(FIdent("or_bool", 0), [], [x;y]) in
+              List.fold_left bool_or (List.hd tests) (List.tl tests)) in
+              Some r)
+          )
+    | _ -> None
+
+  let rebuild_expr e cond st = match bdd_to_expr cond st with 
+      | Some x -> x
+      | None -> Printf.printf "Unable to simplify expr" ; e
 
 
   class nopvis = object(self) 

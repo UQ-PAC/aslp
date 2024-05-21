@@ -769,7 +769,7 @@ statement s is the only definition of x reaching u on every path from s to u t
     copy-propagated at lift time. 
     *)
     method stmt_xform (s : stmt) : stmt list = 
-    let cp_cond c = Transforms.BDDSimp.bdd_to_expr (c) (Option.get rtst) in
+    let cp_cond c = Option.get (Transforms.BDDSimp.bdd_to_expr (Val [c]) (Option.get rtst)) in
     match s with 
       (* Transform runtime variable decls into expression decls *)
       | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f  ->
@@ -824,7 +824,7 @@ statement s is the only definition of x reaching u on every path from s to u t
           | PropCond cpcond -> let ncp,cp = cp_idents v  in
             let load = Expr_TApply(f, [], [Expr_Var ncp]) in
             let prop = Expr_Var cp in
-            let yescpcond = Transforms.BDDSimp.bdd_to_expr cpcond (Option.get rtst) in
+            let yescpcond = Option.get (Transforms.BDDSimp.bdd_to_expr (Val [cpcond]) (Option.get rtst)) in
             let vt = Bindings.find v candidates in
             (* TODO: might be good to check that yes and no are disjoint here *)
             let e = Expr_If (vt.typ, yescpcond, prop, [] , load) in

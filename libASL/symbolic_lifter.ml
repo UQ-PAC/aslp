@@ -395,7 +395,7 @@ let run include_pc iset pat env =
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.CopyProp.run k)) offline_fns in
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.DeadContextSwitch.run k)) offline_fns in
 
-  let use_rt_copyprop = true in
+  let use_rt_copyprop = false in
 
   let freachable k = 
     let k = match k with 
