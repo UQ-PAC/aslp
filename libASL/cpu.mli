@@ -8,6 +8,7 @@
 type gen_backend =
     | Ocaml
     | Cpp
+    | Scala
 
 type gen_function = Asl_ast.ident -> Eval.fun_sig -> Eval.fun_sig Asl_utils.Bindings.t -> Eval.fun_sig Asl_utils.Bindings.t -> string -> unit
 

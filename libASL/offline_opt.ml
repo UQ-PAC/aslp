@@ -289,10 +289,10 @@ module CopyProp = struct
     method! vstmt = function
       (* Transform runtime variable decls into expression decls *)
       | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f && candidate_var v st ->
-          ChangeDoChildrenPost(Stmt_VarDeclsNoInit(Offline_transform.rt_expr_ty, [v], loc), fun e -> e)
+          ChangeDoChildrenPost([Stmt_VarDeclsNoInit(Offline_transform.rt_expr_ty, [v], loc)], fun e -> e)
       (* Transform stores into assigns *)
       | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f && candidate_var v st ->
-          ChangeDoChildrenPost(Stmt_Assign(LExpr_Var v, e, loc), fun e -> e)
+          ChangeDoChildrenPost([Stmt_Assign(LExpr_Var v, e, loc)], fun e -> e)
       | _ -> DoChildren
   end
 

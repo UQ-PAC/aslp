@@ -19,3 +19,6 @@ scripts/result.txt
 scripts/output.txt
 scripts/cntlm.bir
 scripts/total.txt
+
+.cache/
+build/

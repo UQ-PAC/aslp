@@ -26,7 +26,7 @@ let opt_no_default_aarch64 = ref false
 let opt_print_aarch64_dir = ref false
 let opt_verbose = ref false
 
-let opt_debug_level = ref 0
+let opt_debug_level = ref (-1)
 
 
 let () = Printexc.register_printer
@@ -60,6 +60,7 @@ let help_msg = [
 let gen_backends = [
     ("ocaml", (Cpu.Ocaml, "offlineASL"));
     ("cpp",   (Cpu.Cpp, "offlineASL-cpp"));
+    ("scala",   (Cpu.Scala, "offlineASL-cpp"));
 ]
 
 let flags = [
@@ -325,7 +326,7 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
     )
 
 let options = Arg.align ([
-    ( "-x", Arg.Set_int opt_debug_level,      "       Debugging output");
+    ( "-x", Arg.Set_int opt_debug_level,      "       Partial evaluation debugging (requires debug level argument >= 0)");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
     ( "--no-aarch64", Arg.Set opt_no_default_aarch64 , "       Disable bundled AArch64 semantics");
     ( "--aarch64-dir", Arg.Set opt_print_aarch64_dir, "       Print directory of bundled AArch64 semantics");

@@ -223,7 +223,7 @@ module RefParams = struct
       inherit Asl_visitor.nopAslVisitor
       method! vstmt =
         function
-        | Stmt_ProcReturn _ -> ChangeTo s
+          | Stmt_ProcReturn _ -> ChangeTo [s]
         | Stmt_FunReturn _ -> failwith "unexpected function return in ref param conversion."
         | _ -> DoChildren
     end
@@ -300,8 +300,8 @@ module RefParams = struct
 
     val mutable n = 0;
 
-    method! vstmt (s: stmt): stmt visitAction =
-      match s with
+    method! vstmt (s: stmt): stmt list visitAction =
+      singletonVisitAction @@ match s with
       | Stmt_Assign (LExpr_Write (setter, targs, args), r, loc) ->
         (match Bindings.find_opt setter ref_params with
         | None -> DoChildren
@@ -843,7 +843,7 @@ module StatefulIntToBits = struct
           (merge t f,acc@[Stmt_If(e, tstmts, [], fstmts, loc)])
 
       | _ -> (* Otherwise, we have no statement nesting *)
-        let stmt = Asl_visitor.visit_stmt v stmt in
+        let stmt = Asl_visitor.visit_stmt_single v stmt in
         let (st,stmt) = (match stmt with
 
         (* Match integer writes *)
@@ -1489,8 +1489,8 @@ module RedundantSlice = struct
       | Some (Type_Array(_ix,ty)) -> Some ty
       | _ -> None
 
-    method! vstmt (s: stmt): stmt visitAction =
-      ChangeDoChildrenPost(s, fun s -> self#update_lvar_types s; s)
+    method! vstmt (s: stmt): stmt list visitAction =
+      singletonVisitAction @@ ChangeDoChildrenPost(s, fun s -> self#update_lvar_types s; s)
 
     method! vexpr (e: expr): expr visitAction =
       ChangeDoChildrenPost(e, fun e ->
@@ -1581,7 +1581,7 @@ module CommonSubExprElim = struct
       in
       result
 
-    method! vstmt (s: stmt): stmt visitAction =
+    method! vstmt (s: stmt): stmt list visitAction =
       let () = match s with
       | Stmt_ConstDecl(_, Ident(n), _, Unknown) when (Str.string_match (Str.regexp "Cse") n 0) ->
         do_replace <- false
@@ -1714,11 +1714,11 @@ module CaseSimp = struct
     inherit Asl_visitor.nopAslVisitor
 
     (* Assumes x is pure, as it is referenced within a branch condition *)
-    method! vstmt (s: stmt): stmt visitAction =
+    method! vstmt (s: stmt): stmt list visitAction =
       match match_outer s with
       | Some (x, r, w, loc, res) when is_total w res ->
           (match List.find_opt (fun (test,_) -> StringMap.for_all test res) fn_guess with
-          | Some (_,fn) -> ChangeTo (fn r x w loc)
+          | Some (_,fn) -> ChangeTo [fn r x w loc]
           | _ -> DoChildren)
       | _ -> DoChildren
 
@@ -1781,6 +1781,7 @@ module type ScopedBindings = sig
     val add_bind : 'elt t  -> ident -> 'elt -> unit
     val find_binding : 'elt t -> ident -> 'elt option
     val current_scope_bindings : 'elt t -> 'elt Bindings.t
+    val init: unit -> 'elt t  
 end
 
 module ScopedBindings : ScopedBindings = struct
@@ -1789,6 +1790,7 @@ module ScopedBindings : ScopedBindings = struct
   let pop_scope (b:'elt t) (_:unit) : unit = Stack.pop_opt b |> ignore
   let add_bind (b:'elt t) k v : unit = Stack.push (Bindings.add k v (Stack.pop b)) b
   let find_binding (b:'elt t) (i) : 'a option = Seq.find_map (fun s -> Bindings.find_opt i s) (Stack.to_seq b)
+  let init (u:unit) : 'elt t = let s = Stack.create () in Stack.push (Bindings.empty) s; s
 
 
   (** returns a flattened view of bindings accessible from the current (innermost) scope. *)
@@ -1829,7 +1831,7 @@ module FixRedefinitions = struct
       | None -> {name=i; index=0}
 
     method! vstmt s =
-      match s with
+      singletonVisitAction @@ match s with
         | Stmt_VarDeclsNoInit(ty, vs, loc) ->
             let ns = List.map this#incr_binding vs in
             List.iter this#add_bind ns; DoChildren
@@ -1866,7 +1868,6 @@ module FixRedefinitions = struct
        (match (this#existing_binding e) with
           | Some e -> ChangeTo (ident_for_v e)
           | None -> SkipChildren)
-
     end
 
   let run (g: IdentSet.t) (s:stmt list) : stmt list =

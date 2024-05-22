@@ -1,0 +1,6 @@
+(install
+ (section (site (asli aslfiles)))
+ (files
+  (interface.hpp as include/aslp/interface.hpp)
+  (aslp_lifter.hpp as include/aslp/aslp_lifter.hpp)
+  (aslp_lifter_impl.hpp as include/aslp/aslp_lifter_impl.hpp)))

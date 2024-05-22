@@ -78,7 +78,7 @@ module RemoveUnsupported = struct
     inherit Asl_visitor.nopAslVisitor
 
     method! vstmt e =
-      (match e with
+      singletonVisitAction (match e with
       | Stmt_Assert(e, loc) ->
           if contains_unsupported e unsupported env then ChangeTo (assert_false loc)
           else DoChildren
@@ -202,7 +202,7 @@ module Cleanup = struct
             (RemoveUnsupported.assert_false loc)
           else e
       | _ -> e) in
-      ChangeDoChildrenPost(e, reduce)
+      singletonVisitAction @@ ChangeDoChildrenPost(e, reduce)
   end
 
   let rec trim_post_term stmts =
@@ -272,7 +272,7 @@ module DecoderCleanup = struct
             (RemoveUnsupported.assert_false loc)
           else e
       | _ -> e) in
-      ChangeDoChildrenPost(e, reduce)
+      singletonVisitAction @@ ChangeDoChildrenPost(e, reduce)
   end
 
   let run unsupported dsig =
