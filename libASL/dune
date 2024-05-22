@@ -29,7 +29,7 @@
    cpp_backend
    scala_backend 
    )
- (libraries pprint zarith z3 str pcre  dune-site))
+ (libraries pprint zarith z3 str pcre mlbdd dune-site))
 
 (generate_sites_module
  (module res)

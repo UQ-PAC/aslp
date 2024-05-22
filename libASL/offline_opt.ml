@@ -263,6 +263,22 @@ module CopyProp = struct
     | None -> false
     | _ -> true
 
+  (* To change this, you'd need to know :
+      - The condition under which its safe to copy prop
+      - The current reachability
+
+     If you can't establish you are guarded, implies you need to introduce a branch.
+     The branch will have the outcomes of both exp reduction and maintaining the current temp.
+     Then need to specialise everything downstream for this point based on this introduced branch.
+
+     This means you need to pull the condition out to the front.
+     Which means its needs to be fully reduced and in terms of enc.
+     BDD approach gives us this flexibility, every single condition in the program in terms of original enc.
+     Relatively simple to reduce from that point: eliminate guards based on reachability, etc.
+
+     You can implement constant-prop and dead code in a similar fashion, as long as your notions of conditional
+     use / redefinition / loss of constant precision is purely in terms of the original enc.
+   *)
   class copyprop_transform st = object
     inherit Asl_visitor.nopAslVisitor
     method! vexpr = function

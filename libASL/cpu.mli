@@ -22,7 +22,7 @@ type cpu = {
     elfwrite : Int64.t -> char -> unit;
     opcode   : string -> Primops.bigint -> unit;
     sem      : string -> Primops.bigint -> unit;
-    gen      : string -> string -> gen_backend -> string -> unit;
+    gen      : string -> string -> bool -> gen_backend -> string -> unit;
 }
 
 val mkCPU : Eval.Env.t -> Dis.env -> cpu
