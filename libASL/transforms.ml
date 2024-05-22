@@ -2113,7 +2113,7 @@ module type RTAnalysisLattice = sig
   type rt (* RT lattice type *)
   type olt  (* LT lattice type *)
   val xfer_stmt : olt -> rt  -> stmt -> rt*stmt list
-  val join: olt -> rt -> rt  -> rt
+  val join: olt -> olt -> olt -> rt -> rt  -> rt
 end
 
 module BDDSimp = struct
@@ -2136,7 +2136,7 @@ module BDDSimp = struct
     type rt = unit
     type olt = state 
     let xfer_stmt o r s = r,[s]
-    let join o r ro = ()
+    let join o c j r ro = ()
     let init _ = ()
   end
 
@@ -2379,6 +2379,9 @@ module BDDSimp = struct
 
   (* https://cs.nyu.edu/pipermail/smt-lib/2007/000182.html *)
 
+  let unknown_prims = ref Bindings.empty
+  let print_unknown_prims (c:unit) = Bindings.to_seq !unknown_prims |> List.of_seq |> List.sort (fun a b -> compare (snd a) (snd b)) 
+    |> List.iter (fun (id,c) -> Printf.printf "%d \t : %s\n" c (pprint_ident id))
 
   let eq_bit a b = MLBDD.dnot (MLBDD.xor a b)
 
@@ -2472,7 +2475,8 @@ module BDDSimp = struct
       *)
 
     | _, _, _ -> 
-        Printf.printf "unknown prim %s\n" f;
+        unknown_prims  :=  (Bindings.find_opt (Ident f) !unknown_prims) |> (function Some x -> x + 1 | None -> 0) 
+            |> (fun x -> Bindings.add (Ident f) x !unknown_prims) ;
         Top
 
   let rec eval_expr e st =
@@ -2627,7 +2631,7 @@ module BDDSimp = struct
           let tst,xsa = eval_stmts xs tstmts (restrict_ctx cond {st with stmts = []}) in
           let fst,xsb = eval_stmts xs fstmts (restrict_ctx ncond {st with stmts = []}) in
           let st' = join_state cond tst fst in
-          let xs = Xf.join st' xsa xsb in
+          let xs = Xf.join tst fst st' xsa xsb in
 
           let st' = writeall st.stmts st' in
           let st' = write (Stmt_If (c, tst.stmts, [], fst.stmts, loc)) st' in

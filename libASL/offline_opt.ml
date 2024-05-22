@@ -44,6 +44,7 @@ let is_var_decl f =
   f = Offline_transform.rt_decl_bv || f = Offline_transform.rt_decl_bool
 
 
+  (*
 module CopyProp = struct
   type clas =
     Declared |
@@ -306,6 +307,7 @@ module CopyProp = struct
     Asl_visitor.visit_stmts v body
 
 end
+*)
 
 module DeadContextSwitch = struct
   (* Backwards walk to reduce consecutive context switches.
@@ -340,7 +342,7 @@ module RtCopyProp = struct
     match c with
     | Declared -> "Declared"
     | Defined ids -> "Defined (" ^ pp_identset ids ^ ")"
-    | Clobbered ids -> "Clobbered"
+    | Clobbered ids -> "Clobbered (" ^ pp_identset ids ^ ")"
     | Essential -> "Essential"
 
   let merge_clas a b =
@@ -378,7 +380,10 @@ module RtCopyProp = struct
     (* maps idents to the condution under which they are clobbered *)
     cond_clobbered: (MLBDD.t) Bindings.t; (* ident -> clobber condition (any dep updated) *)
     (* maps idents to the condition under which they are read after clobbering *)
-    cond_read_after_clobber: (MLBDD.t) Bindings.t; (* ident -> clobber condition (any dep updated) *)
+    cond_read: (MLBDD.t) Bindings.t; (* ident -> clobber condition (any dep updated) *)
+
+    (*deps: IdentSet.t Bindings.t; (* ident -> ident *) *)
+
     (* not used; stores dep sets for bindings (and the def reachability) *)
     cond_dep: (MLBDD.t * IdentSet.t) Bindings.t;  (* binding -> condition * deps *)
     (**)
@@ -389,16 +394,19 @@ module RtCopyProp = struct
   type olt = MLBDD.t
 
 
+  let pp_state st =
+    (pp_bindings pp_clas st.var_clas) ^ "\n" ^
+    "cond read: " ^
+    (pp_bindings (fun i -> Printf.sprintf "%s\n" (Transforms.BDDSimp.pp_abs (Val [i]))) st.cond_read) ^
+    "\ncond clob: " ^
+    (pp_bindings (fun i -> Printf.sprintf "%s\n" (Transforms.BDDSimp.pp_abs (Val [i]))) st.cond_clobbered)
+
+  let pp_essential st =
+    pp_bindings pp_clas (Bindings.filter (fun f v -> v = Essential) st.var_clas)
 
   let set_var v k st =
     let var_clas = Bindings.add v k st.var_clas in
     (* TODO: need to be adapted for new lattice ? *)
-    let _  = match k with 
-      | Declared -> ()
-      | Defined x -> ()
-      | Clobbered i -> ()
-      | Essential -> ()
-    in
     { st with var_clas }
 
 
@@ -415,52 +423,66 @@ module RtCopyProp = struct
 
   let add_conds is c bs = cond_merge bs (Seq.map (fun i -> i, c) is |>  Bindings.of_seq)
 
+
+  (* only update deps *)
   let clobber_var v st =
     let var_clas = Bindings.map (fun c -> match c with Defined ids | Clobbered ids when IdentSet.mem v ids -> Clobbered ids | _ -> c) st.var_clas in
-    let deps = Bindings.filter_map (fun i c -> match c with 
-      | Defined ids 
-      | Clobbered ids when IdentSet.mem v ids -> Some (st.bdd.ctx) 
-      | _ -> None) var_clas in
-    let cond_clobbered = cond_merge st.cond_clobbered deps in
-    { st with var_clas ; cond_clobbered }
+    (*let st = {st with cond_clobbered = (add_cond v (st.bdd.ctx) st.cond_clobbered)} in *)
+    let st = Seq.fold_left (fun st (i,c) -> 
+          match c with 
+        | Defined ids 
+        | Clobbered ids when IdentSet.mem v ids 
+          -> {st with cond_clobbered = (add_cond v (st.bdd.ctx) st.cond_clobbered)}
+        | _ -> st
+    ) st (Bindings.to_seq var_clas) in
+    { st with var_clas }
+
+  let update_clobbers st = 
+    (* update everything based on the conditions of their dependencies *)
+    let ids = Bindings.to_seq st.cond_clobbered  in
+    Seq.fold_left (fun st (iv,cond) -> 
+      let var_clas = Bindings.map (fun c -> match c with Defined ids | Clobbered ids when IdentSet.mem iv ids -> Clobbered ids | _ -> c) st.var_clas in
+      let st = Seq.fold_left (fun st (ii,c) -> match c with 
+          | Defined ids 
+          | Clobbered ids when IdentSet.mem ii ids -> {st with cond_clobbered = (add_cond ii cond st.cond_clobbered)}
+          | _ -> st
+      ) st (Bindings.to_seq var_clas) in
+      { st with var_clas }
+    )  st ids
+
+
 
   let get_var v st = Bindings.find_opt v st.var_clas
 
-
-  let merge_st (cond: Transforms.BDDSimp.abs) a b =
-    let ctx = a.ctx in
-    let unpack x = match x with 
-          | Transforms.BDDSimp.Val [a] -> Some a
-          | Transforms.BDDSimp.Val (h::tl) -> failwith "why?"
-          | _ -> None
-    in
-    let merged_bdd a b = Bindings.merge (fun (k:ident) (a) (b) -> match a,b with 
-      | Some a, Some b -> (unpack (Transforms.BDDSimp.join_abs cond (Val [a]) (Val [b])))
-      | Some a, None -> Some a
-      | None, Some a -> Some a
-      | None, None -> None)  a b in
-    let cond_clobbered = merged_bdd a.cond_clobbered b.cond_clobbered in
-    let cond_read_after_clobber = merged_bdd a.cond_read_after_clobber b.cond_read_after_clobber in
+  let merge_st (ts:MLBDD.t) (fs:MLBDD.t) (joined: Transforms.BDDSimp.state) xa xb =
+    let merge_cond a b = (MLBDD.dor (MLBDD.dand ts a) (MLBDD.dand fs b)) in
+    let merged_bdd = Bindings.merge (fun (k:ident) a b -> match a,b with 
+      | Some a, Some b -> Some (merge_cond a b)
+      | Some a, None ->  Some (MLBDD.dand ts a)
+      | None, Some a -> Some (MLBDD.dand fs a)
+      | None, None -> None) in
+    let cond_clobbered = merged_bdd xa.cond_clobbered xb.cond_clobbered in
+    let cond_read = merged_bdd xa.cond_read xb.cond_read in
     let cond_dep = Bindings.merge (fun k a b -> match a,b with 
-        | Some (isa, a), Some (isb, b) -> Option.map (fun x -> x, IdentSet.union a b) (unpack (Transforms.BDDSimp.join_abs cond (Val [isa]) (Val [isb])))
-        | Some a, None -> Some a
-        | None, Some a -> Some a
+        | Some (isa, a), Some (isb, b) -> Option.map (fun x -> x, IdentSet.union a b) (Some (merge_cond isa isb))
+        | Some (isa, a), None -> Some (MLBDD.dand ts isa, a)
+        | None, Some (isa, a) -> Some (MLBDD.dand fs isa, a)
         | _ -> None
-    ) a.cond_dep b.cond_dep in
+    ) xa.cond_dep xb.cond_dep in
     let var_clas = Bindings.merge (fun k a b ->
       match a, b with
       | Some a, Some b -> Some (merge_clas a b)
       | Some a, None
       | None, Some a -> Some a
-      | None, None -> None) a.var_clas b.var_clas in
-    let bdd = Transforms.BDDSimp.join_state cond a.bdd b.bdd in
-    { bdd; var_clas ; ctx ; cond_clobbered;  cond_read_after_clobber; cond_dep }
+      | None, None -> None) xa.var_clas xb.var_clas in
+    let st : state = {xa with bdd=joined; var_clas ; cond_clobbered=cond_clobbered;  cond_read=cond_read; cond_dep=cond_dep } in 
+    st
 
 
   let init_state reachable = {bdd=Transforms.BDDSimp.init_state reachable; 
     var_clas = Bindings.empty; ctx = []; 
     cond_clobbered = Bindings.empty ; 
-    cond_read_after_clobber = Bindings.empty ; 
+    cond_read = Bindings.empty ; 
     cond_dep = Bindings.empty}
 
   let push_context m st = { st with ctx = m::st.ctx }
@@ -483,30 +505,40 @@ module RtCopyProp = struct
 
   type xform = 
     | Prop 
-    | PropCond of MLBDD.t (* copyprop not allowed , should copyprop *)
+    | PropCond of MLBDD.t (* encoding whether prop is allowed *)
     | No
 
   let read_var v (st,i) =
+    let st = {st with cond_read = (add_cond v (st.bdd.ctx) st.cond_read )} in
     match get_var v st with
     (* Reading undeclared generally means a value that is gradually constructed through partial updates *)
-    | Some (Declared) ->
-        (set_var v Essential st, i)
+    | Some (Declared) -> (set_var v Essential st, i)
     (* Reading clobbered implies we cannot reorder *)
-    | Some (Clobbered ids) -> (
-        (* record read reachability *)
-        let clobbered = (Bindings.find v st.cond_clobbered)  in
-        let read_after_clobber = MLBDD.dand clobbered (st.bdd.ctx) in
-        let st = {st with cond_read_after_clobber = (add_cond v read_after_clobber st.cond_read_after_clobber)} in
-        st, i )
+    | Some (Clobbered deps) -> (st, IdentSet.union i deps)
         (*if (Transforms.BDDSimp.is_true clobbered st.bdd) then (set_var v Essential st, i) else st, i) *)
     (* Collect ids for transitive walk given a defined variable *)
-    | Some (Defined ids) ->
-        (st, IdentSet.union i ids)
+    | Some (Defined ids) -> (st, IdentSet.union i ids)
     | _ -> (st, i)
+
+  let write_var v (st,i) =
+    let st = if has_context st then (Printf.printf "rt branch dependent\n" ; set_var v Essential st) else st  in
+      (* cannot copy-prop exprs dependent on a run-time branch*)
+    let st = clobber_var v st in
+    Printf.printf "PRE STORE(%s) : %s\n"  (pprint_ident v) (pp_state st); 
+    let st = {st with cond_clobbered = (add_cond v (st.bdd.ctx) st.cond_clobbered )} in
+    let (st,i) = match get_var v st with
+    | Some (Declared) -> (set_var v (Defined i) st, i)
+    | Some (Defined ids) -> ((set_var v (Clobbered i) st), i)
+    | Some (Clobbered deps) -> (st, i)
+    | Some Essential -> (st, i)
+      | None -> (Printf.printf "BEANLESS\n"); (st, i)
+  in Printf.printf "POST STORE: %s\n" (pp_state st); (st,i)
+
 
   let impure_ident = Ident "CopyProp_impure"
 
   let read_vars (vs: IdentSet.t) (st: state): state =
+    Printf.printf "READ "; IdentSet.iter (fun i -> Printf.printf "%s " (pprint_ident i)) vs ; Printf.printf "\n";
     let read_set s st = IdentSet.fold read_var s (st,IdentSet.empty) in
     (* If impure is in the readset, the reads are not pure. Clobber any impure dependencies now. *)
     let st = if IdentSet.mem impure_ident vs then clobber_var impure_ident st else st in
@@ -521,7 +553,7 @@ module RtCopyProp = struct
 
   (* TODO: Updating, check if this has some context dependence *)
   let update_deps v deps st =
-    if has_context st then set_var v Essential st (* cannot copy-prop exprs dependent on a run-time branch*)
+    if has_context st then (Printf.printf "rt branch dependent\n" ; set_var v Essential st) (* cannot copy-prop exprs dependent on a run-time branch*)
     else
       match get_var v st with
       | Some (Declared) ->
@@ -566,11 +598,6 @@ module RtCopyProp = struct
     let _ = Asl_visitor.visit_expr v e in
     v#get_deps
 
-  let pp_state st =
-    pp_bindings pp_clas st.var_clas
-
-  let pp_essential st =
-    pp_bindings pp_clas (Bindings.filter (fun f v -> v = Essential) st.var_clas)
 
 
 
@@ -578,6 +605,7 @@ module RtCopyProp = struct
     match s with
     (* Var decl *)
     | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f ->
+        Printf.printf "decl %s\n" (pprint_ident v);
         decl_var v st 
 
     (* Var assign *)
@@ -586,9 +614,10 @@ module RtCopyProp = struct
         let deps = get_deps e in
         let st = read_vars deps st in
         (* Clobber anything dependent on v *)
-        let st = clobber_var v st in
+        let st,deps = write_var v (st,deps) in
         (* Update deps for v *)
-        update_deps v deps st
+          st
+        (*update_deps v deps st*)
 
     (* Array assign *)
     | Stmt_TCall(f, [], [Expr_Var a; i; e], loc) when is_array_store f ->
@@ -596,7 +625,8 @@ module RtCopyProp = struct
         let deps = get_deps e in
         let st = read_vars deps st in
         (* Clobber anything dependent on a *)
-        clobber_var a st
+        let st,deps = write_var a (st,deps) in
+        st
 
     (* Assert *)
     | Stmt_TCall(f, [], [e], loc) when is_assert f ->
@@ -605,8 +635,11 @@ module RtCopyProp = struct
         read_vars deps st
 
     (* LiftTime branch *)
-    | Stmt_If(c, t, [], f, loc) -> st (* handled by caller splitting, walking children, and joining *)
+    | Stmt_If(c, t, [], f, loc) ->  
         (* merge in the bdds as well *)
+        let deps = get_deps c in
+        read_vars deps st
+        (* branches handled by caller splitting, walking children, and joining *)
 
         (*
         let cond = Transforms.BDDSimp.eval_expr c st.bdd in
@@ -653,12 +686,6 @@ module RtCopyProp = struct
   and walk_stmts s st : state =
     List.fold_left (fun st s -> walk_stmt s st) st s
 
-  let candidate_var v st =
-    match get_var v st with
-    | Some Essential -> false
-    | None -> false
-    | _ -> true
-
 
   (* To change this, you'd need to know :
       - The condition under which its safe to copy prop
@@ -679,23 +706,6 @@ module RtCopyProp = struct
 statement s is the only definition of x reaching u on every path from s to u there are no assignments to y 
 
    *)
-  class copyprop_transform st = object
-    inherit Asl_visitor.nopAslVisitor
-    method! vexpr = function
-      (* Transform loads into direct variable accesses *)
-      | Expr_TApply(f, [], [Expr_Var v]) when is_var_load f && candidate_var v st ->
-          ChangeTo (Expr_Var v)
-      | _ -> DoChildren
-    method! vstmt = function
-      (* Transform runtime variable decls into expression decls *)
-      | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f && candidate_var v st ->
-        ChangeDoChildrenPost([Stmt_VarDeclsNoInit(Offline_transform.rt_expr_ty, [v], loc)], fun e -> e)
-      (* Transform stores into assigns *)
-      | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f && candidate_var v st ->
-        ChangeDoChildrenPost([Stmt_Assign(LExpr_Var v, e, loc)], fun e -> e)
-      | _ -> DoChildren
-  end
-
 
 
   (*
@@ -705,22 +715,29 @@ statement s is the only definition of x reaching u on every path from s to u t
     match get_var v st with
     | Some Essential -> No
     | Some Clobbered deps ->
-        let c = Bindings.find_opt v st.cond_read_after_clobber in
-        (match c with
-        | Some x -> (if (Transforms.BDDSimp.is_true (Val [x]) rtst) then (
-            (* we don't need to generate a condition at read if we know statically *)
-            Printf.printf "Condcopyprop: var %s BDD %s simplifies to TRUE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [x]));
-            No) 
-          else if (Transforms.BDDSimp.is_false (Val [x]) rtst) then (
-            Printf.printf "Condcopyprop: var %s BDD %s simplifies to FALSE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [x])) ;
+        let c = Bindings.find_opt v st.cond_read in
+        let b = Bindings.find_opt v st.cond_clobbered in
+        (match c,b with
+        | Some read,Some clob -> 
+            let cond =  (MLBDD.dand read (MLBDD.dnot clob)) in
+          (if (Transforms.BDDSimp.is_true (Val [cond]) rtst) then 
+              (
+            Printf.printf "Condcopyprop prop var %s read => clobbered %s simplifies to FALSE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [MLBDD.dand read (MLBDD.dnot clob)])) ;
             Prop
-            ) 
-          else PropCond (MLBDD.dnot x))
-          | None -> Printf.printf "Condcopyprop: Clobbered variable missing cond read %s\n" (pprint_ident v); 
+            )
+          else 
+            if (Transforms.BDDSimp.is_false (Val [cond]) rtst) then 
+            (
+              (* we don't need to generate a condition at read if we know statically *)
+              Printf.printf "Condcopyprop noprop var %s read => clobbered %s simplifies to TRUE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [cond]));
+            No) 
+          else PropCond (cond))
+          | Some _, None -> Printf.printf "UNCONCD PROP\n" ; Prop
+          | _,_ -> Printf.printf "Condcopyprop: Clobbered variable missing cond read %s\n" (pprint_ident v); 
             No) (* TODO: clobbered but not subsequently read? *)
-    | Some Defined _ -> Prop
-    | Some Declared -> No 
-    | None -> Printf.printf "Unexpected variable with no candidate decision status %s\n" (pprint_ident v); No 
+    | Some Defined _ -> Printf.printf "Condcopyprop ONLY DEFINED %s\n" (pprint_ident v); Prop 
+    | Some Declared ->  No
+    | None ->  No 
 
 
 
@@ -732,13 +749,6 @@ statement s is the only definition of x reaching u on every path from s to u t
     typ: ty
   }
 
-  class copyprop_vis icpst = object(self) 
-    inherit Asl_visitor.nopAslVisitor
-    val mutable cpst = icpst  
-
-    method xfer_stmt s = cpst <- walk_stmt s cpst
-    method join cond os = cpst <- merge_st cond cpst os
-  end
 
 
   class cond_copyprop_transform cpst = object(self) 
@@ -775,28 +785,28 @@ statement s is the only definition of x reaching u on every path from s to u t
       | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f  ->
           candidates <- Bindings.add v {typ=t} candidates; 
           (match (cond_candidate v cpst (Option.get rtst)) with 
-            (* essential, leave as-is *)
             | No ->  
                 Printf.printf "Condcopyprop: NOT PROP at DEFINITION of var %s\n " (pprint_ident v);
                 [s] 
-              (* move run-time to lift-time *)
             | Prop ->  
-                  Printf.printf "Condcopyprop: UNCOND prop at DEFINITION of var %s\n " (pprint_ident v);
+                (* move run-time to lift-time *)
+                  (*Printf.printf "Condcopyprop: UNCOND prop at DEFINITION of var %s\n " (pprint_ident v); *)
                   [Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [snd (cp_idents v)], Unknown)]  
-            | PropCond cond -> let ncp,cp = cp_idents v in
-              Printf.printf "Condcopyprop: CONDITIONAL prop at DEFINITION : %s\n " (Transforms.BDDSimp.pp_abs (Val [cond]));
-              let c = cp_cond cond in
-              (Printf.printf("Successfully simplified bdd cond to %s on stmt %s \n") (pp_expr c) (pp_stmt s) ;
+            | PropCond cond -> 
+              let ncp,cp = cp_idents v in
+                (* if (cond) lift-time else run-time *)
+              Printf.printf "Condcopyprop: CONDITIONAL prop at DEFINITION %s: %s\n " (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [cond]));
+              (*let c = cp_cond cond in *)
               (* lift-time conditionally generates the copy-propagated or non-propagated form *)
               [ 
                 Stmt_ConstDecl (Offline_transform.rt_expr_ty, ncp, Expr_TApply(f, [], args), Unknown);
                 Stmt_VarDeclsNoInit (Offline_transform.rt_expr_ty, [cp], Unknown);
-              ])
+              ]
           )
       (* Transform stores into assigns *)
       | Stmt_TCall(f, [], [Expr_Var v; e], loc) when is_var_store f  ->
           (match (cond_candidate v cpst (Option.get rtst)) with 
-            | No -> (Printf.printf "Condcopyprop: UNCOND DISABLE PROP on STORE of var %s\n " (pprint_ident v));  [s]
+            | No -> (*(Printf.printf "Condcopyprop: UNCOND DISABLE PROP on STORE of var %s\n " (pprint_ident v));*)  [s]
             | Prop -> 
                   (Printf.printf "Condcopyprop: UNCOND RT PROP on STORE of var %s\n " (pprint_ident v);
                   [(Stmt_Assign (LExpr_Var (snd (cp_idents v)), e, loc))])
@@ -835,14 +845,25 @@ statement s is the only definition of x reaching u on every path from s to u t
       | _ -> e
   end
 
-
   module AnalysisLat = struct 
     type rt = state
     type olt = Transforms.BDDSimp.state
     let xfer_stmt (l:olt) (r:rt) (s:stmt) : rt * stmt list = 
       (*Printf.printf "%s ::\n%s\n" (pp_stmt s) (Transforms.BDDSimp.pp_state l);*) 
       (walk_stmt s r,[s])
-    let join (ol:olt) (rta: rt) (rtb: rt) = merge_st (Val[ol.ctx]) rta rtb
+    let join (ts:olt) (fs:olt) (js:olt) (rta: rt) (rtb: rt) = Printf.printf "ts %s fs %s" 
+      (Transforms.BDDSimp.pp_abs (Val [ts.ctx])) 
+      (Transforms.BDDSimp.pp_abs (Val [fs.ctx]))
+      ; 
+      Printf.printf "\n--------------\n";
+      let p s rta = Printf.printf "%s: %s\n" s (pp_state rta) in 
+      p "\nTRUE BRANCH: " rta;  p "\nFALSE BRANCH: " rtb ;  
+
+      let j = merge_st ts.ctx fs.ctx (js:olt) rta rtb in
+      p "\nJOIN STATE: " j;
+      Printf.printf "\n==============\n"; 
+      j
+
     let init s = init_state s 
   end
 
@@ -851,7 +872,7 @@ statement s is the only definition of x reaching u on every path from s to u t
     type rt = {cpst: cond_copyprop_transform}
     type olt = Transforms.BDDSimp.state
     let xfer_stmt ol ss s =  ss,ss.cpst#xf_stmt s ol
-    let join r a b = if (a != b) then (failwith "not allowed") else a (* only have one instance of the object so should be fine *)
+    let join t f j a b = if (a != b) then (failwith "not allowed") else a (* only have one instance of the object so should be fine *)
     let init st = {cpst = new cond_copyprop_transform st} 
   end
 
