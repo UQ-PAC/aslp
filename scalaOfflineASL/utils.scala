@@ -15,29 +15,51 @@ def rTExprDefault = null
 
 import ir.dsl._
 
+
+object Counter:
+  var counter = 0
+
+case class BranchInfo(val branch: Option[String], val guard: Expr, val branchTaken: Boolean, pcAssigned: Option[Expr])
 class LiftState(val entry: String = "block") {
 
   val endian = Endian.LittleEndian
   val memory = Memory("mem", 64, 8)
 
-  var counter = 0
   var current_pos: String = entry
+
+
   val controlFlow: mutable.Map[String, EventuallyJump] = mutable.Map()
-  val blocks: mutable.Map[String, ArrayBuffer[Statement]] = mutable.Map((entry -> ArrayBuffer.empty))
+  val blocks: mutable.LinkedHashMap[String, ArrayBuffer[Statement]] = mutable.LinkedHashMap((entry -> ArrayBuffer.empty))
   val branches: mutable.Map[String, (String, String, String)] = mutable.Map()
 
-  def new_name(p: Option[String] = None) = entry + "_" + p.map(_ + "_").getOrElse("") + (counter += 1).toString
+
+  var current_guard: BranchInfo = BranchInfo(None, TrueLiteral, false, None)
+
+  // maps block ids to guards
+  // We push the current guard forward as blocks are appended. We maintain this mapping so we 
+  // can update the current guard when switch_ctx is called. 
+  val block_guard: mutable.Map[String, BranchInfo] = mutable.Map()
+
+  def pcAssigns = block_guard.filter {
+    case (k,v) => v.pcAssigned.isDefined
+  } 
+
+  def new_name(p: Option[String] = None) = {
+    Counter.counter += 1
+    entry + "_" + p.map(_ + "_").getOrElse("") + Counter.counter
+  }
 
   def merge_state(other: LiftState) = {
     controlFlow.addAll(other.controlFlow)
     blocks.addAll(other.blocks)
+    branches.addAll(other.branches)
     current_pos = other.current_pos
   }
 
   def escaping_jumps = controlFlow
     .collect {
       case (_, EventuallyGoto(tgts))                => tgts.map((t: DelayNameResolve) => t.ident)
-      case (_, EventuallyCall(_, Some(ft)))         => List(ft.ident)
+      case (_, EventuallyCall(t, Some(ft)))         => List(ft.ident)
       case (_, EventuallyIndirectCall(_, Some(ft))) => List(ft.ident)
     }
     .flatMap(_.toList)
@@ -46,58 +68,106 @@ class LiftState(val entry: String = "block") {
 
   def push_block(p: Option[String] = None): String = {
     val n = new_name(p)
+
     blocks(n) = ArrayBuffer.empty
     n
   }
 
+  def implicit_set_pc(address: Long, label: Option[String] = None) = {
+    val la = LocalAssign(Register("_PC", BitVecType(64)), BitVecLiteral(BigInt(address), 64), label)
+    blocks(current_pos).append(la)
+  }
+
   def push_stmt(s: Statement) = {
+    s match {
+      case LocalAssign(Register("BranchTaken", BoolType), TrueLiteral, _) => current_guard = BranchInfo(current_guard.branch, current_guard.guard, true, current_guard.pcAssigned) 
+      case LocalAssign(Register("_PC", BitVecType(64)), addr, _) => current_guard = BranchInfo(current_guard.branch, current_guard.guard, current_guard.branchTaken, Some(addr))
+      case _ => ()
+    }
+
+    block_guard(current_pos) = current_guard
     blocks(current_pos).append(s)
   }
 
   def switch_ctx(c: String) = {
     require(blocks.keySet.contains(c))
     current_pos = c
+    current_guard = block_guard(current_pos) 
   }
 
-  def gen_branch(cond: Expr): String = {
+  def gen_branch(cond: Expr) = {
     val branch_id = new_name(Some("branch"))
+
     val true_branch = push_block(Some("true"))
     val false_branch = push_block(Some("false"))
     val merge_block = push_block(Some("join"))
     blocks(true_branch).append(Assume(cond))
     blocks(false_branch).append(Assume(UnaryExpr(BoolNOT, cond)))
+
+    block_guard(true_branch) = BranchInfo(Some(branch_id), cond, false, None)
+    block_guard(false_branch) = BranchInfo(Some(branch_id), UnaryExpr(BoolNOT, cond), false, None)
+    block_guard(merge_block) = BranchInfo(None, TrueLiteral, false, None)
+    current_guard = BranchInfo(Some(branch_id), current_guard.guard, current_guard.branchTaken, current_guard.pcAssigned)
+
     controlFlow(current_pos) = goto(true_branch, false_branch)
     controlFlow(true_branch) = goto(merge_block)
-    controlFlow(true_branch) = goto(merge_block)
+    controlFlow(false_branch) = goto(merge_block)
     branches.addOne((branch_id -> (true_branch, false_branch, merge_block)))
-    branch_id
+    switch_ctx (merge_block)
+    (branch_id, true_branch, false_branch, merge_block)
   }
 
-  def add_call(c: EventuallyJump) = {
-    controlFlow.get(current_pos) match {
-      case None    => controlFlow(current_pos) = c
+  def replace_jmp(c: EventuallyJump) = controlFlow(current_pos) = c
+
+  def add_call(from: String, c: EventuallyJump) : Unit = {
+    controlFlow.get(from) match {
+      case None => controlFlow(current_pos) = c
+      case Some(EventuallyGoto(List(x))) => {
+        c match {
+          case EventuallyCall(c, None) => EventuallyCall(c, Some(x))
+          case EventuallyCall(_, Some(f)) => add_call(f.ident, c)
+          case EventuallyIndirectCall(c, None) => EventuallyIndirectCall(c, Some(x))
+          case EventuallyIndirectCall(_, Some(f)) => add_call(f.ident, c)
+          case EventuallyGoto(cs) => (EventuallyGoto(cs ++ List(x)))
+          case _ => throw Exception(s"Existing jump ${EventuallyGoto(List(x))} adding $c")
+        }
+
+      }
       case Some(l) => throw Exception(s"Existing jump $l")
     }
+  }
+
+  def add_call(c: EventuallyJump) : Unit = {
+    add_call(current_pos, c)
   }
 
   def add_goto(l: String) = {
     controlFlow.get(current_pos) match {
       case Some(EventuallyGoto(ts)) => controlFlow(current_pos) = EventuallyGoto(ts ++ List(DelayNameResolve(l)))
+      case Some(EventuallyCall(ts, None)) => controlFlow(current_pos) = EventuallyCall(ts, Some(DelayNameResolve(l)))
       case None                     => controlFlow(current_pos) = EventuallyGoto(List(DelayNameResolve(l)))
-      case Some(l)                  => throw Exception(s"Cannot add goto target to call $l")
+      case Some(l)                  => throw RuntimeException(s"Cannot add goto target to call $l")
     }
   }
 
   def toIR(): List[EventuallyBlock] =
-    blocks.map((n, stmts) => block(n, (stmts.toList ++ List(controlFlow.getOrElse(n, goto()))))).toList
+    blocks.map((n, stmts) => block(n, (stmts.toList ++ List(controlFlow.getOrElse(n, ret))))).toList
 }
 
 object Lifter {
 
+  def liftOpcode(op: Int, sp: BitVecLiteral): List[EventuallyBlock] = {
+    var liftState = LiftState()
+    val dec = A64_decoder()
+    val r = dec.decode(liftState, BitVecLiteral(BigInt(op), 32), sp)
+    liftState.toIR()
+  }
+
+
   def liftOpcode(op: Int): List[EventuallyBlock] = {
     var liftState = LiftState()
     val dec = A64_decoder()
-    val r = dec.decode(liftState, BitVecLiteral(BigInt(op), 32))
+    val r = dec.decode(liftState, BitVecLiteral(BigInt(op), 32), BitVecLiteral(BigInt(0), 64))
     liftState.toIR()
   }
 
@@ -119,6 +189,7 @@ def zero_extend_to(s: BigInt, x: BitVecLiteral) = {
 
 def gen_zero_extend_to(s: BigInt, x: Expr) = {
   x.getType match {
+    case BitVecType(sz) if sz == s.toInt => x 
     case BitVecType(sz) => ZeroExtend((s - sz).toInt, x)
     case _              => throw Exception("Type mismatch gen_zero_extend_to")
   }
@@ -262,17 +333,42 @@ def f_gen_FixedToFP(
 def f_gen_bit_lit(st: LiftState, targ0: BigInt, arg0: BitVecLiteral): RTSym = BitVecLiteral(arg0.value, targ0.toInt)
 def f_gen_bool_lit(st: LiftState, arg0: Boolean): RTSym = if arg0 then TrueLiteral else FalseLiteral
 
-def f_gen_branch(st: LiftState, arg0: RTSym): RTLabel = st.gen_branch(arg0)
+def f_gen_branch(st: LiftState, arg0: RTSym): RTLabel = st.gen_branch(arg0)._1
 def f_true_branch(st: LiftState, arg0: RTLabel): RTLabel = (st.branches(arg0))._1
 def f_false_branch(st: LiftState, arg0: RTLabel): RTLabel = (st.branches(arg0))._2
 def f_merge_branch(st: LiftState, arg0: RTLabel): RTLabel = (st.branches(arg0))._3
 
 def f_cvt_bits_uint(st: LiftState, targ0: BigInt, arg0: BitVecLiteral): BigInt = arg0.value
-def f_gen_cvt_bits_uint(st: LiftState, targ0: BigInt, arg0: RTSym): RTSym = arg0
-def f_gen_cvt_bool_bv(st: LiftState, arg0: RTSym): RTSym = arg0
+def f_gen_cvt_bits_uint(st: LiftState, targ0: BigInt, arg0: RTSym): RTSym = throw Exception("cvt bitsnot implemented")
+def f_gen_cvt_bool_bv(st: LiftState, arg0: RTSym): RTSym = arg0 match {
+    case b: BinaryExpr if b.op == BVEQ => BinaryExpr(BVCOMP, b.arg1, b.arg2)
+    case _ => throw Exception(s"unhandled conversion from bool to bitvector: ${arg0}")
+  }
 
-def f_gen_eor_bits(st: LiftState, targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym = BinaryExpr(BVEQ, arg0, arg1)
-def f_gen_eq_bits(st: LiftState, targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym = BinaryExpr(BVEQ, arg0, arg1)
+def f_gen_eor_bits(st: LiftState, targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym = BinaryExpr(BVXOR, arg0, arg1)
+def f_gen_eq_bits(st: LiftState, targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym =  BinaryExpr(BVEQ, arg0, arg1)
+/*{
+  (arg0.getType, arg1.getType) match {
+    case (b:BitVecType, v:BitVecType) => BinaryExpr(BVEQ, arg0, arg1)
+    case (b:BitVecType, BoolType) => BinaryExpr(BVEQ, BinaryExpr(BVEQ, BitVecLiteral(0, targ0.toInt), arg0), arg1)
+    case (BoolType, b:BitVecType) => BinaryExpr(BVEQ, BinaryExpr(BVEQ, BitVecLiteral(0, targ0.toInt), arg1), arg0)
+    case (b:BitVecType, IntType) => BinaryExpr(IntEQ, BinaryExpr(BVEQ, BitVecLiteral(0, targ0.toInt), arg0), arg1)
+    case (IntType, b:BitVecType) => BinaryExpr(IntEQ, BinaryExpr(BVEQ, BitVecLiteral(0, targ0.toInt), arg1), arg0)
+    case (BoolType, BoolType) =>  BinaryExpr(BoolEQ, arg0, arg1)
+    case (IntType, IntType) =>  BinaryExpr(IntEQ, arg0, arg1)
+  }
+}*/
+
+
+/*def coerceTo(typ: IRType, v: Expr) = {
+  (typ, v.getType) match {
+    case (a, b) if a == b => v
+    case (BitVecType(a), BitVecType(b)) if a > b =>  ZeroExtend((a - b).toInt, v)
+    case (BoolType, BitVecType(s)) => BinaryExpr(BVNEQ, BitVecLiteral(0, s), v)
+    case (BitVecType(s), BoolType) = 
+  }
+}*/
+
 def f_gen_eq_enum(st: LiftState, arg0: RTSym, arg1: RTSym): RTSym = BinaryExpr(BVEQ, arg0, arg1)
 def f_gen_int_lit(st: LiftState, arg0: BigInt): BitVecLiteral = BitVecLiteral(arg0, 1123)
 
@@ -299,7 +395,7 @@ def f_gen_ZeroExtend(st: LiftState, targ0: BigInt, targ1: BigInt, arg0: Expr, ar
   if (arg1.value != newSize) {
     throw Exception()
   }
-  ZeroExtend((newSize - oldSize).toInt, arg0)
+  if ((newSize - oldSize) == 0) then arg0 else ZeroExtend((newSize - oldSize).toInt, arg0)
 }
 
 def f_gen_add_bits(st: LiftState, targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym = BinaryExpr(BVADD, arg0, arg1)
@@ -350,16 +446,12 @@ def f_gen_AArch64_MemTag_set(st: LiftState, arg0: RTSym, arg1: RTSym, arg2: RTSy
 
 def f_gen_Mem_set(st: LiftState, sz: BigInt, ptr: RTSym, width: BitVecLiteral, acctype: RTSym, value: RTSym): Unit =
   assert(width.value == sz)
-  val expr = MemoryStore(st.memory, ptr, value, st.endian, sz.toInt)
+  val expr = MemoryStore(st.memory, ptr, value, st.endian, sz.toInt * st.memory.valueSize)
   val stmt = MemoryAssign(st.memory, expr)
   st.push_stmt(stmt)
 
 def f_gen_Mem_read(st: LiftState, targ0: BigInt, arg0: RTSym, arg1: RTSym, arg2: RTSym): RTSym =
-  val s: Int = arg2 match
-    case BitVecLiteral(v, s) => v.toInt
-    case IntLiteral(v)       => v.toInt
-    case _                   => throw NotImplementedError(s"Cannot convert $arg2 to int")
-  MemoryLoad(st.memory, arg1, st.endian, s)
+  MemoryLoad(st.memory, arg0, st.endian, targ0.toInt * st.memory.valueSize)
 
 def f_gen_slice(st: LiftState, e: RTSym, lo: BigInt, wd: BigInt): RTSym = {
   Extract((wd + lo).toInt, lo.toInt, e)
@@ -369,8 +461,10 @@ def f_gen_replicate_bits(st: LiftState, targ0: BigInt, targ1: BigInt, arg0: RTSy
 }
 def f_gen_append_bits(st: LiftState, targ0: BigInt, targ1: BigInt, arg0: RTSym, arg1: RTSym): RTSym =
   BinaryExpr(BVCONCAT, arg0, arg1)
+
 def f_gen_array_load(st: LiftState, arg0: RTSym, arg1: BigInt): RTSym = arg0 match
   case Register("_R", t) => Register("R" + arg1, BitVecType(64))
+  case Register("_Z", t) => Register("V" + arg1, BitVecType(128))
   case _ => {
     Logger.warn(s"Unknown array load $arg0")
     arg0
@@ -384,19 +478,28 @@ def f_switch_context(st: LiftState, arg0: RTLabel) = st.switch_ctx(arg0)
 
 /** Global variable definitions * */
 
-def v_PSTATE_C = Mutable(Register("PSTATE.C", BoolType)) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "C")
-def v_PSTATE_Z = Mutable(Register("PSTATE.Z", BoolType)) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "Z")
-def v_PSTATE_V = Mutable(Register("PSTATE.V", BoolType)) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "V")
-def v_PSTATE_N = Mutable(Register("PSTATE.N", BoolType)) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "N")
+def v_PSTATE_UAO = Mutable(Register("UAO", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "G")
+def v_PSTATE_PAN = Mutable(Register("PAN", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "G")
+def v_PSTATE_DIT = Mutable(Register("DIT", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "G")
+def v_PSTATE_SSBS = Mutable(Register("SSBS", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "G")
+def v_PSTATE_G = Mutable(Register("G", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "G")
+def v_PSTATE_A = Mutable(Register("A", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "G")
+def v_PSTATE_I = Mutable(Register("I", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "G")
+def v_PSTATE_F = Mutable(Register("F", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "G")
+def v_PSTATE_D = Mutable(Register("D", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "G")
+def v_PSTATE_C = Mutable(Register("CF", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "C")
+def v_PSTATE_Z = Mutable(Register("ZF", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "Z")
+def v_PSTATE_V = Mutable(Register("VF", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "V")
+def v_PSTATE_N = Mutable(Register("NF", BitVecType(1))) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "N")
 def v__PC = Mutable(Register("_PC", BitVecType(64))) // Expr_Var(Ident "_PC")
-def v__R = Mutable(Register("_R", IntType))
-def v__Z = Mutable(Register("_Z", BoolType))
+def v__R = Mutable(Register("_R", MapType(BitVecType(64),BitVecType(64))))
+def v__Z = Mutable(Register("_Z", MapType(BitVecType(64),BitVecType(128))))
 def v_SP_EL0 = Mutable(Register("R31", BitVecType(64)))
 def v_FPSR = Mutable(Register("FPSR", BoolType))
 def v_FPCR = Mutable(LocalVar("FPCR", BitVecType(32)))
 
 def v_PSTATE_BTYPE = Mutable(Register("PSTATE.BTYPE", BoolType)) // Expr_Field(Expr_Var(Ident "PSTATE"), Ident "BTYPE")
 def v_BTypeCompatible = Mutable(Register("BTypeCompatible", BoolType)) // Expr_Var (Ident "BTypeCompatible")
-def v___BranchTaken = Mutable(Register("__BranchTaken", BoolType))
+def v___BranchTaken = Mutable(Register("BranchTaken", BoolType))
 def v_BTypeNext = Mutable(Register("BTypeNext", BoolType))
 def v___ExclusiveLocal = Mutable(Register("__ExclusiveLocal", BoolType))
