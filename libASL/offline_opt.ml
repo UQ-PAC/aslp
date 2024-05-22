@@ -432,7 +432,7 @@ module RtCopyProp = struct
           match c with 
         | Defined ids 
         | Clobbered ids when IdentSet.mem v ids 
-          -> {st with cond_clobbered = (add_cond v (st.bdd.ctx) st.cond_clobbered)}
+          -> {st with cond_clobbered = (add_cond i (st.bdd.ctx) st.cond_clobbered)}
         | _ -> st
     ) st (Bindings.to_seq var_clas) in
     { st with var_clas }
@@ -521,24 +521,21 @@ module RtCopyProp = struct
     | _ -> (st, i)
 
   let write_var v (st,i) =
-    let st = if has_context st then (Printf.printf "rt branch dependent\n" ; set_var v Essential st) else st  in
+    let st = if has_context st then (set_var v Essential st) else st  in
       (* cannot copy-prop exprs dependent on a run-time branch*)
     let st = clobber_var v st in
-    Printf.printf "PRE STORE(%s) : %s\n"  (pprint_ident v) (pp_state st); 
-    let st = {st with cond_clobbered = (add_cond v (st.bdd.ctx) st.cond_clobbered )} in
     let (st,i) = match get_var v st with
     | Some (Declared) -> (set_var v (Defined i) st, i)
     | Some (Defined ids) -> ((set_var v (Clobbered i) st), i)
     | Some (Clobbered deps) -> (st, i)
     | Some Essential -> (st, i)
-      | None -> (Printf.printf "BEANLESS\n"); (st, i)
-  in Printf.printf "POST STORE: %s\n" (pp_state st); (st,i)
+      | None -> (st, i)
+  in  (st,i)
 
 
   let impure_ident = Ident "CopyProp_impure"
 
   let read_vars (vs: IdentSet.t) (st: state): state =
-    Printf.printf "READ "; IdentSet.iter (fun i -> Printf.printf "%s " (pprint_ident i)) vs ; Printf.printf "\n";
     let read_set s st = IdentSet.fold read_var s (st,IdentSet.empty) in
     (* If impure is in the readset, the reads are not pure. Clobber any impure dependencies now. *)
     let st = if IdentSet.mem impure_ident vs then clobber_var impure_ident st else st in
@@ -553,7 +550,7 @@ module RtCopyProp = struct
 
   (* TODO: Updating, check if this has some context dependence *)
   let update_deps v deps st =
-    if has_context st then (Printf.printf "rt branch dependent\n" ; set_var v Essential st) (* cannot copy-prop exprs dependent on a run-time branch*)
+    if has_context st then (set_var v Essential st) (* cannot copy-prop exprs dependent on a run-time branch*)
     else
       match get_var v st with
       | Some (Declared) ->
@@ -605,7 +602,6 @@ module RtCopyProp = struct
     match s with
     (* Var decl *)
     | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f ->
-        Printf.printf "decl %s\n" (pprint_ident v);
         decl_var v st 
 
     (* Var assign *)
@@ -722,20 +718,20 @@ statement s is the only definition of x reaching u on every path from s to u t
             let cond =  (MLBDD.dand read (MLBDD.dnot clob)) in
           (if (Transforms.BDDSimp.is_true (Val [cond]) rtst) then 
               (
-            Printf.printf "Condcopyprop prop var %s read => clobbered %s simplifies to FALSE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [MLBDD.dand read (MLBDD.dnot clob)])) ;
+            (*Printf.printf "Condcopyprop prop var %s read => clobbered %s simplifies to FALSE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [MLBDD.dand read (MLBDD.dnot clob)])) ; *)
             Prop
             )
           else 
             if (Transforms.BDDSimp.is_false (Val [cond]) rtst) then 
             (
               (* we don't need to generate a condition at read if we know statically *)
-              Printf.printf "Condcopyprop noprop var %s read => clobbered %s simplifies to TRUE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [cond]));
+              (*Printf.printf "Condcopyprop noprop var %s read => clobbered %s simplifies to TRUE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [cond])); *)
             No) 
           else PropCond (cond))
           | Some _, None -> Printf.printf "UNCONCD PROP\n" ; Prop
-          | _,_ -> Printf.printf "Condcopyprop: Clobbered variable missing cond read %s\n" (pprint_ident v); 
+          | _,_ -> (*Printf.printf "Condcopyprop: Clobbered variable missing cond read %s\n" (pprint_ident v);  *)
             No) (* TODO: clobbered but not subsequently read? *)
-    | Some Defined _ -> Printf.printf "Condcopyprop ONLY DEFINED %s\n" (pprint_ident v); Prop 
+    | Some Defined _ -> (*Printf.printf "Condcopyprop ONLY DEFINED %s\n" (pprint_ident v);*) Prop 
     | Some Declared ->  No
     | None ->  No 
 

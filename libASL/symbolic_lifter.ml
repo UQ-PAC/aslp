@@ -365,7 +365,7 @@ let run include_pc iset pat env =
   Bindings.iter (fun  fn fnsig  -> Eval.Env.addFun Unknown env' fn fnsig) fns;
   (* Run dis over the entry set identifiers with this new environment *)
 
-  let debug = true in
+  let debug = false in
 
   let fns = Bindings.filter_map (fun fn fnsig ->
     if (debug && (fn <> (FIdent ("aarch64_branch_unconditional_register", 0)))) || (not (Bindings.mem fn instrs))  then None
