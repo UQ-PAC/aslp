@@ -156,18 +156,18 @@ class LiftState(val entry: String = "block") {
 
 object Lifter {
 
-  def liftOpcode(op: Int, sp: BitVecLiteral): List[EventuallyBlock] = {
+  def liftOpcode(op: BigInt, sp: BigInt): List[EventuallyBlock] = {
     var liftState = LiftState()
     val dec = A64_decoder()
-    val r = dec.decode(liftState, BitVecLiteral(BigInt(op), 32), sp)
+    val r = dec.decode(liftState, BitVecLiteral(op, 32), (BitVecLiteral(sp, 32)))
     liftState.toIR()
   }
 
 
-  def liftOpcode(op: Int): List[EventuallyBlock] = {
+  def liftOpcode(op: BigInt): List[EventuallyBlock] = {
     var liftState = LiftState()
     val dec = A64_decoder()
-    val r = dec.decode(liftState, BitVecLiteral(BigInt(op), 32), BitVecLiteral(BigInt(0), 64))
+    val r = dec.decode(liftState, BitVecLiteral(op, 32), BitVecLiteral(BigInt(0), 64))
     liftState.toIR()
   }
 
