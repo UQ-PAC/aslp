@@ -70,12 +70,6 @@ let flags = [
     ("eval:concrete_unknown", Value.concrete_unknown)
 ]
 
-let mkLoc (fname: string) (input: string): AST.l =
-    let len = String.length input in
-    let start : Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 } in
-    let finish: Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = len } in
-    AST.Range (start, finish)
-
 let () = Random.self_init ()
 
 let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0: string): unit =
@@ -244,11 +238,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         Marshal.to_channel chan (stmts : stmt list) [];
         close_out chan
     | (":set" :: "impdef" :: rest) ->
-        let cmd = String.concat " " rest in
-        let loc = mkLoc fname cmd in
-        let (x, e) = LoadASL.read_impdef tcenv loc cmd in
-        let v = Eval.eval_expr loc cpu.env e in
-        Eval.Env.setImpdef cpu.env x v
+        Eval.set_impdef tcenv cpu.env fname rest
     | [":set"; flag] when Utils.startswith flag "+" ->
         (match List.assoc_opt (Utils.stringDrop 1 flag) flags with
         | None -> Printf.printf "Unknown flag %s\n" flag;
@@ -285,7 +275,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             let s = LoadASL.read_stmt tcenv input in
             Eval.eval_stmt cpu.env s
         end else begin
-            let loc = mkLoc fname input in
+            let loc = LoadASL.mkLoc fname input in
             let e   = LoadASL.read_expr tcenv loc input in
             let v   = Eval.eval_expr loc cpu.env e in
             print_endline (Value.pp_value v)
@@ -357,6 +347,8 @@ let main () =
     else begin
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
+
+        (* Note: .prj files are handled by `evaluation_environment`. *)
         let env_opt =
             if (!opt_no_default_aarch64)  
             then evaluation_environment !opt_prelude !opt_filenames !opt_verbose
@@ -368,11 +360,11 @@ let main () =
                 else ();
                 aarch64_evaluation_environment ~verbose:!opt_verbose ();
             end in
+
         let env = (match env_opt with 
             | Some e -> e
             | None -> failwith "Unable to build evaluation environment.") in
-        if not !opt_no_default_aarch64 then
-            opt_filenames := snd (Option.get aarch64_asl_files); (* (!) should be safe if environment built successfully. *)
+
         if !opt_verbose then Printf.printf "Built evaluation environment\n";
         Dis.debug_level := !opt_debug_level;
 
@@ -380,9 +372,8 @@ let main () =
         LNoise.history_set ~max_length:100 |> ignore;
         
         let denv = Dis.build_env env in
-        let prj_files = List.filter (fun f -> Utils.endswith f ".prj") !opt_filenames in
         let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env denv in
-        List.iter (fun f -> process_command tcenv cpu "<args>" (":project " ^ f)) prj_files;
+
         repl tcenv cpu
     end
 

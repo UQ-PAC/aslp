@@ -16,6 +16,14 @@ module AST    = Asl_ast
 open Lexersupport
 open Lexing
 
+(** Returns a new location corresponding to the given line occuring in the given file. *)
+let mkLoc (fname: string) (input: string): AST.l =
+    let len = String.length input in
+    let start : Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 } in
+    let finish: Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = len } in
+    AST.Range (start, finish)
+
+
 let report_parse_error (on_error: unit -> 'a) (f: unit -> 'a): 'a =
     (try
         f ()

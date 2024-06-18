@@ -8,6 +8,8 @@
 module AST = Asl_ast
 module TC  = Tcheck
 
+val mkLoc : string -> string -> AST.l
+
 val report_parse_error : (unit -> 'a) -> (unit -> 'a) -> 'a
 val report_type_error  : (unit -> 'a) -> (unit -> 'a) -> 'a
 val report_eval_error  : (unit -> 'a) -> (unit -> 'a) -> 'a

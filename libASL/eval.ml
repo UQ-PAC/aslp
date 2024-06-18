@@ -1310,8 +1310,29 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
 end
 
 
+let set_impdef (tcenv: Tcheck.Env.t) (env: Env.t) (fname: string) (rest: string list) =
+    (* `rest` is of the form: "Has MTE extension" = FALSE *)
+    let cmd = String.concat " " rest in
+    let loc = LoadASL.mkLoc fname cmd in
+    let (x, e) = LoadASL.read_impdef tcenv loc cmd in
+    let v = eval_expr loc env e in
+    Env.setImpdef env x v
 
+(** Evaluates a minimal subset of the .prj syntax, sufficient for override.prj. *)
+let evaluate_prj_minimal (tcenv: Tcheck.Env.t) (env: Env.t) (fname: string) =
+    let inchan = open_in fname in
+    try
+        while true do
+            let line = input_line inchan in
+            match (String.split_on_char ' ' line) with
+            | ":set" :: "impdef" :: rest -> set_impdef tcenv env fname rest
+            | empty when List.for_all (String.equal "") empty -> ()  (* ignore empty lines *)
+            | _ -> failwith @@ "Unrecognised minimal .prj line in " ^ fname ^ ": " ^ line
+        done
+    with | End_of_file -> close_in inchan
 
+(** Constructs an evaluation environment with the given prelude file and .asl/.prj files.
+    .prj files given here are required to be minimal. *)
 let evaluation_environment (prelude: string) (files: string list) (verbose: bool) = 
     let t  = LoadASL.read_file prelude true verbose in
     let ts = List.map (fun filename ->
@@ -1324,16 +1345,21 @@ let evaluation_environment (prelude: string) (files: string list) (verbose: bool
         end else begin
             failwith ("Unrecognized file suffix on "^filename)
         end
-    ) files 
-    in
+    ) files in
+    let prjs = List.filter (fun fname -> Utils.endswith fname ".prj") files in
+
     if verbose then Printf.printf "Building evaluation environment\n";
-    (try
-        Some (build_evaluation_environment (List.concat (t::ts)))
-    with
-    | Value.EvalError (loc, msg) ->
-        Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg; 
-        None
-    )
+    let env = (
+        try Some (build_evaluation_environment (List.concat (t::ts)))
+        with | Value.EvalError (loc, msg) ->
+            Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
+            None
+    ) in
+
+    let tcenv = TC.Env.mkEnv Tcheck.env0 in
+    Option.iter (fun env -> List.iter (evaluate_prj_minimal tcenv env) prjs) env;
+    env
+
 
 let aarch64_asl_dir: string option = 
     List.nth_opt Res.Sites.aslfiles 0
@@ -1349,7 +1375,6 @@ let aarch64_asl_files: (string * string list) option =
         let prelude = Filename.concat dir "prelude.asl" in
         Some (prelude, filenames))
 
-(** XXX: .prj files NOT evaluated in this environment! *)
 let aarch64_evaluation_environment ?(verbose = false) (): Env.t option = 
     Option.bind aarch64_asl_files 
         (fun (prelude, filenames) -> evaluation_environment prelude filenames verbose)
