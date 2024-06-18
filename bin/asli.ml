@@ -26,8 +26,6 @@ let opt_no_default_aarch64 = ref false
 let opt_print_aarch64_dir = ref false
 let opt_verbose = ref false
 
-let opt_debug_level = ref (-1)
-
 
 let () = Printexc.register_printer
     (function
@@ -319,7 +317,7 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
     )
 
 let options = Arg.align ([
-    ( "-x", Arg.Set_int opt_debug_level,      "       Partial evaluation debugging (requires debug level argument >= 0)");
+    ( "-x", Arg.Set_int Dis.debug_level,      "       Partial evaluation debugging (requires debug level argument >= 0)");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
     ( "--no-aarch64", Arg.Set opt_no_default_aarch64 , "       Disable bundled AArch64 semantics");
     ( "--aarch64-dir", Arg.Set opt_print_aarch64_dir, "       Print directory of bundled AArch64 semantics");
@@ -374,7 +372,6 @@ let main () =
         if not !opt_no_default_aarch64 then
             opt_filenames := snd (Option.get aarch64_asl_files); (* (!) should be safe if environment built successfully. *)
         if !opt_verbose then Printf.printf "Built evaluation environment\n";
-        Dis.debug_level := !opt_debug_level;
 
         LNoise.history_load ~filename:"asl_history" |> ignore;
         LNoise.history_set ~max_length:100 |> ignore;

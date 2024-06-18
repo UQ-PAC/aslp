@@ -24,9 +24,10 @@ end
 module StringMap = Map.Make(StringCmp)
 
 
-let debug_level = ref 0
+let debug_level_none = -1
+let debug_level = ref debug_level_none
 let debug_show_trace = ref false
-let no_debug = fun () -> !debug_level = 0
+let no_debug = fun () -> !debug_level <= debug_level_none
 
 (** (name, arg, location) tuple for tracing disassembly calls.
     For example: ("dis_expr", "1+1", loc).
