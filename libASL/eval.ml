@@ -1362,7 +1362,7 @@ let evaluation_environment (prelude: string) (files: string list) (verbose: bool
 
 
 let aarch64_asl_dir: string option = 
-    List.nth_opt Res.Sites.aslfiles 0
+    List.nth_opt LibASLResources.Res.Sites.aslfiles 0
 
 let aarch64_asl_files: (string * string list) option = 
     let aarch64_file_load_order = 

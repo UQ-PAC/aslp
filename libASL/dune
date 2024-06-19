@@ -15,17 +15,24 @@
      (with-stdout-to asl_parser.mly (run cat asl_parser_head.mly asl_parser_tail.mly)))))
 
 (library
+ (name libASLResources)
+ (public_name asli.libASLResources)
+ (modules res)
+ (libraries dune-site))
+
+(library
  (name libASL)
  (public_name asli.libASL)
  (flags
   (:standard -w -27 -cclib -lstdc++))
  (modules asl_ast asl_parser asl_parser_pp asl_utils asl_visitor cpu dis elf eval
-   lexer lexersupport loadASL monad primops rws symbolic tcheck testing transforms utils value visitor res
+   lexer lexersupport loadASL monad primops rws symbolic tcheck testing transforms utils value visitor
    symbolic_lifter decoder_program call_graph req_analysis
    offline_transform ocaml_backend dis_tc
    offline_opt
    )
- (libraries pprint zarith z3 str pcre  dune-site))
+ (libraries libASLResources pprint zarith z3 str pcre  dune-site))
+
 
 (generate_sites_module
  (module res)
