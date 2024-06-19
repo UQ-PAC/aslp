@@ -536,8 +536,13 @@ let eval_opcode_guard (loc: AST.l) (x: opcode_value) (op: Primops.bigint): value
     | Opcode_Mask m -> (from_maskLit m, eval_inmask)
     ) in
     let opcode_len = length_bits loc opcode_val in
-    let op = from_bitsInt opcode_len op in
-    if eval_opcode loc op opcode_val then Some op else None
+    (* rudimentary length compatibility check. this will only throw if there are *set* bits
+       exceeding the expected length. *)
+    if opcode_len < Z.numbits op then
+        raise (EvalError (loc, Printf.sprintf "opcode too long, expected %d bits but got %d: 0x%s"
+                                    opcode_len (Z.numbits op) (Z.format "%x" op)));
+    let value = from_bitsInt opcode_len op in
+    if eval_opcode loc value opcode_val then Some value else None
 
 (** Evaluate instruction decode pattern match *)
 let rec eval_decode_pattern (loc: AST.l) (x: decode_pattern) (op: value): bool =
