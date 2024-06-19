@@ -51,16 +51,14 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
         Eval.eval_proccall loc env (AST.FIdent ("__ELFWriteMemory", 0)) [] [a; b]
 
     and opcode (iset: string) (opcode: Primops.bigint): unit =
-        let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
         let decoder = Eval.Env.getDecoder env (Ident iset) in
-        Eval.eval_decode_case AST.Unknown env decoder op
+        Eval.eval_decode_case AST.Unknown env decoder opcode
 
     and sem (iset: string) (opcode: Primops.bigint): unit =
-        let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
         let decoder = Eval.Env.getDecoder env (Ident iset) in
         List.iter
             (fun s -> Printf.printf "%s\n" (pp_stmt s))
-            (Dis.dis_decode_entry env denv decoder op)
+            (Dis.dis_decode_entry env denv decoder opcode)
 
     and gen (iset: string) (pat: string) (backend: gen_backend) (dir: string): unit =
         if not (Sys.file_exists dir) then failwith ("Can't find target dir " ^ dir);

@@ -74,7 +74,7 @@ let test_compare env () : unit =
             let lenv = Dis.build_env disEnv in
 
             let opcode = input_line inchan in
-            let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
+            let op = Z.of_string opcode in
 
             (try
                 (* Evaluate original instruction *)

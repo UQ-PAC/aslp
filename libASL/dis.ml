@@ -1343,15 +1343,12 @@ and dis_stmt' (x: AST.stmt): unit rws =
         DisEnv.write [Stmt_Assert(expr_false, loc)]
     )
 
-let dis_encoding (x: encoding) (op: value): bool rws =
+let dis_encoding (x: encoding) (op: Primops.bigint): bool rws =
     let Encoding_Block (nm, iset, fields, opcode, guard, unpreds, b, loc) = x in
     (* todo: consider checking iset *)
     (* Printf.printf "Checking opcode match %s == %s\n" (Utils.to_string (PP.pp_opcode_value opcode)) (pp_value op); *)
-    let ok = (match opcode with
-    | Opcode_Bits b -> eval_eq     loc op (from_bitsLit b)
-    | Opcode_Mask m -> eval_inmask loc op (from_maskLit m)
-    ) in
-    if ok then begin
+    match Eval.eval_opcode_guard loc opcode op with
+    | Some op -> 
         if !Eval.trace_instruction then Printf.printf "TRACE: instruction %s\n" (pprint_ident nm);
 
         let@ () = DisEnv.traverse_ (function (IField_Field (f, lo, wd)) ->
@@ -1372,13 +1369,12 @@ let dis_encoding (x: encoding) (op: value): bool rws =
         end else begin
             DisEnv.pure false
         end
-    end else begin
-        DisEnv.pure false
-    end
+    | None -> DisEnv.pure false
 
-let dis_decode_slice (loc: l) (x: decode_slice) (op: value): value rws =
+let dis_decode_slice (loc: l) (x: decode_slice) (op: Primops.bigint): value rws =
     (match x with
     | DecoderSlice_Slice (lo, wd) ->
+        let op = Value.from_bitsInt (lo+wd) op in
         DisEnv.pure @@ extract_bits' loc op lo wd
     | DecoderSlice_FieldName f ->
         (* assumes expression always evaluates to concrete value. *)
@@ -1390,11 +1386,11 @@ let dis_decode_slice (loc: l) (x: decode_slice) (op: value): value rws =
     )
 
 (* Duplicate of eval_decode_case modified to print rather than eval *)
-let rec dis_decode_case (loc: AST.l) (x: decode_case) (op: value): unit rws =
+let rec dis_decode_case (loc: AST.l) (x: decode_case) (op: Primops.bigint): unit rws =
     let body = dis_decode_case' loc x op in
     if no_debug() then body
     else DisEnv.scope loc "dis_decode_case" (pp_decode_case x) Utils.pp_unit body
-and dis_decode_case' (loc: AST.l) (x: decode_case) (op: value): unit rws =
+and dis_decode_case' (loc: AST.l) (x: decode_case) (op: Primops.bigint): unit rws =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
             let@ vs = DisEnv.traverse (fun s -> dis_decode_slice loc s op) ss in
@@ -1413,11 +1409,11 @@ and dis_decode_case' (loc: AST.l) (x: decode_case) (op: value): unit rws =
     )
 
 (* Duplicate of eval_decode_alt modified to print rather than eval *)
-and dis_decode_alt (loc: l) (x: decode_alt) (vs: value list) (op: value): bool rws =
+and dis_decode_alt (loc: l) (x: decode_alt) (vs: value list) (op: Primops.bigint): bool rws =
     let body = dis_decode_alt' loc x vs op in
     if no_debug() then body
     else DisEnv.scope loc "dis_decode_alt" (pp_decode_alt x) string_of_bool body
-and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool rws =
+and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: Primops.bigint): bool rws =
     if List.for_all2 (Eval.eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
@@ -1461,6 +1457,7 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
         | DecoderBody_Decoder (fs, c, loc) ->
                 let@ () = DisEnv.modify (LocalEnv.addLevel) in
                 let@ () = DisEnv.traverse_ (function (IField_Field (f, lo, wd)) ->
+                    let op = Value.from_bitsInt (lo+wd) op in
                     let v = extract_bits' loc op lo wd in
                     declare_assign_var loc (val_type v) f (Val v)
                 ) fs
@@ -1483,7 +1480,7 @@ let enum_types env i =
     | Some l -> Some (Z.log2up (Z.of_int (List.length l)))
     | _ -> None
 
-let dis_decode_entry (env: Eval.Env.t) ((lenv,globals): env) (decode: decode_case) (op: value): stmt list =
+let dis_decode_entry (env: Eval.Env.t) ((lenv,globals): env) (decode: decode_case) (op: Primops.bigint): stmt list =
     let DecoderCase_Case (_,_,loc) = decode in
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let varentries = List.(concat @@ map (fun vars -> StringMap.(bindings (map fst vars))) lenv.locals) in
@@ -1553,4 +1550,4 @@ let retrieveDisassembly ?(address:string option) (env: Eval.Env.t) (lenv: env) (
     let lenv = match address with
     | Some v -> setPC env lenv (Z.of_string v)
     | None -> lenv in
-    dis_decode_entry env lenv decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_string opcode)))
+    dis_decode_entry env lenv decoder (Z.of_string opcode)

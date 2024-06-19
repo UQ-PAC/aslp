@@ -209,6 +209,9 @@ let from_realLit (x: AST.realLit): value =
     let denominator = Z.pow (Z.of_int 10) fracsz in
     VReal (Q.make numerator denominator)
 
+let from_bitsInt (wd: int) (x: Primops.bigint) =
+    VBits (Primops.mkBits wd x)
+
 let from_bitsLit (x: AST.bitsLit): value =
     let x' = drop_chars x ' ' in
     VBits (mkBits (String.length x') (Z.of_string_base 2 x'))
@@ -398,6 +401,10 @@ and prims_impure = ["ram_init"; "ram_read"; "ram_write"; "trace_memory_read"; "t
 (****************************************************************)
 (** {2 Utility functions on Values}                             *)
 (****************************************************************)
+
+let length_bits (loc: AST.l) = function
+    | VBits { n; _ } | VMask { n; _ } -> n
+    | x -> raise (EvalError (loc, "bits or mask expected. Got " ^ pp_value x))
 
 let extract_bits (loc: AST.l) (x: value) (i: value) (w: value): value =
     VBits (prim_extract (to_bits loc x) (to_integer loc i) (to_integer loc w))

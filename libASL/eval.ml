@@ -520,12 +520,24 @@ let removeGlobalConsts (env: Env.t) (ids: IdentSet.t): IdentSet.t =
 (****************************************************************)
 
 (** Evaluate bitslice of instruction opcode *)
-let eval_decode_slice (loc: l) (env: Env.t) (x: decode_slice) (op: value): value =
+let eval_decode_slice (loc: l) (env: Env.t) (x: decode_slice) (op: Primops.bigint): value =
     (match x with
-    | DecoderSlice_Slice (lo, wd) -> extract_bits' loc op lo wd
+    | DecoderSlice_Slice (lo, wd) ->
+        let op = Value.from_bitsInt (lo+wd) op in
+        extract_bits' loc op lo wd
     | DecoderSlice_FieldName f -> Env.getVar loc env f
     | DecoderSlice_Concat fs -> eval_concat loc (List.map (Env.getVar loc env) fs)
     )
+
+(** Evaluate an encoding's opcode guard pattern *)
+let eval_opcode_guard (loc: AST.l) (x: opcode_value) (op: Primops.bigint): value option =
+    let opcode_val, eval_opcode = (match x with
+    | Opcode_Bits b -> (from_bitsLit b, eval_eq)
+    | Opcode_Mask m -> (from_maskLit m, eval_inmask)
+    ) in
+    let opcode_len = length_bits loc opcode_val in
+    let op = from_bitsInt opcode_len op in
+    if eval_opcode loc op opcode_val then Some op else None
 
 (** Evaluate instruction decode pattern match *)
 let rec eval_decode_pattern (loc: AST.l) (x: decode_pattern) (op: value): bool =
@@ -910,7 +922,8 @@ and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     | Stmt_DecodeExecute(i, e, loc) ->
             let dec = Env.getDecoder env i in
             let op  = eval_expr loc env e in
-            eval_decode_case loc env dec op
+            let value = (to_bits loc op).v in
+            eval_decode_case loc env dec value
     | Stmt_If(c, t, els, e, loc) ->
             let rec eval css d =
                 (match css with
@@ -1055,7 +1068,7 @@ and eval_proccall (loc: l) (env: Env.t) (f: ident) (tvs: value list) (vs: value 
     )
 
 (** Evaluate instruction decode case *)
-and eval_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): unit =
+and eval_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: Primops.bigint): unit =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
             let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
@@ -1074,7 +1087,7 @@ and eval_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): uni
     )
 
 (** Evaluate instruction decode case alternative *)
-and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool =
+and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: Primops.bigint): bool =
     if List.for_all2 (eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
@@ -1096,6 +1109,7 @@ and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: valu
         | DecoderBody_Decoder (fs, c, loc) ->
                 (* let env = Env.empty in  *)
                 List.iter (function (IField_Field (f, lo, wd)) ->
+                    let op = Value.from_bitsInt (lo+wd) op in
                     Env.addLocalVar loc env f (extract_bits' loc op lo wd)
                 ) fs;
                 eval_decode_case loc env c op;
@@ -1105,7 +1119,7 @@ and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: valu
         false
 
 (** Evaluates instruction but draw statements from list, not specification *)
-and eval_stmt_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value) (xs: stmt list): unit =
+and eval_stmt_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: Primops.bigint) (xs: stmt list): unit =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
             let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
@@ -1123,7 +1137,7 @@ and eval_stmt_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value) (xs: s
             eval alts
     )
 
-and eval_stmt_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value) (xs: stmt list): bool =
+and eval_stmt_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: Primops.bigint) (xs: stmt list): bool =
     if List.for_all2 (eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
@@ -1145,6 +1159,7 @@ and eval_stmt_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value 
         | DecoderBody_Decoder (fs, c, loc) ->
                 (* let env = Env.empty in  *)
                 List.iter (function (IField_Field (f, lo, wd)) ->
+                    let op = Value.from_bitsInt (lo+wd) op in
                     Env.addLocalVar loc env f (extract_bits' loc op lo wd)
                 ) fs;
                 eval_decode_case loc env c op;
@@ -1154,15 +1169,12 @@ and eval_stmt_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value 
         false
 
 (** Evaluate instruction encoding *)
-and eval_encoding (env: Env.t) (x: encoding) (op: value): bool =
+and eval_encoding (env: Env.t) (x: encoding) (op: Primops.bigint): bool =
     let Encoding_Block (nm, iset, fields, opcode, guard, unpreds, b, loc) = x in
     (* todo: consider checking iset *)
     (* Printf.printf "Checking opcode match %s == %s\n" (Utils.to_string (PP.pp_opcode_value opcode)) (pp_value op); *)
-    let ok = (match opcode with
-    | Opcode_Bits b -> eval_eq     loc op (from_bitsLit b)
-    | Opcode_Mask m -> eval_inmask loc op (from_maskLit m)
-    ) in
-    if ok then begin
+    match eval_opcode_guard loc opcode op with
+    | Some op -> 
         if !trace_instruction then Printf.printf "TRACE: instruction %s\n" (pprint_ident nm);
         List.iter (function (IField_Field (f, lo, wd)) ->
             let v = extract_bits' loc op lo wd in
@@ -1179,10 +1191,7 @@ and eval_encoding (env: Env.t) (x: encoding) (op: value): bool =
         end else begin
             false
         end
-    end else begin
-        false
-    end
-
+    | None -> false
 
 
 (****************************************************************)
