@@ -5,7 +5,7 @@
  (modes exe byte)
  (modules asli)
  (flags (-cclib -lstdc++))
- (libraries libASL linenoise pprint pcre)
+ (libraries libASL linenoise pprint)
  )
 
 (executable
@@ -14,7 +14,7 @@
  (modes exe)
  (modules server)
  (flags (-cclib -lstdc++))
- (libraries libASL pprint pcre lwt.unix yojson cohttp-lwt cohttp-lwt-unix))
+ (libraries libASL pprint lwt.unix yojson cohttp-lwt cohttp-lwt-unix))
 
 
 (executable

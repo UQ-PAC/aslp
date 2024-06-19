@@ -116,10 +116,10 @@ let run iset pat env problematic =
 
   (* Find all matching instructions, pulled from testing.ml *)
   let decoder = Eval.Env.getDecoder env (Ident iset) in
-  let re = Pcre.regexp pat in
+  (* let re = Pcre.regexp pat in *)
   let filterfn = function
     | ((Encoding_Block (Ident nm, Ident is, _, _, _, _, _, _)),_,_,_) ->
-        is = iset && Pcre.pmatch ~rex:re nm && not (List.mem nm problematic)
+        is = iset &&true
     | _ -> assert false
   in
   let encs = List.filter filterfn (Eval.Env.listInstructions env) in

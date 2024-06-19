@@ -423,10 +423,10 @@ let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
 let get_opcodes (opt_verbose: bool ref) (iset: string) (instr: string) (env: Env.t): (string * instr_field list * ((int * bool) list) option) list =
   if !opt_verbose then Printf.printf "Coverage for encoding %s\n" instr;
 
-  let re = Pcre.regexp instr in
+  (* let re = Pcre.regexp instr in *)
   let encoding_matches = function
       | (Encoding_Block (Ident nm, Ident is, _, _, _, _, _, _)) ->
-          is = iset && Pcre.pmatch ~rex:re nm
+          is = iset && true
       | _ -> assert false
   in
   let encs = List.map (fun (x,_,_,_) -> x) (Env.listInstructions env) in

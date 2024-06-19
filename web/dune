@@ -2,9 +2,14 @@
   (name js)
   (modes js)
   (modules js)
-  (libraries z3 libASLResources dune-site str zarith pprint zarith_stubs_js)
+  (libraries boopimpl libASL libASLResources dune-site str zarith pprint zarith_stubs_js)
   (js_of_ocaml (flags --debug-info --no-inline :standard \ --source-map-inline))
   )
+
+(library
+ (name virtual)
+ (modules v)
+ (virtual_modules v))
 
 (alias
  (name default)
