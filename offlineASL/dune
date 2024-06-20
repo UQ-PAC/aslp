@@ -2,5 +2,5 @@
   (name offlineASL)
   (flags
     (:standard -w -27 -cclib -lstdc++))
-  (modules offline utils)
+  (modules offline offline_utils)
   (libraries zarith libASL))

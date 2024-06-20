@@ -1,0 +1,4 @@
+(library
+ (name libASL_native)
+ (implements libASL_support)
+ (libraries z3 libASL_ast))
