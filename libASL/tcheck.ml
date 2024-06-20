@@ -711,6 +711,13 @@ let simplify_type (x: AST.ty): AST.ty =
     let repl = new replaceExprClass (fun e -> Some (simplify_expr e)) in
     Visitor.visit_type repl x
 
+(****************************************************************)
+(** {3 Constraint solver entry point}                           *)
+(****************************************************************)
+
+let check_constraints (bs: expr list) (cs: expr list): bool =
+    LibASL_support.Solver.check_constraints bs cs
+
 
 (****************************************************************)
 (** {3 Unification support code}                                *)
@@ -861,7 +868,7 @@ class unifier (loc: AST.l) (assumptions: expr list) = object (self)
         (* The optimisation of not invoking solver if there are no constraints
          * improves runtime by a factor of 6x
          *)
-        if constraints <> [] && not (LibASL_support.Solver.check_constraints assumptions constraints) then begin
+        if constraints <> [] && not (check_constraints assumptions constraints) then begin
             Printf.printf "Type Error at %s\n" (pp_loc loc);
             if verbose then begin
                 renamings#pp "      Renaming: ";
