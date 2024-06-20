@@ -1,3 +1,5 @@
+; provides platform-specific dependencies
+
 (library
  (name libASL_support)
  (public_name asli.libASL-support)
