@@ -339,7 +339,7 @@ let _ =
 let main () =
     if !opt_print_version then Printf.printf "%s\n" version
     else if !opt_print_aarch64_dir then 
-        match aarch64_asl_dir with 
+        match Arm_env.aarch64_asl_dir with 
         | Some d -> Printf.printf "%s\n" d
         | None -> (Printf.eprintf "Unable to retrieve installed asl directory\n"; exit 1)
     else begin
@@ -356,7 +356,7 @@ let main () =
                         "Warning: asl file arguments ignored without --no-aarch64 (%s)\n"
                         (String.concat " " !opt_filenames)
                 else ();
-                aarch64_evaluation_environment ~verbose:!opt_verbose ();
+                Arm_env.aarch64_evaluation_environment ~verbose:!opt_verbose ();
             end in
 
         let env = (match env_opt with 
