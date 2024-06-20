@@ -23,6 +23,33 @@ let mkLoc (fname: string) (input: string): AST.l =
     let finish: Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = len } in
     AST.Range (start, finish)
 
+(** a source of data which may be a file on disk or a byte string in memory. *)
+type source = FileSource of string | DataSource of string * string
+
+let pp_source = function | FileSource s -> s | DataSource (name, _) -> "<data:" ^ name ^ ">"
+
+let name_of_source = function | FileSource s | DataSource (s, _) -> s
+
+(** opens a variant source.
+    returns (lexbuf, closer) where closer should be called to close the source. *)
+let open_source = function
+    | FileSource filename ->
+        let inchan = open_in filename in
+        let lexbuf = Lexing.from_channel inchan in
+        lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
+        (lexbuf, fun () -> close_in inchan)
+    | DataSource (filename, data) ->
+        let lexbuf = Lexing.from_string data in
+        lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
+        (lexbuf, Fun.id)
+
+let read_source = function
+    | FileSource filename ->
+        let inchan = open_in_bin filename in
+        let x = really_input_string inchan (in_channel_length inchan) in
+        close_in inchan;
+        x
+    | DataSource (_, data) -> data
 
 let report_parse_error (on_error: unit -> 'a) (f: unit -> 'a): 'a =
     (try
@@ -92,10 +119,8 @@ let declare_var_getters (decls: declaration list) =
   in
   List.map declare decls
 
-let parse_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declaration list =
-    let inchan = open_in filename in
-    let lexbuf = Lexing.from_channel inchan in
-    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
+let parse_file (filename : source) (isPrelude: bool) (verbose: bool): AST.declaration list =
+    let (lexbuf, close) = open_source filename in
     let t =
         report_parse_error
           (fun _ -> print_endline (pp_loc (Range (lexbuf.lex_start_p, lexbuf.lex_curr_p))); exit 1)
@@ -104,46 +129,39 @@ let parse_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declar
             let lexer = offside_token Lexer.token in
 
             (* Run the parser on this line of input. *)
-            if verbose then Printf.printf "- Parsing %s\n" filename;
+            if verbose then Printf.printf "- Parsing %s\n" (pp_source filename);
             Parser.declarations_start lexer lexbuf)
     in
-    close_in inchan;
+    close ();
     declare_var_getters t
 
-let read_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declaration list =
-    if verbose then Printf.printf "Processing %s\n" filename;
+let read_file (filename : source) (isPrelude: bool) (verbose: bool): AST.declaration list =
+    if verbose then Printf.printf "Processing %s\n" (pp_source filename);
     let t = parse_file filename isPrelude verbose in
 
     if false then PPrint.ToChannel.pretty 1.0 60 stdout (PP.pp_declarations t);
-    if verbose then Printf.printf "  - Got %d declarations from %s\n" (List.length t) filename;
+    if verbose then Printf.printf "  - Got %d declarations from %s\n" (List.length t) (pp_source filename);
 
     let t' =
         report_type_error (fun _ -> exit 1) (fun _ ->
-            if verbose then Printf.printf "- Typechecking %s\n" filename;
+            if verbose then Printf.printf "- Typechecking %s\n" (pp_source filename);
             TC.tc_declarations isPrelude t
         )
     in
 
     if false then PPrint.ToChannel.pretty 1.0 60 stdout (PP.pp_declarations t');
-    if verbose then Printf.printf "  - Got %d typechecked declarations from %s\n" (List.length t') filename;
+    if verbose then Printf.printf "  - Got %d typechecked declarations from %s\n" (List.length t') (pp_source filename);
 
-    if verbose then Printf.printf "Finished %s\n" filename;
+    if verbose then Printf.printf "Finished %s\n" (pp_source filename);
     flush stdout;
     t'
 
-let read_spec (filename : string) (verbose: bool): AST.declaration list =
-    let r: AST.declaration list list ref = ref [] in
-    let inchan = open_in filename in
-    (try
-        while true do
-            let t = read_file (input_line inchan) false verbose in
-            r := t :: !r
-        done
-    with
-    | End_of_file ->
-        close_in inchan
-    );
-    List.concat (List.rev !r)
+let read_spec (filename : source) (verbose: bool): AST.declaration list =
+    let specfile = read_source filename in
+    let lines = String.split_on_char '\n' specfile
+        |> List.map String.trim
+        |> List.filter (fun x -> x <> "") in
+    List.concat_map (fun f -> read_file (FileSource f) false verbose) lines
 
 let read_impdef (tcenv: TC.Env.t) (loc: AST.l) (s: string): (string * AST.expr) =
     let lexbuf = Lexing.from_string s in

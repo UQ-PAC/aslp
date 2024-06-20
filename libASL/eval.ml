@@ -1319,34 +1319,37 @@ let set_impdef (tcenv: Tcheck.Env.t) (env: Env.t) (fname: string) (rest: string 
     Env.setImpdef env x v
 
 (** Evaluates a minimal subset of the .prj syntax, sufficient for override.prj. *)
-let evaluate_prj_minimal (tcenv: Tcheck.Env.t) (env: Env.t) (fname: string) =
-    let inchan = open_in fname in
-    try
-        while true do
-            let line = input_line inchan in
-            match (String.split_on_char ' ' line) with
+let evaluate_prj_minimal (tcenv: Tcheck.Env.t) (env: Env.t) (source: LoadASL.source) =
+    let data = LoadASL.read_source source in
+    let fname = LoadASL.pp_source source in
+    let lines = List.map String.trim @@ String.split_on_char '\n' data in
+    List.iter
+        (fun line -> match (String.split_on_char ' ' line) with
             | ":set" :: "impdef" :: rest -> set_impdef tcenv env fname rest
             | empty when List.for_all (String.equal "") empty -> ()  (* ignore empty lines *)
-            | _ -> failwith @@ "Unrecognised minimal .prj line in " ^ fname ^ ": " ^ line
-        done
-    with | End_of_file -> close_in inchan
+            | _ -> failwith @@ "Unrecognised minimal .prj line in " ^ fname ^ ": " ^ line)
+        lines
 
 (** Constructs an evaluation environment with the given prelude file and .asl/.prj files.
     .prj files given here are required to be minimal. *)
-let evaluation_environment (prelude: string) (files: string list) (verbose: bool) = 
-    let t  = LoadASL.read_file prelude true verbose in
-    let ts = List.map (fun filename ->
+let evaluation_environment (prelude: LoadASL.source) (files: LoadASL.source list) (verbose: bool) = 
+    let t  = LoadASL.read_file (prelude) true verbose in
+    let ts = List.map (fun file ->
+        let filename = LoadASL.name_of_source file in
         if Utils.endswith filename ".spec" then begin
-            LoadASL.read_spec filename verbose 
+            LoadASL.read_spec file verbose 
         end else if Utils.endswith filename ".asl" then begin
-            LoadASL.read_file filename false verbose 
+            LoadASL.read_file file false verbose 
         end else if Utils.endswith filename ".prj" then begin
             [] (* ignore project files here and process later *)
         end else begin
-            failwith ("Unrecognized file suffix on "^filename)
+            failwith ("Unrecognized file suffix on "^(LoadASL.pp_source file))
         end
     ) files in
-    let prjs = List.filter (fun fname -> Utils.endswith fname ".prj") files in
+
+    let prjs = List.filter
+        (fun fname -> Utils.endswith (LoadASL.name_of_source fname) ".prj")
+        files in
 
     if verbose then Printf.printf "Building evaluation environment\n";
     let env = (

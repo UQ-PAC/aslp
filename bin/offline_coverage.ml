@@ -87,10 +87,6 @@ let main () =
   let env = match Arm_env.aarch64_evaluation_environment ~verbose:!opt_verbose () with
   | Some e -> e
   | _ -> failwith "Unable to build evaluation environment." in
-  let filenames = Option.get Arm_env.aarch64_asl_files in
-  let prj_files = List.filter (fun f -> Utils.endswith f ".prj") (snd filenames) in
-  let tcenv = Tcheck.Env.mkEnv Tcheck.env0 in
-  List.iter (fun f -> process_command tcenv env (":project " ^ f)) prj_files;
   List.map (fun instr -> run opt_verbose instr env) !opt_instr
 
 let _ = ignore (main())

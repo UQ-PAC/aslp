@@ -346,10 +346,11 @@ let main () =
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
 
+        let sources = List.map (fun x -> LoadASL.FileSource x) !opt_filenames in
         (* Note: .prj files are handled by `evaluation_environment`. *)
         let env_opt =
             if (!opt_no_default_aarch64)  
-            then evaluation_environment !opt_prelude !opt_filenames !opt_verbose
+            then evaluation_environment (FileSource !opt_prelude) sources !opt_verbose
             else begin
                 if List.length (!opt_filenames) != 0 then
                     Printf.printf
