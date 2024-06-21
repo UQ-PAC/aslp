@@ -32,15 +32,15 @@ let name_of_source = function | FileSource s | DataSource (s, _) -> s
 
 (** opens a variant source.
     returns (lexbuf, closer) where closer should be called to close the source. *)
-let open_source = function
+let open_source source = match source with
     | FileSource filename ->
         let inchan = open_in filename in
         let lexbuf = Lexing.from_channel inchan in
-        lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
+        lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = pp_source source };
         (lexbuf, fun () -> close_in inchan)
     | DataSource (filename, data) ->
         let lexbuf = Lexing.from_string data in
-        lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
+        lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = pp_source source };
         (lexbuf, Fun.id)
 
 let read_source = function
