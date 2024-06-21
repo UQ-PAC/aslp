@@ -28,7 +28,6 @@ let asl_blobs : LoadASL.source list = [
 let aarch64_asl_files: (LoadASL.source * LoadASL.source list) option =
     Some (prelude_blob, asl_blobs)
 
-
 let aarch64_evaluation_environment ?(verbose = false) (): Eval.Env.t option = 
     Option.bind aarch64_asl_files 
         (fun (prelude, filenames) -> Eval.evaluation_environment prelude filenames verbose)

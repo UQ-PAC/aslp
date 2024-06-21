@@ -51,6 +51,15 @@ let read_source = function
         x
     | DataSource (_, data) -> data
 
+let write_source prefix = function
+    | FileSource _ -> failwith "write_source for FileSource is unsupported"
+    | DataSource (name, data) ->
+        let name = Filename.concat prefix name in
+        Utils.mkdir_p (Filename.dirname name);
+        let chan = open_out_bin name in
+        output_string chan data;
+        close_out chan
+
 let report_parse_error (on_error: unit -> 'a) (f: unit -> 'a): 'a =
     (try
         f ()

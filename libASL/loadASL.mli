@@ -12,6 +12,7 @@ type source = FileSource of string | DataSource of string * string
 val pp_source : source -> string
 val name_of_source : source -> string
 val read_source : source -> string
+ val write_source : string -> source -> unit
 
 val mkLoc : string -> string -> AST.l
 

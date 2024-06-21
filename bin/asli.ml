@@ -23,7 +23,7 @@ let opt_prelude : string ref = ref "prelude.asl"
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
 let opt_no_default_aarch64 = ref false
-let opt_print_aarch64_dir = ref false
+let opt_export_aarch64_dir = ref ""
 let opt_verbose = ref false
 
 
@@ -309,8 +309,8 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
 let options = Arg.align ([
     ( "-x", Arg.Set_int Dis.debug_level,      "       Partial evaluation debugging (requires debug level argument >= 0)");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
-    ( "--no-aarch64", Arg.Set opt_no_default_aarch64 , "       Disable bundled AArch64 semantics");
-    ( "--aarch64-dir", Arg.Set opt_print_aarch64_dir, "       Print directory of bundled AArch64 semantics");
+    ( "--no-aarch64", Arg.Set opt_no_default_aarch64 ,    "       Disable bundled AArch64 semantics");
+    ( "--export-aarch64", Arg.Set_string opt_export_aarch64_dir,  "       Export bundled AArch64 MRA to the given directory");
     ( "--version", Arg.Set opt_print_version, "       Print version");
     ( "--prelude", Arg.Set_string opt_prelude,"       ASL prelude file (default: ./prelude.asl)");
 ] )
@@ -338,10 +338,10 @@ let _ =
 
 let main () =
     if !opt_print_version then Printf.printf "%s\n" version
-    else if !opt_print_aarch64_dir then 
-        match Arm_env.aarch64_asl_dir with 
-        | Some d -> Printf.printf "%s\n" d
-        | None -> (Printf.eprintf "Unable to retrieve installed asl directory\n"; exit 1)
+    else if "" <> !opt_export_aarch64_dir then
+        let dir = !opt_export_aarch64_dir in
+        ignore @@ Sys.readdir dir;
+        List.iter LoadASL.(write_source dir) Arm_env.(prelude_blob :: asl_blobs);
     else begin
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
