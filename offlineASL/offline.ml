@@ -1,4 +1,7 @@
-open Utils
+(* AUTO-GENERATED LIFTER FILE *)
+
+open Offline_utils
+open Decode_tests
 
 let f_A64_decoder v_enc : unit = 
   failwith "unsupported"
