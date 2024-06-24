@@ -33,7 +33,7 @@
    offline_transform ocaml_backend dis_tc
    offline_opt
    )
- (libraries libASL_support (re_export libASL_ast) str pcre dune-site))
+ (libraries libASL_support (re_export libASL_ast) str dune-site))
 
 (generate_sites_module
  (module res)
