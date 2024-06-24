@@ -15,7 +15,7 @@ open Asl_utils
 open Lwt
 
 
-let persistent_env = lazy (Option.get (aarch64_evaluation_environment ()))
+let persistent_env = lazy (Option.get (Arm_env.aarch64_evaluation_environment ()))
 
 let eval_instr (opcode: string) : string =
     let pp_raw stmt : string = Utils.to_string (Asl_parser_pp.pp_raw_stmt stmt) |> String.trim  in

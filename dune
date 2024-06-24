@@ -1,26 +1,24 @@
-(install 
-  (files
-   (prelude.asl                       as   prelude.asl                      )
-   (mra_tools/arch/arch.asl           as   mra_tools/arch/arch.asl          )
-   (mra_tools/arch/arch_decode.asl    as   mra_tools/arch/arch_decode.asl   )
-   (mra_tools/arch/arch_instrs.asl    as   mra_tools/arch/arch_instrs.asl   )
-   (mra_tools/arch/regs.asl           as   mra_tools/arch/regs.asl          )
-   (mra_tools/arch/regs_access.asl    as   mra_tools/arch/regs_access.asl   )
-   (mra_tools/support/aes.asl         as   mra_tools/support/aes.asl        )
-   (mra_tools/support/barriers.asl    as   mra_tools/support/barriers.asl   )
-   (mra_tools/support/debug.asl       as   mra_tools/support/debug.asl      )
-   (mra_tools/support/feature.asl     as   mra_tools/support/feature.asl    )
-   (mra_tools/support/fetchdecode.asl as   mra_tools/support/fetchdecode.asl)
-   (mra_tools/support/hints.asl       as   mra_tools/support/hints.asl      )
-   (mra_tools/support/interrupts.asl  as   mra_tools/support/interrupts.asl )
-   (mra_tools/support/memory.asl      as   mra_tools/support/memory.asl     )
-   (mra_tools/support/stubs.asl       as   mra_tools/support/stubs.asl      )
-   (mra_tools/types.asl               as   mra_tools/types.asl              )
-   (tests/override.asl                as   tests/override.asl               )
-   (tests/override.prj                as   tests/override.prj               )
-  )
-  (section (site (asli aslfiles)))
- )
+(alias 
+  (name asl_files)
+  (deps
+    prelude.asl
+    mra_tools/arch/arch.asl
+    mra_tools/arch/arch_decode.asl
+    mra_tools/arch/arch_instrs.asl
+    mra_tools/arch/regs.asl
+    mra_tools/arch/regs_access.asl
+    mra_tools/support/aes.asl
+    mra_tools/support/barriers.asl
+    mra_tools/support/debug.asl
+    mra_tools/support/feature.asl
+    mra_tools/support/fetchdecode.asl
+    mra_tools/support/hints.asl
+    mra_tools/support/interrupts.asl
+    mra_tools/support/memory.asl
+    mra_tools/support/stubs.asl
+    mra_tools/types.asl
+    tests/override.asl
+    tests/override.prj))
 
 (alias
  (name default)

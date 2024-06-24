@@ -7,6 +7,15 @@
 
 (** Generic utility functions *)
 
+let rec mkdir_p p =
+    let open Filename in
+    if Sys.file_exists p then
+        ()
+    else
+        (* make parents, then make final directory. *)
+        (mkdir_p (dirname p); Sys.mkdir p 0o755)
+
+
 (****************************************************************
  * Pretty-printer related
  ****************************************************************)
