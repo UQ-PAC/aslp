@@ -3,7 +3,7 @@
   (modes js)
   (modules js)
   (libraries libASL libASL_web js_of_ocaml)
-  (js_of_ocaml (flags --debug-info --no-inline --sourcemap :standard \ --source-map-inline))
+  (js_of_ocaml (flags --sourcemap :standard \ --source-map-inline))
   (preprocess (pps js_of_ocaml-ppx))
   )
 

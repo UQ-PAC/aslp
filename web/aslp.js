@@ -85,3 +85,4 @@ const write = (isError) => s => {
 
 libASL_web.init(write(false), write(true));
 libASL_web.setDebugLevel(0);
+
