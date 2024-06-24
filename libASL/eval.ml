@@ -1359,7 +1359,7 @@ let evaluation_environment (prelude: LoadASL.source) (files: LoadASL.source list
             None
     ) in
 
-    let tcenv = TC.Env.mkEnv Tcheck.env0 in
+    let tcenv = TC.Env.mkEnv !Tcheck.env0 in
     Option.iter (fun env -> List.iter (evaluate_prj_minimal tcenv env) prjs) env;
     env
 

@@ -2448,7 +2448,7 @@ let genPrototypes (ds: AST.declaration list): (AST.declaration list * AST.declar
     (List.rev !pre, List.rev !post)
 
 (** Overall typechecking environment shared by all invocations of typechecker *)
-let env0 = GlobalEnv.mkempty ()
+let env0 = ref (GlobalEnv.mkempty ())
 
 (** Typecheck a list of declarations - main entrypoint into typechecker *)
 let tc_declarations (isPrelude: bool) (ds: AST.declaration list): AST.declaration list =
@@ -2463,8 +2463,8 @@ let tc_declarations (isPrelude: bool) (ds: AST.declaration list): AST.declaratio
      *)
     let (pre, post) = if isPrelude then (ds, []) else genPrototypes ds in
     if verbose then Printf.printf "  - Typechecking %d phase 1 declarations\n" (List.length pre);
-    let pre'  = List.map (tc_declaration env0) pre  in
-    let post' = List.map (tc_declaration env0) post in
+    let pre'  = List.map (tc_declaration !env0) pre  in
+    let post' = List.map (tc_declaration !env0) post in
     if verbose then List.iter (fun ds -> List.iter (fun d -> Printf.printf "\nTypechecked %s\n" (Utils.to_string (PP.pp_declaration d))) ds) post';
     if verbose then Printf.printf "  - Typechecking %d phase 2 declarations\n" (List.length post);
     List.append (List.concat pre') (List.concat post')

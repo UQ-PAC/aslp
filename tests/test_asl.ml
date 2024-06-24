@@ -101,7 +101,7 @@ let test_compare env () : unit =
 let tests : unit Alcotest.test_case list =
     let prelude = LoadASL.read_file (FileSource "../../../prelude.asl") true false in
     let mra = List.map (fun tool -> LoadASL.read_file tool false false) (mra_tools ()) in
-    let tcenv   = TC.Env.mkEnv TC.env0 in
+    let tcenv   = TC.Env.mkEnv !TC.env0 in
     let env     = Eval.build_evaluation_environment (prelude @ List.concat mra) in
     [
         ("arith", `Quick, test_arith tcenv env);

@@ -180,7 +180,7 @@ module LocalEnv = struct
 
     let init (env: Eval.Env.t) =
         let eval e = val_expr (Eval.eval_expr Unknown env e) in
-        let tenv = Tcheck.env0 in
+        let tenv = !Tcheck.env0 in
         let get_global_type id =
             (match Tcheck.GlobalEnv.getGlobalVar tenv id with
             | Some (Type_Bits e) ->
@@ -642,7 +642,7 @@ and width_of_type (loc: l) (t: ty): int =
   | _ -> unsupported loc @@ "Can't get bit width of type: " ^ pp_type t
 
 and width_of_field (loc: l) (t: ty) (f: ident): int =
-  let env = Tcheck.env0 in
+  let env = !Tcheck.env0 in
   let ft =
     (match Tcheck.typeFields env loc t with
     | FT_Record rfs -> Tcheck.get_recordfield loc rfs f
@@ -654,7 +654,7 @@ and width_of_field (loc: l) (t: ty) (f: ident): int =
 
 (** Determine the type of memory access expression (Var, Array, Field) *)
 and type_of_load (loc: l) (x: expr): ty rws =
-  let env = Tcheck.env0 in
+  let env = !Tcheck.env0 in
   (match x with
   | Expr_Var(id) ->
       let+ (_,(t,_)) = DisEnv.gets (LocalEnv.resolveGetVar loc id) in

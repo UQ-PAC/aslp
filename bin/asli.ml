@@ -370,7 +370,7 @@ let main () =
         LNoise.history_set ~max_length:100 |> ignore;
         
         let denv = Dis.build_env env in
-        let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env denv in
+        let tcenv = TC.Env.mkEnv !TC.env0 and cpu = Cpu.mkCPU env denv in
 
         repl tcenv cpu
     end
