@@ -5,7 +5,7 @@
  (modes exe byte)
  (modules asli)
  (flags (-cclib -lstdc++))
- (libraries libASL linenoise pprint pcre)
+ (libraries libASL libASL_native linenoise pprint pcre)
  )
 
 (executable
@@ -14,7 +14,7 @@
  (modes exe)
  (modules server)
  (flags (-cclib -lstdc++))
- (libraries libASL pprint pcre lwt.unix yojson cohttp-lwt cohttp-lwt-unix))
+ (libraries libASL libASL_native pprint pcre lwt.unix yojson cohttp-lwt cohttp-lwt-unix))
 
 
 (executable
@@ -39,7 +39,7 @@
  (modes exe)
  (modules offline_coverage)
  (flags (-cclib -lstdc++))
- (libraries libASL offlineASL))
+ (libraries libASL libASL_native offlineASL))
 
 (executable
  (name offline_sem)
@@ -47,4 +47,4 @@
  (modes exe)
  (modules offline_sem)
  (flags (-cclib -lstdc++))
- (libraries libASL offlineASL))
+ (libraries libASL libASL_native offlineASL))
