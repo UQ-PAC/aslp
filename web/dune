@@ -2,10 +2,11 @@
   (name js)
   (modes js)
   (modules js)
-  (libraries z3 libASLResources dune-site str zarith pprint zarith_stubs_js)
-  (js_of_ocaml (flags --debug-info --no-inline :standard \ --source-map-inline))
+  (libraries libASL libASL_web js_of_ocaml)
+  (js_of_ocaml (flags --debug-info --no-inline --sourcemap :standard \ --source-map-inline))
+  (preprocess (pps js_of_ocaml-ppx))
   )
 
 (alias
  (name default)
- (deps js.bc.js index.html))
+ (deps js.bc.js index.html reset.css aslp.js worker.js))

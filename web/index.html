@@ -1,9 +1,93 @@
 <!doctype html>
 <html>
   <head>
-    <title>Cubes</title>
+    <title>ASLp Web</title>
     <script type="text/javascript" src="js.bc.js"></script>
+    <link href="reset.css" rel="stylesheet" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
   </head>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2em;
+    }
+
+    .monospace {
+      font-family: monospace;
+    }
+
+    .small {
+      font-size: 12px;
+    }
+
+    p {
+      margin-bottom: 0.5em;
+    }
+
+    input[type="radio"], label, summary {
+      cursor: pointer;
+    }
+
+    .invisible {
+      visibility: hidden;
+    }
+
+    .stderr {
+      color: #ce0000;
+    }
+  </style>
+
   <body>
+    <h1>ASLp Web</h1>
+    <form action="javascript:submit();">
+      <div>
+        <p>
+          <input onclick="setOpcodeMode('opcode');" type="radio" id="opcode" name="mode" value="opcode" checked />
+          <label for="opcode">Opcode (big-endian)</label><br/>
+          <input onclick="setOpcodeMode('bytes');" type="radio" id="bytes" name="mode" value="bytes" />
+          <label for="bytes">Bytes (little-endian)</label>
+        </p>
+      </div>
+      <p>
+        <input id="op" type="text" class="monospace" required autofocus value="0x8b031041"
+               pattern="[a-fA-F0-9x ]+" />
+      </p>
+
+      <p>
+        <button id="go" submit>Semantics</button>
+        <span id="loading" class="invisible">Loading...</span>
+      </p>
+
+      <p>
+
+        <details>
+          <summary>Debug options</summary>
+          <select onchange="onChangeDebug(this);" name="debug" id="debug">
+            <option value="0">minimal</option>
+            <option value="1">stack trace</option>
+            <option value="2">stack trace, variables</option>
+            <option value="3">stack trace, variables, residual programs</option>
+          </select>
+        </details>
+
+      </p>
+
+      <hr/>
+
+      <h4>Output</h4>
+      <p>
+        <button disabled type=button class="small" id="dl">Download</button>
+        <button disabled type=button class="small" id="share">Share</button>
+        <button onclick="clearOutput();" type=button class="small" id="clear">Clear</button>
+      </p>
+      <p>
+        <pre id="output"></pre>
+      
+      </p>
+    </form>
+
+
+    <script type="text/javascript" src="aslp.js"></script>
   </body>
 </html>
