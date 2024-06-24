@@ -19,7 +19,7 @@ open Utils
 open Asl_utils
 open Printf
 
-let verbose = true
+let verbose = false
 
 
 (****************************************************************)
@@ -731,43 +731,43 @@ let simplify_type (x: AST.ty): AST.ty =
     we can reason that "F(x) == F(x)" without knowing "F".
  *)
 
-(* let rec z3_of_expr (ctx: Z3.context) (ufs: (AST.expr * Z3.Expr.expr) list ref) (x: AST.expr): Z3.Expr.expr = *)
-(*     (match x with *)
-(*     | Expr_Var(v) -> *)
-(*         let intsort = Z3.Arithmetic.Integer.mk_sort ctx in *)
-(*         Z3.Expr.mk_const_s ctx (pprint_ident v) intsort *)
-(*     | Expr_Parens y -> z3_of_expr ctx ufs y *)
-(*     | Expr_LitInt i -> Z3.Arithmetic.Integer.mk_numeral_s ctx i *)
-(**)
-(*     (* todo: the following lines involving DIV are not sound *) *)
-(*     | Expr_TApply (FIdent ("mul_int",_), [], [Expr_TApply (FIdent ("fdiv_int",_), [], [a; b]); c]) when b = c -> z3_of_expr ctx ufs a *)
-(*     | Expr_TApply (FIdent ("mul_int",_), [], [a; Expr_TApply (FIdent ("fdiv_int",_), [], [b; c])]) when a = c -> z3_of_expr ctx ufs b *)
-(*     | Expr_TApply (FIdent ("add_int",_), [], [Expr_TApply (FIdent ("fdiv_int",_), [], [a1; b1]); *)
-(*                                          Expr_TApply (FIdent ("fdiv_int",_), [], [a2; b2])]) *)
-(*          when a1 = a2 && b1 = b2 && b1 = Expr_LitInt "2" *)
-(*          -> z3_of_expr ctx ufs a1 *)
-(*     | Expr_TApply (FIdent ("eq_int",_), [], [a; Expr_TApply (FIdent ("fdiv_int",_), [], [b; c])]) -> *)
-(*             Z3.Boolean.mk_eq ctx *)
-(*                 (Z3.Arithmetic.mk_mul ctx [z3_of_expr ctx ufs c; z3_of_expr ctx ufs a]) *)
-(*                 (z3_of_expr ctx ufs b) *)
-(**)
-(*     | Expr_TApply (FIdent ("add_int",_),  [], xs)    -> Z3.Arithmetic.mk_add ctx (List.map (z3_of_expr ctx ufs) xs) *)
-(*     | Expr_TApply (FIdent ("sub_int",_),  [], xs)    -> Z3.Arithmetic.mk_sub ctx (List.map (z3_of_expr ctx ufs) xs) *)
-(*     | Expr_TApply (FIdent ("mul_int",_),  [], xs)    -> Z3.Arithmetic.mk_mul ctx (List.map (z3_of_expr ctx ufs) xs) *)
-(*     | Expr_TApply (FIdent ("fdiv_int",_), [], [a;b]) -> Z3.Arithmetic.mk_div ctx (z3_of_expr ctx ufs a) (z3_of_expr ctx ufs b) *)
-(*     | Expr_TApply (FIdent ("eq_int",_),   [], [a;b]) -> Z3.Boolean.mk_eq ctx (z3_of_expr ctx ufs a) (z3_of_expr ctx ufs b) *)
-(*     | _ -> *)
-(*             if verbose then Printf.printf "    Unable to translate %s - using as uninterpreted function\n" (pp_expr x); *)
-(*             let intsort = Z3.Arithmetic.Integer.mk_sort ctx in *)
-(*             (match List.assoc_opt x !ufs with *)
-(*             | None -> *)
-(*                     let uf = Z3.Expr.mk_fresh_const ctx "UNINTERPRETED" intsort in *)
-(*                     ufs := (x, uf) :: !ufs; *)
-(*                     uf *)
-(*             | Some uf -> *)
-(*                     uf *)
-(*             ) *)
-(*     ) *)
+let rec z3_of_expr (ctx: Z3.context) (ufs: (AST.expr * Z3.Expr.expr) list ref) (x: AST.expr): Z3.Expr.expr =
+    (match x with
+    | Expr_Var(v) ->
+        let intsort = Z3.Arithmetic.Integer.mk_sort ctx in
+        Z3.Expr.mk_const_s ctx (pprint_ident v) intsort
+    | Expr_Parens y -> z3_of_expr ctx ufs y
+    | Expr_LitInt i -> Z3.Arithmetic.Integer.mk_numeral_s ctx i
+
+    (* todo: the following lines involving DIV are not sound *)
+    | Expr_TApply (FIdent ("mul_int",_), [], [Expr_TApply (FIdent ("fdiv_int",_), [], [a; b]); c]) when b = c -> z3_of_expr ctx ufs a
+    | Expr_TApply (FIdent ("mul_int",_), [], [a; Expr_TApply (FIdent ("fdiv_int",_), [], [b; c])]) when a = c -> z3_of_expr ctx ufs b
+    | Expr_TApply (FIdent ("add_int",_), [], [Expr_TApply (FIdent ("fdiv_int",_), [], [a1; b1]);
+                                         Expr_TApply (FIdent ("fdiv_int",_), [], [a2; b2])])
+         when a1 = a2 && b1 = b2 && b1 = Expr_LitInt "2"
+         -> z3_of_expr ctx ufs a1
+    | Expr_TApply (FIdent ("eq_int",_), [], [a; Expr_TApply (FIdent ("fdiv_int",_), [], [b; c])]) ->
+            Z3.Boolean.mk_eq ctx
+                (Z3.Arithmetic.mk_mul ctx [z3_of_expr ctx ufs c; z3_of_expr ctx ufs a])
+                (z3_of_expr ctx ufs b)
+
+    | Expr_TApply (FIdent ("add_int",_),  [], xs)    -> Z3.Arithmetic.mk_add ctx (List.map (z3_of_expr ctx ufs) xs)
+    | Expr_TApply (FIdent ("sub_int",_),  [], xs)    -> Z3.Arithmetic.mk_sub ctx (List.map (z3_of_expr ctx ufs) xs)
+    | Expr_TApply (FIdent ("mul_int",_),  [], xs)    -> Z3.Arithmetic.mk_mul ctx (List.map (z3_of_expr ctx ufs) xs)
+    | Expr_TApply (FIdent ("fdiv_int",_), [], [a;b]) -> Z3.Arithmetic.mk_div ctx (z3_of_expr ctx ufs a) (z3_of_expr ctx ufs b)
+    | Expr_TApply (FIdent ("eq_int",_),   [], [a;b]) -> Z3.Boolean.mk_eq ctx (z3_of_expr ctx ufs a) (z3_of_expr ctx ufs b)
+    | _ ->
+            if verbose then Printf.printf "    Unable to translate %s - using as uninterpreted function\n" (pp_expr x);
+            let intsort = Z3.Arithmetic.Integer.mk_sort ctx in
+            (match List.assoc_opt x !ufs with
+            | None ->
+                    let uf = Z3.Expr.mk_fresh_const ctx "UNINTERPRETED" intsort in
+                    ufs := (x, uf) :: !ufs;
+                    uf
+            | Some uf ->
+                    uf
+            )
+    )
 
 (** check that bs => cs *)
 let check_constraints (bs: expr list) (cs: expr list): bool =
@@ -775,21 +775,17 @@ let check_constraints (bs: expr list) (cs: expr list): bool =
      * It is possible to share them across all invocations to save
      * about 10% of execution time.
      *)
-    (* let z3_ctx = Z3.mk_context [] in *)
-    (* let solver = Z3.Solver.mk_simple_solver z3_ctx in *)
-    (* let ufs = ref [] in (* uninterpreted function list *) *)
-    (* if verbose then begin *)
-    (*     Printf.printf "bs=%s, cs=%s\n" (Utils.pp_list pp_expr bs) (Utils.pp_list pp_expr cs) *)
-    (* end; *)
-    (* let bs' = List.map (z3_of_expr z3_ctx ufs) bs in *)
-    (* let cs' = List.map (z3_of_expr z3_ctx ufs) cs in *)
-    (* let p = Z3.Boolean.mk_implies z3_ctx (Z3.Boolean.mk_and z3_ctx bs') (Z3.Boolean.mk_and z3_ctx cs') in *)
-    (* if verbose then Printf.printf "      - Checking %s\n" (Z3.Expr.to_string p); *)
-    (* Z3.Solver.add solver [Z3.Boolean.mk_not z3_ctx p]; *)
-    (* let q = Z3.Solver.check solver [] in *)
-    (* if q = SATISFIABLE then Printf.printf "Failed property %s\n" (Z3.Expr.to_string p); *)
-    (* q = UNSATISFIABLE *)
-    true
+    let z3_ctx = Z3.mk_context [] in
+    let solver = Z3.Solver.mk_simple_solver z3_ctx in
+    let ufs = ref [] in (* uninterpreted function list *)
+    let bs' = List.map (z3_of_expr z3_ctx ufs) bs in
+    let cs' = List.map (z3_of_expr z3_ctx ufs) cs in
+    let p = Z3.Boolean.mk_implies z3_ctx (Z3.Boolean.mk_and z3_ctx bs') (Z3.Boolean.mk_and z3_ctx cs') in
+    if verbose then Printf.printf "      - Checking %s\n" (Z3.Expr.to_string p);
+    Z3.Solver.add solver [Z3.Boolean.mk_not z3_ctx p];
+    let q = Z3.Solver.check solver [] in
+    if q = SATISFIABLE then Printf.printf "Failed property %s\n" (Z3.Expr.to_string p);
+    q = UNSATISFIABLE
 
 
 (****************************************************************)
@@ -2525,7 +2521,7 @@ let env0 = GlobalEnv.mkempty ()
 
 (** Typecheck a list of declarations - main entrypoint into typechecker *)
 let tc_declarations (isPrelude: bool) (ds: AST.declaration list): AST.declaration list =
-    (* if verbose then Printf.printf "  - Using Z3 %s\n" Z3.Version.to_string; *)
+    if verbose then Printf.printf "  - Using Z3 %s\n" Z3.Version.to_string;
     (* Process declarations, starting by moving all function definitions to the
      * end of the list and replacing them with function prototypes.
      * As long as the type/var decls are all sorted correctly, this
@@ -2538,7 +2534,7 @@ let tc_declarations (isPrelude: bool) (ds: AST.declaration list): AST.declaratio
     if verbose then Printf.printf "  - Typechecking %d phase 1 declarations\n" (List.length pre);
     let pre'  = List.map (tc_declaration env0) pre  in
     let post' = List.map (tc_declaration env0) post in
-    (* if verbose then List.iter (fun ds -> List.iter (fun d -> Printf.printf "\nTypechecked %s\n" (Utils.to_string (PP.pp_declaration d))) ds) post'; *)
+    if verbose then List.iter (fun ds -> List.iter (fun d -> Printf.printf "\nTypechecked %s\n" (Utils.to_string (PP.pp_declaration d))) ds) post';
     if verbose then Printf.printf "  - Typechecking %d phase 2 declarations\n" (List.length post);
     List.append (List.concat pre') (List.concat post')
 
