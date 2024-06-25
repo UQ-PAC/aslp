@@ -3,5 +3,5 @@
 (library
  (name libASL_support)
  (public_name asli.libASL-support)
- (libraries libASL_ast)
+ (libraries libASL_base)
  (virtual_modules solver))

@@ -3,4 +3,4 @@
 (****************************************************************)
 
 (** check that bs => cs *)
-val check_constraints : (Asl_ast.expr list) -> (Asl_ast.expr list) -> bool
+val check_constraints : (LibASL_base.Asl_ast.expr list) -> (LibASL_base.Asl_ast.expr list) -> bool

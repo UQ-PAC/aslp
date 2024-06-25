@@ -15,18 +15,17 @@
      (with-stdout-to asl_parser.mly (run cat asl_parser_head.mly asl_parser_tail.mly)))))
 
 (library
- (name libASL_ast)
- (public_name asli.libASL-ast)
+ (name libASL_base)
+ (public_name asli.libASL-base)
  (flags (:standard -w -27))
- (wrapped false)
  (modules asl_ast asl_parser asl_parser_pp asl_utils asl_visitor visitor utils)
  (libraries pprint (re_export zarith)))
 
 (library
- (name libASL)
- (public_name asli.libASL)
+ (name libASL_virtual)
+ (public_name asli.libASL-virtual)
  (flags
-  (:standard -w -27 -cclib -lstdc++))
+  (:standard -w -27 -cclib -lstdc++ -open LibASL_base))
  (modules cpu dis elf eval
    lexer lexersupport loadASL monad primops rws symbolic tcheck testing transforms value
    symbolic_lifter decoder_program call_graph req_analysis
@@ -35,5 +34,17 @@
    )
  (preprocessor_deps (alias ../asl_files))
  (preprocess (pps ppx_blob))
- (libraries libASL_support (re_export libASL_ast) str))
+ (libraries libASL_support str))
 
+(library
+ (name libASL)
+ (public_name asli.libASL-merged)
+ (modules libASL)
+ (wrapped false)
+ (libraries libASL_virtual libASL_base))
+
+(library
+ (name libASL_dummy)
+ (public_name asli.libASL)
+ (modules)
+ (libraries (re_export libASL) libASL_native))
