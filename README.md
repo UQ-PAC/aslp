@@ -79,7 +79,7 @@ This interpreter consists of a single directory organized as follows
 ### Installing with Nix
 
 ASLp can be installed as a Nix package from https://github.com/katrinafyi/pac-nix.
-_asli_ provides the base ASLp and _aslp_ provides ASLp bundled with ARM's specifications.
+The _aslp_ provides ASLp bundled with ARM's specifications.
 If you don't plan on modifying the tool, this is a fast and easy way to get started.
 
 ### Installing dependencies
@@ -123,12 +123,25 @@ You also need to execute this command
 
 To build the ASL lexer and ASL interpreter, execute this command.
 
-```
+``` 
     make install
 ```
 
 If you get a lot of linker errors involving Z3, double-check that you installed
 the right version.
+
+### Building for use in other projects
+
+If you need to use ASLp or libASL in a downstream OCaml project,
+these steps will install the package in a location discoverable by opam and dune.
+
+After installing dependencies and testing the build, run these commands in this directory:
+```
+    opam pin . -k path
+    opam install .
+```
+Once complete, you can verify the package is installed by running `ocamlfind query asli`.
+
 
 ### Using ASL lexer
 
