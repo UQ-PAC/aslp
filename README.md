@@ -81,6 +81,7 @@ This interpreter consists of a single directory organized as follows
 ASLp can be installed as a Nix package from https://github.com/katrinafyi/pac-nix.
 The _aslp_ provides ASLp bundled with ARM's specifications.
 If you don't plan on modifying the tool, this is a fast and easy way to get started.
+If installed via Nix, the following installation steps are not necessary.
 
 ### Installing dependencies
 
@@ -95,9 +96,17 @@ Platform specific instructions:
         sudo zypper install ocaml opam ocaml-ocaml-compiler-libs-devel
 ```
 
-Platform independent instructions:
+First-time only (if you have not previously set up an opam switch environment):
 
+```bash
+    opam init  # answer y/n depending on your preference
+    opam switch create ocaml.4.14.2  # or later
+    eval `opam env`
 ```
+
+Platform-independent instructions:
+
+```bash
     # Install dependencies from asli.opam file
     opam install --deps-only --with-test ./asli.opam
 
@@ -107,11 +116,9 @@ Platform independent instructions:
 
     # On OSX, you may need to use this command to install zarith
     env CFLAGS="-I$HOME/homebrew/include/" LDFLAGS="-L$HOME/homebrew/lib/" opam install zarith
-
-    eval `opam config env`
 ```
 
-You also need to execute this command
+You may also need to execute this command
 
 ```
     MacOS: export DYLD_LIBRARY_PATH=`opam config var z3:lib`
@@ -123,7 +130,7 @@ You also need to execute this command
 
 To build the ASL lexer and ASL interpreter, execute this command.
 
-``` 
+```
     make install
 ```
 
@@ -132,7 +139,7 @@ the right version.
 
 ### Building for use in other projects
 
-If you need to use ASLp or libASL in a downstream OCaml project,
+If you need to use ASLp or libASL as a dependency in another OCaml project,
 these steps will install the package in a location discoverable by opam and dune.
 
 After installing dependencies and testing the build, run these commands in this directory:
