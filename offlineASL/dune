@@ -8,4 +8,4 @@
     decode_tests
     offline_utils
   )
-  (libraries libASL))
+  (libraries asli.libASL))

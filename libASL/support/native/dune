@@ -1,5 +1,5 @@
 (library
- (name libASL_native)
+ (name libASL_support_native)
  (public_name asli.libASL-support-native)
  (implements libASL_support)
- (libraries z3 libASL_base))
+ (libraries z3 libASL_stage0))

@@ -382,7 +382,7 @@ let write_dune_file files dir =
     Printf.fprintf oc "    %s\n" (String.lowercase_ascii k)
   ) files;
   Printf.fprintf oc "  )
-  (libraries libASL))";
+  (libraries asli.libASL))";
   close_out oc
 
 (* Write all of the above, expecting offline_utils.ml to already be present in dir *)

@@ -17,8 +17,8 @@
     we can reason that "F(x) == F(x)" without knowing "F".
  *)
 
-module AST = LibASL_base.Asl_ast
-module Asl_utils = LibASL_base.Asl_utils
+module AST = LibASL_stage0.Asl_ast
+module Asl_utils = LibASL_stage0.Asl_utils
 
 let verbose = false
 
