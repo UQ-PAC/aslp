@@ -21,6 +21,7 @@
     "linenoise"
     "pprint"
     "zarith"
+    "zarith_stubs_js"
     ("z3"        (>= "4.8.7"))
     ("alcotest"  :with-test)
     "ppx_blob"
