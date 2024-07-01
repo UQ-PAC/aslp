@@ -1,5 +1,0 @@
-(library
- (name libASL_support_web)
- (public_name asli.libASL-support-web)
- (implements libASL_support)
- (libraries libASL_stage0 zarith_stubs_js))
