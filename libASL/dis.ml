@@ -385,20 +385,19 @@ module DisEnv = struct
         let num, s = LocalEnv.incNumSymbols s in
         (Ident (prefix ^ string_of_int num),s,empty)
 
-    let indent: string rws =
+    let indent: string list rws =
         let+ i = gets (fun l -> l.indent) in
-        let h = i / 2 in
-        let s = String.concat "" (List.init h (fun _ -> "\u{2502} \u{250a} ")) in
-        if i mod 2 == 0 then
-            s ^ ""
-        else
-            s ^ "\u{2502} "
+        (* when concatenated, produces a string of the form:
+                "| I | I | ..." where | and I are
+           alternating unicode box-drawing lines *)
+        List.init i (fun i -> if i mod 2 == 0 then "\u{2502} " else "\u{250a} ")
 
     let debug (minLevel: int) (s: string): unit rws =
         if !debug_level >= minLevel then
             let+ i = indent in
-            let s' = Str.global_replace (Str.regexp "\n") ("\n"^i) s in
-            Printf.printf "%s%s\n" i s';
+            List.iter
+              (fun l -> List.iter print_string i; print_endline l)
+              (String.split_on_char '\n' s);
             ()
         else
             unit
