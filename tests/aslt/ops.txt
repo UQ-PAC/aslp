@@ -24,3 +24,6 @@
 
 // cnt v0.8b, v0.8b https://github.com/UQ-PAC/aslp/issues/43
 0x0e205800
+
+// sqrdmulh v0.8h, v0.8h, v1.h[3] https://github.com/UQ-PAC/aslp/pull/96
+0x4f71d000
