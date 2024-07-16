@@ -12,14 +12,15 @@ permissions:
   contents: read
   packages: read
 
+defaults:
+  run:
+    # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+    # XXX using multi-line string will fail since \n is stuck to the end of the argument.
+    shell: "nix develop github:katrinafyi/pac-nix#ocamlPackages_pac.asli --impure --accept-flake-config --command bash --noprofile --norc -eo pipefail {0}"
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
-        # XXX using multi-line string will fail since \n is stuck to the end of the argument.
-        shell: "nix develop github:katrinafyi/pac-nix#ocamlPackages_pac.asli --impure --accept-flake-config --command bash --noprofile --norc -eo pipefail {0}"
 
     steps:
     - uses: actions/checkout@v4
@@ -41,3 +42,19 @@ jobs:
       with:
         name: coverage-output-${{ github.run_id }}
         path: ${{ steps.coverage.outputs.OUTPUT }}
+
+  offline:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: cachix/install-nix-action@v25
+    - run: echo 'preparing nix shell environment'
+
+    - run: dune build --profile release -j4
+    - run: echo ':gen A64 aarch64_* ocaml offlineASL' | OCAMLRUNPARAM=b dune exec asli
+
+    - run: dune build offlineASL -j4
+
+    - run: dune build @offline-coverage -j4
