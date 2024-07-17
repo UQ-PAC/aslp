@@ -174,7 +174,7 @@ let join_state (a: state) (b: state): state =
 (* Produce a runtime value if any arg is runtime *)
 let pure_prims =
   Value.prims_pure @
-  (List.map fst Dis.no_inline_pure) @ [
+  (List.map fst (Dis.no_inline_pure ())) @ [
     "lsr_bits";
     "sle_bits";
     "lsl_bits";

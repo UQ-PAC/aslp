@@ -110,15 +110,18 @@ let no_inline = [
   "AArch64.MemTag.set",0;
 ]
 
-let no_inline_pure = [
+let no_inline_pure () = [
   "LSL",0;
   "LSR",0;
   "ASR",0;
   "SignExtend",0;
   "ZeroExtend",0;
+] @ (if !use_vectoriser then [
   "Elem.set",0;
   "Elem.read",0;
-]
+] else [])
+
+
 
 (** A variable's stack level and original identifier name.
     The "stack level" is how many scopes deep it is.
@@ -941,15 +944,15 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_LitString(s) -> DisEnv.pure (Val (from_stringLit s))
     )
 
-and no_inline_pure_ids = List.map (fun (x,y) -> FIdent(x,y))
-  no_inline_pure
+and no_inline_pure_ids () = List.map (fun (x,y) -> FIdent(x,y))
+  (no_inline_pure ())
 
 and no_inline_ids = List.map (fun (x,y) -> FIdent (x,y))
   no_inline
 
 (** Disassemble call to function *)
 and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
-    if List.mem f no_inline_pure_ids &&
+    if List.mem f (no_inline_pure_ids ()) &&
       ((List.exists (function Exp _ -> true | _ -> false) tvs) ||
         (List.exists (function Exp _ -> true | _ -> false) vs)) then
       let expr = Exp (Expr_TApply (f, List.map sym_expr tvs, List.map sym_expr vs)) in
