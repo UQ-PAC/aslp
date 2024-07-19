@@ -23,8 +23,6 @@ module StringCmp = struct
 end
 module StringMap = Map.Make(StringCmp)
 
-let use_vectoriser = ref false
-
 let debug_level_none = -1
 let debug_level = ref debug_level_none
 let debug_show_trace = ref false
@@ -116,7 +114,7 @@ let no_inline_pure () = [
   "ASR",0;
   "SignExtend",0;
   "ZeroExtend",0;
-] @ (if !use_vectoriser then [
+] @ (if !Symbolic.use_vectoriser then [
   "Elem.set",0;
   "Elem.read",0;
 ] else [])
@@ -1598,7 +1596,7 @@ let dis_core (env: Eval.Env.t) (unroll_bound) ((lenv,globals): env) (decode: dec
  *)
 let dis_decode_entry_with_inst (env: Eval.Env.t) ((lenv,globals): env) (decode: decode_case) (op: Primops.bigint): string * stmt list =
   let max_upper_bound = Z.of_int64 Int64.max_int in
-  match !use_vectoriser with
+  match !Symbolic.use_vectoriser with
   | false -> dis_core env max_upper_bound (lenv,globals) decode op
   | true ->
     let enc,stmts' = dis_core env Z.one (lenv,globals) decode op in
