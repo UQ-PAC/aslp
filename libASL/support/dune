@@ -1,0 +1,7 @@
+; provides platform-specific dependencies
+
+(library
+ (name libASL_support)
+ (public_name asli.libASL-support)
+ (libraries libASL_stage0)
+ (virtual_modules solver))

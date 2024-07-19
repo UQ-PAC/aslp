@@ -209,6 +209,9 @@ let from_realLit (x: AST.realLit): value =
     let denominator = Z.pow (Z.of_int 10) fracsz in
     VReal (Q.make numerator denominator)
 
+let from_bitsInt (wd: int) (x: Primops.bigint) =
+    VBits (Primops.mkBits wd x)
+
 let from_bitsLit (x: AST.bitsLit): value =
     let x' = drop_chars x ' ' in
     VBits (mkBits (String.length x') (Z.of_string_base 2 x'))
@@ -384,7 +387,7 @@ let eval_prim (f: string) (tvs: value list) (vs: value list): value option =
 let prims_pure = [
     "eq_enum"; "eq_enum"; "ne_enum"; "ne_enum"; "eq_bool"; "ne_bool"; "equiv_bool"; "not_bool"; "eq_int"; "ne_int"; "le_int";
     "lt_int"; "ge_int"; "gt_int"; "is_pow2_int"; "neg_int"; "add_int"; "sub_int"; "shl_int"; "shr_int"; "mul_int"; "zdiv_int";
-    "zrem_int"; "fdiv_int"; "frem_int"; "mod_pow2_int"; "align_int"; "pow2_int"; "pow_int_int"; "cvt_int_real"; "eq_real";
+    "zrem_int"; "sdiv_int"; "fdiv_int"; "frem_int"; "mod_pow2_int"; "align_int"; "pow2_int"; "pow_int_int"; "cvt_int_real"; "eq_real";
     "ne_real"; "le_real"; "lt_real"; "ge_real"; "gt_real"; "add_real"; "neg_real"; "sub_real"; "mul_real"; "divide_real";
     "pow2_real"; "round_tozero_real"; "round_down_real"; "round_up_real"; "sqrt_real"; "cvt_int_bits"; "cvt_bits_sint";
     "cvt_bits_uint"; "in_mask"; "notin_mask"; "eq_bits"; "ne_bits"; "add_bits"; "sub_bits"; "mul_bits"; "and_bits"; "or_bits";
@@ -398,6 +401,10 @@ and prims_impure = ["ram_init"; "ram_read"; "ram_write"; "trace_memory_read"; "t
 (****************************************************************)
 (** {2 Utility functions on Values}                             *)
 (****************************************************************)
+
+let length_bits (loc: AST.l) = function
+    | VBits { n; _ } | VMask { n; _ } -> n
+    | x -> raise (EvalError (loc, "bits or mask expected. Got " ^ pp_value x))
 
 let extract_bits (loc: AST.l) (x: value) (i: value) (w: value): value =
     VBits (prim_extract (to_bits loc x) (to_integer loc i) (to_integer loc w))

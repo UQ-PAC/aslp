@@ -46,7 +46,7 @@ type_register_slices:
 
 type:
   'Type_Bits' OPEN_PAREN expr CLOSE_PAREN  # TypeBits
-  | 'Type_Constructor(boolean)'            # TypeBoolean
+  | 'Type_Constructor("boolean")'            # TypeBoolean
   | 'Type_Constructor(' ident ')'       # TypeConstructor
   | 'Type_Register' OPEN_PAREN QUOTE width=integer QUOTE type_register_slices CLOSE_PAREN # TypeRegister
 ;

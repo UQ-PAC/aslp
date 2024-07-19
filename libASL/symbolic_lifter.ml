@@ -83,7 +83,7 @@ module RemoveUnsupported = struct
     inherit Asl_visitor.nopAslVisitor
 
     method! vstmt e =
-      (match e with
+      singletonVisitAction (match e with
       | Stmt_Assert(e, loc) ->
           if contains_unsupported e unsupported env then ChangeTo (assert_false loc)
           else DoChildren
@@ -207,7 +207,7 @@ module Cleanup = struct
             (RemoveUnsupported.assert_false loc)
           else e
       | _ -> e) in
-      ChangeDoChildrenPost(e, reduce)
+      singletonVisitAction @@ ChangeDoChildrenPost(e, reduce)
   end
 
   let rec trim_post_term stmts =
@@ -277,7 +277,7 @@ module DecoderCleanup = struct
             (RemoveUnsupported.assert_false loc)
           else e
       | _ -> e) in
-      ChangeDoChildrenPost(e, reduce)
+      singletonVisitAction @@ ChangeDoChildrenPost(e, reduce)
   end
 
   let run unsupported dsig =
@@ -296,8 +296,9 @@ let dis_wrapper fn fnsig env =
   try
     let body = fnsig_get_body fnsig in
     let sym = Symbolic.Exp (Expr_Var (Decoder_program.enc)) in
-    let (_,lenv,_) = (Dis.declare_assign_var Unknown (Type_Bits (Expr_LitInt "32")) (Ident "enc") sym) env lenv in
-    let ((),lenv',stmts) = (Dis.dis_stmts body) env lenv in
+    let config = {Dis.eval_env = env ; unroll_bound = Z.of_int64 Int64.max_int} in
+    let (_,lenv,_) = (Dis.declare_assign_var Unknown (Type_Bits (Expr_LitInt "32")) (Ident "enc") sym) config lenv in
+    let ((),lenv',stmts) = (Dis.dis_stmts body) config lenv in
     let globals = IdentSet.diff globals dead_globals in
     let stmts = Dis.flatten stmts [] in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
@@ -322,16 +323,19 @@ let dis_wrapper fn fnsig env =
 (* Produce a lifter for the desired parts of the instruction set *)
 let run iset pat env =
   Printf.printf "Stage 1: Mock decoder & instruction encoding definitions\n";
+  flush stdout;
   let ((did,dsig),tests,instrs) = Decoder_program.run iset pat env problematic_enc in
   Printf.printf "  Collected %d instructions\n\n" (Bindings.cardinal instrs);
 
   Printf.printf "Stage 2: Call graph construction\n";
+  flush stdout;
   let frontier = get_inlining_frontier in
   let (callers, reachable) = Call_graph.run (bindings_domain instrs) frontier env in
   let fns = IdentSet.fold (fun id acc -> Bindings.add id (Eval.Env.getFun Unknown env id) acc) reachable Bindings.empty in
   Printf.printf "  Collected %d functions\n\n" (Bindings.cardinal fns);
 
   Printf.printf "Stage 3: Simplification\n";
+  flush stdout;
   (* Remove temporary dynamic bitvectors where possible *)
   let fns = Bindings.map (fnsig_upd_body (Transforms.RemoveTempBVs.do_transform false)) fns in
   (* Remove calls to problematic functions & impdefs *)
@@ -339,11 +343,13 @@ let run iset pat env =
   Printf.printf "\n";
 
   Printf.printf "Stage 4: Specialisation\n";
+  flush stdout;
   (* Run requirement collection over the full set *)
   let fns = Req_analysis.run fns callers in
   Printf.printf "\n";
 
   Printf.printf "Stage 5: Disassembly\n";
+  flush stdout;
   (* Build an environment with these new function definitions *)
   let env' = Eval.Env.copy env in
   Bindings.iter (fun  fn fnsig  -> Eval.Env.addFun Unknown env' fn fnsig) fns;
@@ -354,18 +360,21 @@ let run iset pat env =
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
 
   Printf.printf "Stmt Counts\n";
+  flush stdout;
   let l = Bindings.fold (fun fn fnsig acc -> (fn, stmts_count (fnsig_get_body fnsig))::acc) fns [] in
   let l = List.sort (fun (_,i) (_,j) -> compare i j) l in
   List.iter (fun (fn,c) -> Printf.printf "  %d\t:\t%s\n" c (name_of_FIdent fn)) l;
   Printf.printf "\n";
 
   Printf.printf "Stage 6: Cleanup\n";
+  flush stdout;
   (* TODO: Defer *)
   let tests = Bindings.map (fun s -> fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) s) tests in
   Printf.printf "\n";
 
   (* Perform offline PE *)
   Printf.printf "Stages 7-8: Offline Transform\n";
+  flush stdout;
   let offline_fns = Offline_transform.run fns env in
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.CopyProp.run k)) offline_fns in
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.DeadContextSwitch.run k)) offline_fns in

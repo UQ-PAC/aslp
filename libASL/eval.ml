@@ -520,12 +520,29 @@ let removeGlobalConsts (env: Env.t) (ids: IdentSet.t): IdentSet.t =
 (****************************************************************)
 
 (** Evaluate bitslice of instruction opcode *)
-let eval_decode_slice (loc: l) (env: Env.t) (x: decode_slice) (op: value): value =
+let eval_decode_slice (loc: l) (env: Env.t) (x: decode_slice) (op: Primops.bigint): value =
     (match x with
-    | DecoderSlice_Slice (lo, wd) -> extract_bits' loc op lo wd
+    | DecoderSlice_Slice (lo, wd) ->
+        let op = Value.from_bitsInt (lo+wd) op in
+        extract_bits' loc op lo wd
     | DecoderSlice_FieldName f -> Env.getVar loc env f
     | DecoderSlice_Concat fs -> eval_concat loc (List.map (Env.getVar loc env) fs)
     )
+
+(** Evaluate an encoding's opcode guard pattern *)
+let eval_opcode_guard (loc: AST.l) (x: opcode_value) (op: Primops.bigint): value option =
+    let opcode_val, eval_opcode = (match x with
+    | Opcode_Bits b -> (from_bitsLit b, eval_eq)
+    | Opcode_Mask m -> (from_maskLit m, eval_inmask)
+    ) in
+    let opcode_len = length_bits loc opcode_val in
+    (* rudimentary length compatibility check. this will only throw if there are *set* bits
+       exceeding the expected length. *)
+    if opcode_len < Z.numbits op then
+        raise (EvalError (loc, Printf.sprintf "opcode too long, expected %d bits but got %d: 0x%s"
+                                    opcode_len (Z.numbits op) (Z.format "%x" op)));
+    let value = from_bitsInt opcode_len op in
+    if eval_opcode loc value opcode_val then Some value else None
 
 (** Evaluate instruction decode pattern match *)
 let rec eval_decode_pattern (loc: AST.l) (x: decode_pattern) (op: value): bool =
@@ -910,7 +927,8 @@ and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     | Stmt_DecodeExecute(i, e, loc) ->
             let dec = Env.getDecoder env i in
             let op  = eval_expr loc env e in
-            eval_decode_case loc env dec op
+            let value = (to_bits loc op).v in
+            eval_decode_case loc env dec value
     | Stmt_If(c, t, els, e, loc) ->
             let rec eval css d =
                 (match css with
@@ -1055,7 +1073,7 @@ and eval_proccall (loc: l) (env: Env.t) (f: ident) (tvs: value list) (vs: value 
     )
 
 (** Evaluate instruction decode case *)
-and eval_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): unit =
+and eval_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: Primops.bigint): unit =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
             let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
@@ -1074,7 +1092,7 @@ and eval_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): uni
     )
 
 (** Evaluate instruction decode case alternative *)
-and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool =
+and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: Primops.bigint): bool =
     if List.for_all2 (eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
@@ -1096,6 +1114,7 @@ and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: valu
         | DecoderBody_Decoder (fs, c, loc) ->
                 (* let env = Env.empty in  *)
                 List.iter (function (IField_Field (f, lo, wd)) ->
+                    let op = Value.from_bitsInt (lo+wd) op in
                     Env.addLocalVar loc env f (extract_bits' loc op lo wd)
                 ) fs;
                 eval_decode_case loc env c op;
@@ -1105,7 +1124,7 @@ and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: valu
         false
 
 (** Evaluates instruction but draw statements from list, not specification *)
-and eval_stmt_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value) (xs: stmt list): unit =
+and eval_stmt_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: Primops.bigint) (xs: stmt list): unit =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
             let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
@@ -1123,7 +1142,7 @@ and eval_stmt_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value) (xs: s
             eval alts
     )
 
-and eval_stmt_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value) (xs: stmt list): bool =
+and eval_stmt_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: Primops.bigint) (xs: stmt list): bool =
     if List.for_all2 (eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
@@ -1145,6 +1164,7 @@ and eval_stmt_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value 
         | DecoderBody_Decoder (fs, c, loc) ->
                 (* let env = Env.empty in  *)
                 List.iter (function (IField_Field (f, lo, wd)) ->
+                    let op = Value.from_bitsInt (lo+wd) op in
                     Env.addLocalVar loc env f (extract_bits' loc op lo wd)
                 ) fs;
                 eval_decode_case loc env c op;
@@ -1154,15 +1174,12 @@ and eval_stmt_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value 
         false
 
 (** Evaluate instruction encoding *)
-and eval_encoding (env: Env.t) (x: encoding) (op: value): bool =
+and eval_encoding (env: Env.t) (x: encoding) (op: Primops.bigint): bool =
     let Encoding_Block (nm, iset, fields, opcode, guard, unpreds, b, loc) = x in
     (* todo: consider checking iset *)
     (* Printf.printf "Checking opcode match %s == %s\n" (Utils.to_string (PP.pp_opcode_value opcode)) (pp_value op); *)
-    let ok = (match opcode with
-    | Opcode_Bits b -> eval_eq     loc op (from_bitsLit b)
-    | Opcode_Mask m -> eval_inmask loc op (from_maskLit m)
-    ) in
-    if ok then begin
+    match eval_opcode_guard loc opcode op with
+    | Some op ->
         if !trace_instruction then Printf.printf "TRACE: instruction %s\n" (pprint_ident nm);
         List.iter (function (IField_Field (f, lo, wd)) ->
             let v = extract_bits' loc op lo wd in
@@ -1179,10 +1196,7 @@ and eval_encoding (env: Env.t) (x: encoding) (op: value): bool =
         end else begin
             false
         end
-    end else begin
-        false
-    end
-
+    | None -> false
 
 
 (****************************************************************)
@@ -1197,7 +1211,7 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
     if false then Printf.printf "Building environment from %d declarations\n" (List.length ds);
 
     (* perform reference parameter transformation. *)
-    let ds = Transforms.RefParams.ref_param_conversion ds in
+    let ds = Pretransforms.RefParams.ref_param_conversion ds in
 
     let env = Env.empty in
     (* todo?: first pull out the constants/configs and evaluate all of them
@@ -1310,49 +1324,59 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
 end
 
 
+let set_impdef (tcenv: Tcheck.Env.t) (env: Env.t) (fname: string) (rest: string list) =
+    (* `rest` is of the form: "Has MTE extension" = FALSE *)
+    let cmd = String.concat " " rest in
+    let loc = LoadASL.mkLoc fname cmd in
+    let (x, e) = LoadASL.read_impdef tcenv loc cmd in
+    let v = eval_expr loc env e in
+    Env.setImpdef env x v
 
+(** Evaluates a minimal subset of the .prj syntax, sufficient for override.prj. *)
+let evaluate_prj_minimal (tcenv: Tcheck.Env.t) (env: Env.t) (source: LoadASL.source) =
+    let data = LoadASL.read_source source in
+    let fname = LoadASL.pp_source source in
+    let lines = List.map String.trim @@ String.split_on_char '\n' data in
+    List.iter
+        (fun line -> match (String.split_on_char ' ' line) with
+            | ":set" :: "impdef" :: rest -> set_impdef tcenv env fname rest
+            | empty when List.for_all (String.equal "") empty -> ()  (* ignore empty lines *)
+            | _ -> failwith @@ "Unrecognised minimal .prj line in " ^ fname ^ ": " ^ line)
+        lines
 
-let evaluation_environment (prelude: string) (files: string list) (verbose: bool) = 
-    let t  = LoadASL.read_file prelude true verbose in
-    let ts = List.map (fun filename ->
+(** Constructs an evaluation environment with the given prelude file and .asl/.prj files.
+    .prj files given here are required to be minimal. *)
+let evaluation_environment (prelude: LoadASL.source) (files: LoadASL.source list) (verbose: bool) =
+    let t  = LoadASL.read_file (prelude) true verbose in
+    let ts = List.map (fun file ->
+        let filename = LoadASL.name_of_source file in
         if Utils.endswith filename ".spec" then begin
-            LoadASL.read_spec filename verbose 
+            LoadASL.read_spec file verbose
         end else if Utils.endswith filename ".asl" then begin
-            LoadASL.read_file filename false verbose 
+            LoadASL.read_file file false verbose
         end else if Utils.endswith filename ".prj" then begin
             [] (* ignore project files here and process later *)
         end else begin
-            failwith ("Unrecognized file suffix on "^filename)
+            failwith ("Unrecognized file suffix on "^(LoadASL.pp_source file))
         end
-    ) files 
-    in
+    ) files in
+
+    let prjs = List.filter
+        (fun fname -> Utils.endswith (LoadASL.name_of_source fname) ".prj")
+        files in
+
     if verbose then Printf.printf "Building evaluation environment\n";
-    (try
-        Some (build_evaluation_environment (List.concat (t::ts)))
-    with
-    | Value.EvalError (loc, msg) ->
-        Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg; 
-        None
-    )
+    let env = (
+        try Some (build_evaluation_environment (List.concat (t::ts)))
+        with | Value.EvalError (loc, msg) ->
+            Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
+            None
+    ) in
 
-let aarch64_asl_dir: string option = 
-    List.nth_opt Res.Sites.aslfiles 0
+    let tcenv = TC.Env.mkEnv !Tcheck.env0 in
+    Option.iter (fun env -> List.iter (evaluate_prj_minimal tcenv env) prjs) env;
+    env
 
-let aarch64_asl_files: (string * string list) option = 
-    let aarch64_file_load_order = 
-       ["mra_tools/arch/regs.asl"; "mra_tools/types.asl"; "mra_tools/arch/arch.asl"; "mra_tools/arch/arch_instrs.asl"; "mra_tools/arch/regs_access.asl";
-        "mra_tools/arch/arch_decode.asl"; "mra_tools/support/aes.asl"; "mra_tools/support/barriers.asl"; "mra_tools/support/debug.asl"; 
-        "mra_tools/support/feature.asl"; "mra_tools/support/hints.asl"; "mra_tools/support/interrupts.asl"; "mra_tools/support/memory.asl"; 
-        "mra_tools/support/stubs.asl"; "mra_tools/support/fetchdecode.asl"; "tests/override.asl"; "tests/override.prj"]
-    in Option.bind aarch64_asl_dir (fun dir ->
-        let filenames = List.map (Filename.concat dir) aarch64_file_load_order in
-        let prelude = Filename.concat dir "prelude.asl" in
-        Some (prelude, filenames))
-
-(** XXX: .prj files NOT evaluated in this environment! *)
-let aarch64_evaluation_environment ?(verbose = false) (): Env.t option = 
-    Option.bind aarch64_asl_files 
-        (fun (prelude, filenames) -> evaluation_environment prelude filenames verbose)
 
 (****************************************************************
  * End

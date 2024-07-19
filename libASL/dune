@@ -14,20 +14,46 @@
      (with-stdout-to asl_parser_tail.mly (bash "OTT=${ASLI_OTT:-$(opam config var ott:share)};  grep -v '^%%' $OTT/menhir_library_extra.mly"))
      (with-stdout-to asl_parser.mly (run cat asl_parser_head.mly asl_parser_tail.mly)))))
 
-(library
- (name libASL)
- (public_name asli.libASL)
- (flags
-  (:standard -w -27 -cclib -lstdc++))
- (modules asl_ast asl_parser asl_parser_pp asl_utils asl_visitor cpu dis elf eval
-   lexer lexersupport loadASL monad primops rws symbolic tcheck testing transforms utils value visitor res
-   symbolic_lifter decoder_program call_graph req_analysis
-   offline_transform ocaml_backend dis_tc
-   offline_opt
-   cpp_backend
-   )
- (libraries pprint zarith z3 str pcre  dune-site))
+; libASL is constructed in two stages: stage0, and stage1.
+; stage0 is the minimum needed to define an "expression", and stage1 is the rest.
+; this is so stage0 can be used as a dependency for the libASL_support virtual library
+; which provides flexibility on whether to link z3 (for native compilation) or not (for js compilation).
+; thus, everything after the type-checking phase is in stage1.
+; these stages are merged together in libASL_virtual and re-exported as "LibASL",
+; and asli.libASL provides a publicly available dummy library which additionally
+; links the native implementation of the support code.
 
-(generate_sites_module
- (module res)
- (sites asli))
+(library
+ (name libASL_stage0)
+ (public_name asli.libASL-stage0)
+ (flags (:standard -w -27))
+ (modules asl_ast asl_parser asl_parser_pp asl_utils asl_visitor visitor utils)
+ (libraries pprint (re_export zarith)))
+
+(library
+ (name libASL_stage1)
+ (public_name asli.libASL-stage1)
+ (flags
+  (:standard -w -27 -cclib -lstdc++ -open LibASL_stage0))
+ (modules cpu dis elf eval
+   lexer lexersupport loadASL monad primops rws symbolic tcheck testing transforms value
+   symbolic_lifter decoder_program call_graph req_analysis
+   offline_transform ocaml_backend dis_tc offline_opt
+   cpp_backend arm_env pretransforms flags
+   )
+ (preprocessor_deps (alias ../asl_files))
+ (preprocess (pps ppx_blob))
+ (libraries libASL_stage0 libASL_support str))
+
+(library
+ (name libASL_virtual)
+ (public_name asli.libASL-virtual)
+ (modules libASL)
+ (wrapped false) ; exports LibASL module
+ (libraries libASL_stage0 libASL_stage1))
+
+(library
+ (name libASL_dummy)
+ (public_name asli.libASL)
+ (modules)
+ (libraries (re_export libASL_virtual) libASL_support_native))

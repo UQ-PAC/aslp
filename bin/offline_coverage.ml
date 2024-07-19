@@ -18,7 +18,7 @@ let op_dis (op: int): stmt list opresult =
     | e -> Result.Error (Op_DisFail e)
 
 let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
-  let op' = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int op)) in
+  let op' = Z.of_int op in
 
   let initenv = Env.copy env in
   Random.self_init ();
@@ -84,13 +84,9 @@ let rec process_command tcenv env cmd =
 
 let main () = 
   let opt_verbose = ref false in
-  let env = match Eval.aarch64_evaluation_environment ~verbose:!opt_verbose () with
+  let env = match Arm_env.aarch64_evaluation_environment ~verbose:!opt_verbose () with
   | Some e -> e
   | _ -> failwith "Unable to build evaluation environment." in
-  let filenames = Option.get Eval.aarch64_asl_files in
-  let prj_files = List.filter (fun f -> Utils.endswith f ".prj") (snd filenames) in
-  let tcenv = Tcheck.Env.mkEnv Tcheck.env0 in
-  List.iter (fun f -> process_command tcenv env (":project " ^ f)) prj_files;
   List.map (fun instr -> run opt_verbose instr env) !opt_instr
 
 let _ = ignore (main())

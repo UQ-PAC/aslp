@@ -2,7 +2,6 @@
 (name asli)
 (version 0.2.0)
 
-(using dune_site 0.1)
 (using menhir 2.0)
 
 (package
@@ -23,14 +22,12 @@
     "pprint"
     "zarith"
     ("z3"        (>= "4.8.7"))
-    "pcre"
     ("alcotest"  :with-test)
-    "dune-site"
+    "ppx_blob"
     "lwt"
     "cohttp-lwt-unix"
     "yojson"
   )
-  (sites (share aslfiles))
 )
 
 (license BSD-3-Clause)

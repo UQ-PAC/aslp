@@ -226,7 +226,7 @@ let fv_stmts stmts =
 
 let fv_stmt stmt =
     let fvs = new freevarClass in
-    ignore (visit_stmt (fvs :> aslVisitor) stmt);
+    ignore (visit_stmt_single (fvs :> aslVisitor) stmt);
     fvs#result
 
 let fv_decl decl =
@@ -295,7 +295,7 @@ end
 
 let locals_of_stmts stmts =
     let lc = new localsClass in
-    ignore (Visitor.mapNoCopy (visit_stmt (lc :> aslVisitor)) stmts);
+    ignore @@ Asl_visitor.visit_stmts lc stmts;
     lc#locals
 
 let locals_of_decl decl =
@@ -423,7 +423,7 @@ let subst_type (s: expr Bindings.t) (x: ty): ty =
 
 let subst_stmt (s: expr Bindings.t) (x: stmt): stmt =
     let subst = new substClass s in
-    visit_stmt subst x
+    visit_stmt_single subst x
 
 
 (** More flexible substitution class - takes a function instead

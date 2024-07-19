@@ -12,7 +12,7 @@ open AST
 module TC  = Tcheck
 module AST = Asl_ast
 
-let mra_tools () = [
+let mra_tools () = List.map (fun x -> LoadASL.FileSource x) [
     "../../../mra_tools/arch/regs.asl";
     "../../../mra_tools/types.asl";
     "../../../mra_tools/arch/arch.asl";
@@ -74,7 +74,7 @@ let test_compare env () : unit =
             let lenv = Dis.build_env disEnv in
 
             let opcode = input_line inchan in
-            let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
+            let op = Z.of_string opcode in
 
             (try
                 (* Evaluate original instruction *)
@@ -99,9 +99,9 @@ let test_compare env () : unit =
     )
 
 let tests : unit Alcotest.test_case list =
-    let prelude = LoadASL.read_file "../../../prelude.asl" true false in
+    let prelude = LoadASL.read_file (FileSource "../../../prelude.asl") true false in
     let mra = List.map (fun tool -> LoadASL.read_file tool false false) (mra_tools ()) in
-    let tcenv   = TC.Env.mkEnv TC.env0 in
+    let tcenv   = TC.Env.mkEnv !TC.env0 in
     let env     = Eval.build_evaluation_environment (prelude @ List.concat mra) in
     [
         ("arith", `Quick, test_arith tcenv env);

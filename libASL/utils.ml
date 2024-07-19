@@ -252,6 +252,11 @@ let pp_list f xs = Printf.sprintf "[%s]" (String.concat " ; " (List.map f xs))
 
 let pp_pair l r (x,y) = Printf.sprintf "(%s, %s)" (l x) (r y)
 
+let pp_option f a =
+  match a with
+  | Some v -> "Some(" ^ f v ^ ")"
+  | _ -> "None"
+
 (****************************************************************
  * End
  ****************************************************************)
