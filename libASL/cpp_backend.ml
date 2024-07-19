@@ -513,7 +513,7 @@ let write_explicit_instantiations cppfuns prefix dir =
       write_instantiation file (List.filter (fun x -> x.file = file) cppfuns))
     files
 
-(* Write all of the above, expecting Utils.ml to already be present in dir *)
+(* Write all of the above, expecting headers and meson.build to already be present in dir *)
 let run dfn dfnsig tests fns root =
 
   let genprefix = root ^ "/" ^ gen_dir in
@@ -530,5 +530,8 @@ let run dfn dfnsig tests fns root =
   let _explicits = write_explicit_instantiations allfns instprefix "." in
 
   let _impl = write_impl_file allfns genprefix export_prefix in
+
+  if not (Sys.file_exists (root ^ "/meson.build")) then
+    Printf.eprintf "Warning: cpp gen directory '%s' is missing build system files. These might need to be copied manually.\n\n" root;
 
   ()
