@@ -8,6 +8,22 @@ this folder structure.
 [aslp]: https://github.com/UQ-PAC/aslp
 [subprojects/aslp-lifter]: subprojects/aslp-lifter
 
+Within Git, the directory contains a generated lifter that supports no instructions.
+The following commands should generate and compile a functioning lifter:
+```bash
+# in 'aslp' repository root
+echo ':gen A64 .* cpp' | OCAMLRUNPARAM=b dune exec asli
+cd offlineASL-cpp
+CXX=clang++ meson setup --reconfigure build
+meson compile -C build -j16
+build/subprojects/aslp-lifter-demo/aslp-lifter-demo 0xaa0203e1
+```
+To reset this directory to its clean state, use:
+```bash
+rm -rf offlineASL-cpp
+git checkout -- offlineASL-cpp
+```
+
 ## lifter
 
 The generated [`aslp_lifter`][] is a polymorphic C++ class
