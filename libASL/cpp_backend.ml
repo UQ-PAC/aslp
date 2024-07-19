@@ -516,9 +516,8 @@ let write_explicit_instantiations cppfuns prefix dir =
 
 (* Finalises the generation by writing build-system files. *)
 let write_build_files instdir funs dir =
-  (* let meson_template = [%blob "../offlineASL-cpp/subprojects/aslp-lifter/meson.build.in"] in *)
-  let meson_template = {|"SRCFILES"|} in
-  let interface_file = "INTERFACE" in
+  let meson_template = [%blob "../offlineASL-cpp/subprojects/aslp-lifter/meson.build.in"] in
+  let interface_file = [%blob "../offlineASL-cpp/subprojects/aslp-lifter/include/aslp/interface.hpp"] in
 
   close_out @@ open_out_bin @@ dir ^ "/dummy.cpp";
 
@@ -535,11 +534,14 @@ let write_build_files instdir funs dir =
   output_string f interface_file;
   close_out f;
 
-  let re = Str.regexp_string {|"SRCFILES"|} in
-  let instfiles = Utils.nub @@ List.map (fun (file,_) -> Printf.sprintf {|  "%s/%s",%s|} instdir file "\n") funs in
+  let re = Str.regexp_string {|["SRCFILES"]|} in
+  let instfiles =
+    List.map fst funs
+    |> Utils.nub
+    |> List.map (fun file -> Printf.sprintf {|  '%s/%s',%s|} instdir file "\n") in
   let srcfiles = "[\n" ^ String.concat "" instfiles ^ "]\n" in
   let f = open_out_bin @@ dir ^ "/meson.build" in
-  output_string f @@ Str.global_replace re meson_template srcfiles;
+  output_string f @@ Str.global_replace re srcfiles meson_template;
   close_out f
 
 (* Write all of the above, expecting headers and meson.build to already be present in dir *)

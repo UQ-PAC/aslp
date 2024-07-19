@@ -9,7 +9,7 @@ install_srcdir = get_option('datadir') / 'aslp'
 install_subdir(incdir, install_dir : get_option('includedir'), strip_directory : true)
 gen_dep = declare_dependency(include_directories : incdir)
 
-srcfiles = "SRCFILES"
+srcfiles = ["SRCFILES"]
 
 install_subdir(srcdir, install_dir: install_srcdir)
 cxxflags = ['-Wno-unused-parameter']
