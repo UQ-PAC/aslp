@@ -504,7 +504,7 @@ let write_explicit_instantiations cppfuns prefix dir =
 
     write_epilogue () st;
     close_out st.oc;
-    cppfuns
+    (path, cppfuns)
   in
   (* group by the .hpp file where each template is defined. *)
   let files = Utils.nub @@ List.map (fun x -> x.file) cppfuns in
@@ -512,6 +512,35 @@ let write_explicit_instantiations cppfuns prefix dir =
     (fun file ->
       write_instantiation file (List.filter (fun x -> x.file = file) cppfuns))
     files
+
+
+(* Finalises the generation by writing build-system files. *)
+let write_build_files instdir funs dir =
+  (* let meson_template = [%blob "../offlineASL-cpp/subprojects/aslp-lifter/meson.build.in"] in *)
+  let meson_template = {|"SRCFILES"|} in
+  let interface_file = "INTERFACE" in
+
+  close_out @@ open_out_bin @@ dir ^ "/dummy.cpp";
+
+  let headers_dir = dir ^ "/include/aslp" in
+  Utils.mkdir_p headers_dir;
+  let exported = ["aslp_lifter.hpp"; "aslp_lifter_impl.hpp"] in
+  List.iter (fun h ->
+    let f = open_out_bin @@ headers_dir ^ "/" ^ h in
+    Printf.fprintf f {|#include "generated/%s" // IWYU pragma: export%s|} h "\n";
+    close_out f
+  ) exported;
+
+  let f = open_out_bin @@ headers_dir ^ "/interface.hpp" in
+  output_string f interface_file;
+  close_out f;
+
+  let re = Str.regexp_string {|"SRCFILES"|} in
+  let instfiles = Utils.nub @@ List.map (fun (file,_) -> Printf.sprintf {|  "%s/%s",%s|} instdir file "\n") funs in
+  let srcfiles = "[\n" ^ String.concat "" instfiles ^ "]\n" in
+  let f = open_out_bin @@ dir ^ "/meson.build" in
+  output_string f @@ Str.global_replace re meson_template srcfiles;
+  close_out f
 
 (* Write all of the above, expecting headers and meson.build to already be present in dir *)
 let run dfn dfnsig tests fns root =
@@ -527,9 +556,11 @@ let run dfn dfnsig tests fns root =
   let allfns = dfn :: allfns in
 
   let _header = write_header_file dfn dfnsig (dfn :: semfns) testfns genprefix export_prefix in
-  let _explicits = write_explicit_instantiations allfns instprefix "." in
+  let explicits = write_explicit_instantiations allfns instprefix "." in
 
   let _impl = write_impl_file allfns genprefix export_prefix in
+
+  let () = write_build_files instantiate_dir explicits root in
 
   if not (Sys.file_exists (root ^ "/meson.build")) then
     Printf.eprintf "Warning: cpp gen directory '%s' is missing build system files. These might need to be copied manually.\n\n" root;
