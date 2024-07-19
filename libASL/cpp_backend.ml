@@ -544,7 +544,7 @@ let write_build_files instdir funs dir =
   output_string f @@ Str.global_replace re srcfiles meson_template;
   close_out f
 
-(* Write all of the above, expecting headers and meson.build to already be present in dir *)
+(* Write all of the above, generating all necessary files for a minimal meson project *)
 let run dfn dfnsig tests fns root =
 
   let genprefix = root ^ "/" ^ gen_dir in
