@@ -29,19 +29,19 @@ jobs:
     - run: echo 'preparing nix shell environment'
 
     - run: dune build --profile release
+
     - run: dune runtest -j4
     - run: dune build '@coverage' -j4
-    - run: |
-        echo "OUTPUT=$(pwd)/_build/default/tests/coverage" >> $GITHUB_OUTPUT
-        rm -rf _build/default/tests/coverage/encodings
-      id: coverage
+    - run: rm -rf _build/default/tests/coverage/encodings
 
     - name: Upload new coverage results
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: coverage-output-${{ github.run_id }}
-        path: ${{ steps.coverage.outputs.OUTPUT }}
+        path: |
+          _build/default/tests/coverage
+          _build/.promotion-staging
 
   offline:
     runs-on: ubuntu-latest
