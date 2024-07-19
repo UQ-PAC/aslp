@@ -9,6 +9,62 @@ open Value
 
 (* For splitting up functions we use type to indicate which parameters are passed by reference. *)
 
+module StringSet = Set.Make(String)
+
+  let globs = StringSet.of_list [
+    "v_PSTATE_UAO";
+    "v_PSTATE_PAN";
+    "v_PSTATE_DIT";
+    "v_PSTATE_SSBS";
+    "v_PSTATE_G";
+    "v_PSTATE_A";
+    "v_PSTATE_I";
+    "v_PSTATE_F";
+    "v_PSTATE_D";
+    "v_PSTATE_C";
+    "v_PSTATE_Z";
+    "v_PSTATE_V";
+    "v_PSTATE_N";
+    "v__PC";
+    "v__R";
+    "v__Z";
+    "v_SP_EL0";
+    "v_FPSR";
+    "v_FPCR";
+    "v_PSTATE_BTYPE";
+    "v_BTypeCompatible";
+    "v___BranchTaken";
+    "v_BTypeNext";
+    "v___ExclusiveLocal"
+  ]
+
+  let prims = StringSet.of_list (["mkBits"; "bvextract"; "f_eq_bits"; "f_ne_bits"; "f_add_bits"; "f_sub_bits";
+        "f_mul_bits"; "f_and_bits"; "f_or_bits"; "f_eor_bits"; "f_not_bits";
+        "f_slt_bits"; "f_sle_bits"; "f_zeros_bits"; "f_ones_bits";
+        "f_ZeroExtend"; "f_SignExtend"; "f_asr_bits"; "f_lsl_bits";
+        "f_lsr_bits"; "f_decl_bool"; "f_decl_bv"; "f_AtomicEnd";
+        "f_AtomicStart"; "f_replicate_bits"; "f_append_bits"; "f_gen_BFAdd";
+        "f_gen_BFMul"; "f_gen_FPAdd"; "f_gen_FPCompare"; "f_gen_FPCompareEQ";
+        "f_gen_FPCompareGE"; "f_gen_FPCompareGT"; "f_gen_FPConvert";
+        "f_gen_FPConvertBF"; "f_gen_FPDiv"; "f_gen_FPMax"; "f_gen_FPMaxNum";
+        "f_gen_FPMin"; "f_gen_FPMinNum"; "f_gen_FPMul"; "f_gen_FPMulAdd";
+        "f_gen_FPMulAddH"; "f_gen_FPMulX"; "f_gen_FPRSqrtStepFused";
+        "f_gen_FPRecipEstimate"; "f_gen_FPRecipStepFused"; "f_gen_FPRecpX";
+        "f_gen_FPRoundInt"; "f_gen_FPRoundIntN"; "f_gen_FPSqrt"; "f_gen_FPSub";
+        "f_gen_FPToFixed"; "f_gen_FPToFixedJS_impl"; "f_gen_FixedToFP";
+        "f_gen_bit_lit"; "f_gen_bool_lit"; "f_gen_branch"; "f_cvt_bits_uint";
+        "f_gen_cvt_bits_uint"; "f_gen_cvt_bool_bv"; "f_gen_eor_bits";
+        "f_gen_eq_bits"; "f_gen_eq_enum"; "f_gen_int_lit"; "f_gen_store";
+        "f_gen_load"; "f_gen_SignExtend"; "f_gen_ZeroExtend"; "f_gen_add_bits";
+        "f_gen_and_bits"; "f_gen_and_bool"; "f_gen_asr_bits"; "f_gen_lsl_bits";
+        "f_gen_lsr_bits"; "f_gen_mul_bits"; "f_gen_ne_bits"; "f_gen_not_bits";
+        "f_gen_not_bool"; "f_gen_or_bits"; "f_gen_or_bool"; "f_gen_sdiv_bits";
+        "f_gen_sle_bits"; "f_gen_slt_bits"; "f_gen_sub_bits";
+        "f_gen_AArch64_MemTag_set"; "f_gen_Mem_read"; "f_gen_slice";
+        "f_gen_replicate_bits"; "f_gen_append_bits"; "f_gen_array_load";
+        "f_gen_array_store"; "f_gen_Mem_set"; "f_gen_assert";
+        "f_switch_context"; "f_true_branch"; "f_false_branch"; "f_merge_branch"])
+
 let mutable_decl = "class Mutable[T](var v: T)"
 
 type var_type = 
@@ -70,7 +126,7 @@ type stvarinfo = {
   typ : var_type; 
 }
 
-let state_var = { var = Expr_Var (Ident "st"); typ = Immutable (Type_Constructor (Ident "LiftState")); ident = Ident "st" } 
+let state_var = { var = Expr_Var (Ident "st"); typ = Immutable (Type_Constructor (Ident "LiftState[RTSym, RTLabel, BV]")); ident = Ident "st" } 
 
 type st = {
   mutable indent: int;
@@ -161,7 +217,7 @@ let prints_arg_type (t: var_type) : string =
     | (Type_Tuple l) -> ": (" ^ (String.concat "," (List.map ctype (l)) ) ^ ")"
     | Type_Constructor (Ident "rt_label") -> "RTLabel"
     | Type_Constructor (Ident "rt_sym") -> "RTSym" 
-  | Type_Constructor (Ident "rt_expr") -> "Expr"
+  | Type_Constructor (Ident "rt_expr") -> "RTSym"
     | Type_Constructor (Ident e) -> e 
     | t -> failwith @@ "Unknown arg type: " ^ (pp_type t)
   in
@@ -227,7 +283,10 @@ let rec prints_expr ?(deref:bool=true) e (st:st)  =
       Printf.sprintf " (!(%s))" (prints_expr a st ~deref)
 
   (* State Accesses *)
-  | Expr_Var(v) -> (if (deref && (var_mutable v st)) then ((name_of_ident v) ^ ".v" ) else (name_of_ident v))
+  | Expr_Var(v) -> 
+    let name = (name_of_ident v) in
+    let name = if (StringSet.mem name globs) then ("v_st." ^ name) else name in
+    if (deref && (var_mutable v st)) then (name ^ ".v" ) else name
   | Expr_Field(e, f) ->
       prints_expr e st ^ "." ^ name_of_ident f
   | Expr_Array(a,i) ->
@@ -248,17 +307,21 @@ let rec prints_expr ?(deref:bool=true) e (st:st)  =
   (* Other operations *)
   | Expr_TApply(FIdent("as_ref", 0), [], [a]) -> Printf.sprintf "%s" (prints_expr a st ~deref:false) 
     (*as_ref is only output by backend to idicate not to deref pointers*)
-  | Expr_LitBits b -> Printf.sprintf "mkBits(v_st, %d, BigInt(\"%s\", 2))" (String.length b) b 
+  | Expr_LitBits b -> Printf.sprintf "%s.mkBits(%d, BigInt(\"%s\", 2))" (prints_expr state_var.var st) (String.length b) b 
   | Expr_Slices(e,[Slice_LoWd(i,w)]) ->
       let e = prints_expr e st in
       let i = prints_expr i st in
       let w = prints_expr w st in
       let stv = prints_expr state_var.var st in
-      Printf.sprintf "bvextract(%s,%s,%s,%s)" stv e i w
+      Printf.sprintf "%s.bvextract(%s,%s,%s)" stv e i w
   | Expr_TApply(f, targs, args) ->
+      let stv = prints_expr state_var.var st in
       let deref = not (Bindings.mem f st.extra_functions) in
-      let f = name_of_ident f in
-      let args = List.map (fun e -> prints_expr ~deref:deref e st) (state_var.var::targs@args) in
+      let f = (name_of_ident f) in
+      let prim = (StringSet.mem f prims) in
+      let args = if prim  then (targs@args) else (state_var.var::targs@args) in
+      let f = if prim then (stv ^ "." ^  f) else f in
+      let args = List.map (fun e -> prints_expr ~deref:deref e st) (args) in
       f ^ "(" ^ (String.concat ", " (args)) ^ ")"
 
   | Expr_LitString s -> "\"" ^ s ^ "\""
@@ -268,13 +331,14 @@ let rec prints_expr ?(deref:bool=true) e (st:st)  =
   | _ -> failwith @@ "prints_expr: " ^ pp_expr e
 
 and default_value t st =
+  let stv = prints_expr state_var.var st in
   match t with
-  | Type_Bits w -> Printf.sprintf "mkBits(v_st, %s, BigInt(0))" (prints_expr w st)
+  | Type_Bits w -> Printf.sprintf "%s.mkBits(%s, BigInt(0))" stv (prints_expr w st)
   | Type_Constructor (Ident "boolean") -> "true"
   | Type_Constructor (Ident "integer") -> "BigInt(0)"
-  | Type_Constructor (Ident "rt_label") -> "rTLabelDefault"
-  | Type_Constructor (Ident "rt_sym") -> "rTSymDefault"
-  | Type_Constructor (Ident "rt_expr") -> "rTExprDefault"
+  | Type_Constructor (Ident "rt_label") -> stv ^ ".rTLabelDefault"
+  | Type_Constructor (Ident "rt_sym") -> stv ^ ".rTSymDefault"
+  | Type_Constructor (Ident "rt_expr") -> stv ^ ".rTExprDefault"
   | Type_Constructor (Ident "Unit") -> "()"
   | Type_Constructor (Ident "Any") -> "null"
   | Type_Array(Index_Range(lo, hi),ty) ->
@@ -320,8 +384,10 @@ let write_unsupported st =
   write_line "throw Exception(\"not supported\")" st
 
 let write_call f (targs : typeid list) (args: typeid list) st =
-  let f = name_of_ident f in
-  let args = (prints_expr state_var.var st)::(targs@args) in
+  let stv = prints_expr state_var.var st in
+  let prim = (StringSet.mem f prims) in
+  let f = if prim then (stv ^ "." ^  f) else f in
+  let args = if prim then (targs@args) else ((prints_expr state_var.var st)::targs@args)in
   let call = f ^ " (" ^ (String.concat "," args) ^ ")" in
   write_line call st
 
@@ -630,7 +696,7 @@ let rec write_stmt ?(primitive:bool=false) s st =
   | Stmt_TCall(f, tes, es, loc) ->
       let tes = List.map (fun e -> prints_expr e st) tes in
       let es = List.map (fun e -> prints_expr e st) es in
-      write_call f tes es st
+      write_call (name_of_ident f) tes es st
 
   | Stmt_FunReturn(e, loc) ->
       write_fun_return (prints_expr e st) st
@@ -686,19 +752,15 @@ let write_preamble imports opens st =
   Printf.fprintf st.oc "\n"
 
 
-let write_epilogue (fid: AST.ident) st =
-  Printf.fprintf st.oc "class %s {
-
-  def decode(l: LiftState, insn: BV) : Any = {
-    %s(l, insn)
-  }
-}" (plain_ident fid) (name_of_ident fid)
+let write_epilogue (fid: AST.ident) st = ""
 
 open AST
 
 
 let init_b (u:unit) = Transforms.ScopedBindings.init () 
+
 let init_st : st = { indent = 0; skip_seq=false;  oc=stdout;  mutable_vars = init_b (); extra_functions = Bindings.empty}
+
 let rinit_st oc st : st =  {st with indent = 0; skip_seq=false;  oc=oc;   mutable_vars = init_b ()}  
 
 let build_args (tys: ((var_type * ident)  list)) targs args =
@@ -719,7 +781,8 @@ let print_write_fn  (name: AST.ident) ((ret_tyo: var_type), (argtypes: ((var_typ
   push_scope st.mutable_vars () ; 
   List.iter (fun (a,b) -> add_bind st.mutable_vars b a) argtypes  ;
 
-  Printf.fprintf st.oc "def %s %s %s = {\n" (name_of_ident name) wargs ret;
+  Printf.fprintf st.oc "def %s[RTSym, RTLabel, BV <: RTSym] %s %s = {\n" (name_of_ident name) wargs ret;
+
   write_stmts body st;
   Printf.fprintf st.oc "\n}\n";
 
@@ -730,8 +793,8 @@ let write_fn (name: AST.ident) (fn:sc_fun_sig) st =
   if ((sl_complexity fn.body) < 1000) then (print_write_fn name (fn.rt, fn.arg_types, fn.targs, fn.args, (), fn.body) st) else
   let ol = new FunctionSplitter.branch_outliner fn 5 in
   let (nb,to_add) = ol#split_function () in
-  print_write_fn name (fn.rt, fn.arg_types, fn.targs, fn.args, (), nb) st;
   st.extra_functions <- to_add ;
+  print_write_fn name (fn.rt, fn.arg_types, fn.targs, fn.args, (), nb) st;
   Bindings.iter (fun n b -> print_write_fn n (b.rt, b.arg_types, b.targs, b.args, (), b.body) st) to_add
   
 let lift_fsig (fs: Eval.fun_sig) : sc_fun_sig = 
