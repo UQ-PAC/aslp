@@ -1,0 +1,5 @@
+# these flags control whether particular subprojects are built
+option('aslp-lifter', type : 'feature', value : 'enabled')
+option('aslp-lifter-llvm', type : 'feature', value : 'enabled')
+option('aslp-lifter-demo', type : 'feature', value : 'enabled')
+
