@@ -11,9 +11,12 @@ let rec mkdir_p p =
     let open Filename in
     if Sys.file_exists p then
         ()
-    else
+    else begin
         (* make parents, then make final directory. *)
-        (mkdir_p (dirname p); Sys.mkdir p 0o755)
+        mkdir_p (dirname p);
+        if Sys.file_exists p then ()
+        else Sys.mkdir p 0o755
+    end
 
 
 (****************************************************************
