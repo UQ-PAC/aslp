@@ -153,8 +153,8 @@ let var_mutable (v:ident) (st) =
     | Some Immutable _ -> false
   | None ->  true (* Globals are mutable by default *)
 
-let global_imports = ["util.Logger"]
-let global_opens = ["ir"]
+let global_imports = []
+let global_opens = []
 
 let uniq_counter : int ref = ref 0 
 
@@ -744,7 +744,7 @@ and write_stmts ?(primitive:bool=false) s st  =
 
 
 let write_preamble imports opens st =
-  Printf.fprintf st.oc "/* AUTO-GENERATED ASLp LIFTER FILE */\npackage aslloader\n";
+  Printf.fprintf st.oc "/* AUTO-GENERATED ASLp LIFTER FILE */\npackage lifter\n";
   List.iter (fun n ->
     Printf.fprintf st.oc "import %s\n" n) imports;
   List.iter (fun n ->
