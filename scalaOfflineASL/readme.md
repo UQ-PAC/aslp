@@ -5,4 +5,5 @@ Build standalone Scala lifter interface
 ~ echo ':gen A64 aarch64.+ scala true scalaOfflineASL/lifter/generated' | dune exec asli
 ~ cd scalaOfflineASL
 ~ ./mill lifter.assembly
+~ ./mill main.run
 ```
