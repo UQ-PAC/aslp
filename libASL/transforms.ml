@@ -1097,7 +1097,13 @@ module IntToBits = struct
     method! vstmt s =
       match s with
       | Stmt_ConstDecl(ty, nm, _, _) ->
-        var_types <- Bindings.add nm ty var_types;
+          var_types <- Bindings.add nm ty var_types;
+          DoChildren
+      | Stmt_VarDecl(ty, nm, _, _) ->
+          var_types <- Bindings.add nm ty var_types;
+          DoChildren
+      | Stmt_VarDeclsNoInit(ty, [nm], _) ->
+          var_types <- Bindings.add nm ty var_types;
         DoChildren
       | _ -> DoChildren
 
