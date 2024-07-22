@@ -550,7 +550,7 @@ and sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
     | _ -> Exp slice_expr)
 
 (** Wrapper around sym_slice to handle cases of symbolic slice bounds *)
-let sym_extract_bits loc v vwd i w =
+let rec sym_extract_bits loc v vwd i w =
   match (v, i, w) with
   (* Constant slice *)
   | _, Val i', Val w' ->
@@ -560,7 +560,8 @@ let sym_extract_bits loc v vwd i w =
   (* Nested slice *)
   | Exp (Expr_Slices (e, [Slice_LoWd (lo,wd)])), lo', wd' ->
       let lo = sym_add_int loc (Exp lo) lo' in
-      Exp (Expr_Slices (e, [Slice_LoWd (sym_expr lo, sym_expr wd')]))
+      sym_extract_bits loc (sym_of_expr e) vwd lo wd'
+  (* Lower dynamicly-indexed extractions to a shift. Requires static width. *)
   | v, Exp lo, Val w ->
       let shifted = Exp (Expr_TApply (FIdent ("LSR", 0), [Expr_LitInt (string_of_int vwd)], [sym_expr v; lo])) in
       sym_slice loc shifted 0 (to_int loc w)
