@@ -12,6 +12,7 @@ not yet properly support -fsyntax-only.
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 clangpp = shutil.which('clang++')
 true = shutil.which('true')
@@ -19,14 +20,18 @@ assert clangpp
 assert true
 
 def main():
-  os.environ['CXX'] = str(clangpp)
+  assert clangpp and true
+
+  os.chdir(Path(__file__).parent)
+
+  os.environ['CXX'] = clangpp
 
   subprocess.check_call('meson setup --reconfigure build'.split())
 
   with open('build/build.ninja', 'rb') as f:
     build = f.readlines()
 
-  bstr = lambda x: str(x).encode('utf-8')
+  bstr = lambda x: x.encode('utf-8')
 
   # replacement rules, keyed by sentinel line, and values are
   # replacements to perform on the NEXT line.
