@@ -116,11 +116,11 @@ let get_ret_type f targs env =
       Some (subst_type subst ty)
   | _ -> None
 
-let infer_type (e: expr) vars env =
+let rec infer_type' (e: expr) vars env =
   match e with
   | Expr_Var (Ident "TRUE")
   | Expr_Var (Ident "FALSE") -> (Some(Type_Constructor(Ident ("boolean"))))
-  | Expr_Var v -> Bindings.find_opt v vars
+  | Expr_Var (Ident v) -> vars v
   | Expr_LitInt _ -> (Some(Value.type_integer))
   | Expr_LitBits bv -> (Some(Type_Bits(Expr_LitInt (string_of_int (String.length bv)))))
   | Expr_Slices(x, [Slice_LoWd(l,w)]) -> (Some(Type_Bits(w)))
@@ -131,4 +131,8 @@ let infer_type (e: expr) vars env =
       (match prim_type f targs with
       | Some t -> Some t 
       | None -> get_ret_type f targs env)
+  | Expr_Parens e -> infer_type' e vars env
   | _ -> None
+
+let infer_type e vars env =
+  infer_type' e (fun v -> Bindings.find_opt (Ident v) vars) env

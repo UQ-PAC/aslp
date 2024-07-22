@@ -307,7 +307,6 @@ module LocalEnv = struct
           | Some (t,_) -> Some (t,v)
           | None -> internal_error loc @@ "failed to set resolved variable: " ^ pp_var x)) n env.locals in
         { env with locals }
-
 end
 
 type tree =
@@ -718,7 +717,14 @@ and type_of_load (loc: l) (x: expr): ty rws =
       (match Tcheck.derefType env t with
       | Type_Array(ixty, elty) -> dis_type loc elty
       | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr a)))
-  | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr x)))
+  | _ ->
+      let@ config = DisEnv.read in
+      let@ lenv = DisEnv.get in
+      let vars x = Some (fst @@ snd @@ LocalEnv.resolveGetVar loc (Ident x) lenv) in
+
+      match Dis_tc.infer_type' x vars config.eval_env  with
+      | Some t -> dis_type loc t
+      | None -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr x)))
 
 and type_access_chain (loc: l) (var: var) (ref: access_chain list): ty rws =
     let Var (_,id) = var in
@@ -870,15 +876,18 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             let+ vs = DisEnv.traverse (fun f -> dis_load_with_type loc (Expr_Field(e,f))) fs in
             let vs' = List.map (fun (t,x) -> (width_of_type loc t, x)) vs in
             sym_concat loc vs'
-    | Expr_Slices(e, [s]) ->
-            let@ e' = dis_expr loc e in
-            let+ (i,w) = dis_slice loc s in
-            sym_extract_bits loc e' i w
     | Expr_Slices(e, ss) ->
+            let@ config = DisEnv.read in
+            let@ ty = type_of_load loc e in
             let@ e' = dis_expr loc e in
             let+ ss' = DisEnv.traverse (dis_slice loc) ss in
-            let vs = List.map (fun (i,w) -> (int_of_sym w, sym_extract_bits loc e' i w)) ss' in
-            sym_concat loc vs
+            (match ty with
+            | Type_Constructor (Ident "integer") ->
+                Exp (Expr_Slices(sym_expr e', List.map (fun (x,y) -> Slice_LoWd(sym_expr x,sym_expr y)) ss'))
+            | _ ->
+                let vwd = width_of_type loc ty in
+                let vs = List.map (fun (i,w) -> (int_of_sym w, sym_extract_bits loc e' vwd i w)) ss' in
+                sym_concat loc vs)
     | Expr_In(e, p) ->
             let@ e' = dis_expr loc e in
             let@ p' = dis_pattern loc e' p in
@@ -1201,7 +1210,7 @@ and dis_lexpr' (loc: l) (x: lexpr) (r: sym): unit rws =
             | [] -> DisEnv.pure prev
             | (s :: ss) ->
                 let@ (i, w) = dis_slice loc s in
-                let v       = sym_extract_bits loc r o w in
+                let v       = sym_extract_bits loc r prev_width o w in
                 eval (sym_add_int loc o w) ss (sym_insert_bits loc prev_width prev i w v)
             )
         in
