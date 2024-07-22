@@ -215,7 +215,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             (Dis.dis_decode_entry cpu.env cpu.denv decoder op);
         Option.iter close_out chan_opt
     | ":gen" :: iset :: id :: rest when List.length rest <= 3 ->
-        let pc_option = Option.value List.(nth_opt rest 0) ~default:"false" in
+        let pc_option = Option.value List.(nth_opt rest 1) ~default:"false" in
         let backend = Option.value List.(nth_opt rest 0) ~default:"ocaml" in
         Printf.printf "Generating lifter for %s %s with pc option %s using %s backend\n" iset id pc_option backend;
 

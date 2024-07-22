@@ -751,11 +751,7 @@ let write_preamble imports opens st =
     Printf.fprintf st.oc "import %s._\n" n) opens;
   Printf.fprintf st.oc "\n"
 
-
-let write_epilogue (fid: AST.ident) st = ""
-
 open AST
-
 
 let init_b (u:unit) = Transforms.ScopedBindings.init () 
 
@@ -826,7 +822,6 @@ let write_decoder_file fn fnsig deps dir st =
   let st = rinit_st oc st in
   write_preamble global_imports (global_opens) st;
   write_fn fn fnsig st;
-  write_epilogue fn st;
   close_out oc;
   m 
 
