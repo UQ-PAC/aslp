@@ -24,7 +24,8 @@ scripts/total.txt
 build/
 
 offlineASL/aarch64_*
-offlineASL-scala/lifter/src/generated/*
 offlineASL-cpp/subprojects/aslp-lifter/src/generated/*
 offlineASL-cpp/subprojects/aslp-lifter/include/aslp/generated/*
+
+
 

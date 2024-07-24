@@ -327,6 +327,7 @@ let rec prints_expr ?(deref:bool=true) e (st:st)  =
   | Expr_LitString s -> "\"" ^ s ^ "\""
   | Expr_Tuple(es) -> "(" ^ (String.concat "," (List.map (fun e -> prints_expr e st) es)) ^ ")"
   | Expr_Unknown(ty) -> default_value ty st (* Sound? *)
+  | Expr_If(_, c, t, [], e) -> Printf.sprintf "(if (%s) then (%s) else (%s))" (prints_expr c st) (prints_expr t st) (prints_expr e st)
 
   | _ -> failwith @@ "prints_expr: " ^ pp_expr e
 

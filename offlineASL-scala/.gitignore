@@ -1,0 +1,4 @@
+
+lifter/src/generated/*
+.metals
+out

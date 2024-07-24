@@ -1814,13 +1814,14 @@ module FixRedefinitions = struct
             this#add_bind b; DoChildren
         | Stmt_If (c, t, els, e, loc) ->
             let c'   = visit_expr this c in
-            this#push_scope () ;
+    (* Don't push or pop scopes anymore so that variables are also unique across branches *)
+            (*this#push_scope () ; *)
             let t'   = visit_stmts this t in
-            this#pop_scope (); this#push_scope () ;
+            (*this#pop_scope (); this#push_scope () ; *)
             let els' = mapNoCopy (visit_s_elsif this ) els in
-            this#pop_scope (); this#push_scope () ;
+            (*this#pop_scope (); this#push_scope () ; *)
             let e'   = visit_stmts this e in
-            this#pop_scope ();
+            (*this#pop_scope (); *)
             ChangeTo (Stmt_If (c', t', els', e', loc))
         | Stmt_For (var, start, dir, stop, body, loc) ->
             let start' = visit_expr this start in
@@ -2083,12 +2084,20 @@ module DecoderChecks = struct
       (st,prior) ) (st,st.cur_enc) alts in
     st
 
-  let do_transform d =
+  let do_transform d : st =
     tf_decoder d init_state
 
 end
 
+module type RTAnalysisLattice = sig
+  type rt (* RT lattice type *)
+  type olt  (* LT lattice type *)
+  val xfer_stmt : olt -> rt  -> stmt -> rt*stmt list
+  val join: olt -> olt -> olt -> rt -> rt  -> rt
+end
+
 module BDDSimp = struct
+
   type abs = 
     Top |
     Val of MLBDD.t list |
@@ -2100,6 +2109,17 @@ module BDDSimp = struct
     ctx: MLBDD.t;
     stmts: stmt list;
   }
+
+  module type Lattice = RTAnalysisLattice with type olt = state
+
+  module NopAnalysis = struct  
+    type rt = unit
+    type olt = state 
+    let xfer_stmt o r s = r,[s]
+    let join o c j r ro = ()
+    let init _ = ()
+  end
+
 
   let init_state (ctx : MLBDD.t) = {
     man = MLBDD.manager ctx;
@@ -2144,7 +2164,7 @@ module BDDSimp = struct
   let get_var v st =
     match Bindings.find_opt v st.vars with
     | Some v -> v
-    | _ -> Top (* logically this should be Bot, but need to init globals *)
+    | _ -> (Printf.printf "no var %s\n" (pprint_ident v)); Top (* logically this should be Bot, but need to init globals *)
 
   let add_var v abs st =
     { st with vars = Bindings.add v abs st.vars }
@@ -2279,9 +2299,115 @@ module BDDSimp = struct
         let start = List.length v - lo - wd in
         Val (sublist v start wd)
 
+
+  let half_add_bit l r = MLBDD.dand l r, MLBDD.xor l r  (* carry, sum *) 
+  let full_add_bit l r carry = 
+    let c1,s1 = half_add_bit l r in
+    let c2,o = half_add_bit s1 carry in
+    let ocarry = MLBDD.dor c1 c2 in
+    ocarry,o
+
+  let twos_comp_add (xs : MLBDD.t list) (ys: MLBDD.t list) : MLBDD.t * (MLBDD.t list)= 
+      let xs = List.rev xs in let ys = List.rev ys in
+      match xs,ys with 
+        | hx::tlx,hy::tly ->  
+          let lscarry,lsb = half_add_bit hx hy in
+          let bits,carry = List.fold_left2
+          (fun (acc,carry) (l:MLBDD.t) (r:MLBDD.t)  -> let carry,o = (full_add_bit l r carry) in o::acc , carry) 
+            ([lsb], lscarry) tlx tly
+          in carry,bits
+        | _,_ -> failwith "invalid bit strings"
+
+  let signed_add_wrap x y = let _,bits = twos_comp_add x y in bits
+
+  
+  let addone m xs  = let one = MLBDD.dtrue m in
+      let xs = List.rev xs  in
+      let c,rs = match xs with 
+        | hx::tlx ->  
+          let lscarry,lsb = half_add_bit hx one in
+          let bits,carry = List.fold_left
+            (fun (acc,carry) (l:MLBDD.t) -> let carry,o = (half_add_bit l carry) in o::acc, carry) 
+            ([lsb], lscarry) tlx
+          in carry,bits
+        | _ -> failwith "no"
+      in rs
+    
+
+  let signed_negation m (x:MLBDD.t list) =  addone m (List.map MLBDD.dnot x)
+
+  let signed_sub_wrap m x y = let _,bits = twos_comp_add x (signed_negation m y) in bits
+
+(*
+  let signed_lt m x y =  
+
+  let signed_gt m x y = List.map MLBDD.dnot (signed_lt m x y)
+  *)
+
+
+
+  let eq_bvs a b = 
+    let bits = List.map2 MLBDD.eq a b in
+    match bits with
+      | x::xs -> List.fold_right MLBDD.dand xs x
+      | _ -> failwith "bad bits width"
+
+    let sle_bits m x y = 
+      MLBDD.dor 
+        (MLBDD.dand (List.hd x) (MLBDD.dnot (List.hd y)))
+        (MLBDD.dnot (MLBDD.xor (List.hd x) (List.hd y)) )
+
+  (* https://cs.nyu.edu/pipermail/smt-lib/2007/000182.html *)
+
+  let unknown_prims = ref Bindings.empty
+  let print_unknown_prims (c:unit) = Bindings.to_seq !unknown_prims |> List.of_seq |> List.sort (fun a b -> compare (snd a) (snd b)) 
+    |> List.iter (fun (id,c) -> Printf.printf "%d \t : %s\n" c (pprint_ident id))
+
+  let eq_bit a b = MLBDD.dnot (MLBDD.xor a b)
+
+  let bvugt m s t : MLBDD.t = let a, b = (List.fold_left2 (fun (gt, bnotsetfirst) a b ->
+      MLBDD.dor gt (MLBDD.dand (bnotsetfirst) ((MLBDD.dand a (MLBDD.dnot b)))), (* false until a > b*)
+      MLBDD.dand bnotsetfirst (MLBDD.dnot (MLBDD.dand (MLBDD.dnot gt) (MLBDD.dand b (MLBDD.dnot a)))) (* true until a < b*)
+     )
+      (MLBDD.dfalse m, MLBDD.dtrue m) (s) (t))
+  in (MLBDD.dand a b)
+
+  let bvult m x y : MLBDD.t = bvugt m y x 
+  let bvule m x y = MLBDD.dor (bvult m x y) (eq_bvs x y)
+  let bvuge m x y = MLBDD.dor (bvugt m x y) (eq_bvs x y)
+
+  let bvslt m x y = MLBDD.dor 
+    (MLBDD.dand (List.hd x) (MLBDD.dnot (List.hd y)))
+    (MLBDD.dand (eq_bit (List.hd x) (List.hd y)) (bvult m x y))
+
+  let bvsgt m x y = bvslt m y x
+
+  let bvsle m x y = MLBDD.dor 
+    (MLBDD.dand (List.hd x) (MLBDD.dnot (List.hd y)))
+    (MLBDD.dand (eq_bit (List.hd x) (List.hd y)) (bvule m x y))
+
+  let bvsge m x y = bvsle m y x 
+
+  let wrap_bv_bool f m x y  =  match x , y with 
+      | Val x, Val y -> Val [(f m x y)]
+      | _,_ -> Top
+
+  (*
+    let signed_gte_bits m x y = [MLBDD.dor (eq_bvs x y) (List.hd (signed_gt m x y))]
+  *)
+
+
+  let twos_comp_sub man (xs : MLBDD.t list) (ys: MLBDD.t list) = ()
+
+  let replicate_bits newlen bits = match bits with 
+    | Val bits -> if Int.rem newlen (List.length bits) <> 0 then failwith "indivisible rep length"  ;
+      let repeats = newlen / (List.length bits) in Val (List.concat (List.init repeats (fun i -> bits)))
+    | _ -> Top
+
   (****************************************************************)
   (** Expr Walk                                                   *)
   (****************************************************************)
+
 
   let eval_prim f tes es st = 
     match f, tes, es with
@@ -2298,19 +2424,39 @@ module BDDSimp = struct
     | "ne_bits",  [w], [x; y] -> ne_bits  x y
     | "eor_bits", [w], [x; y] -> eor_bits x y
 
-    | "append_bits", [w;w'], [x; y] -> append_bits x y
+    | "append_bits",    [w;w'], [x; y] -> append_bits x y
+    (*| "replicate_bits", [w;Expr_LitInt nw], [x;times] -> replicate_bits (int_of_string nw) x *)
 
     | "ZeroExtend", [w;Expr_LitInt nw], [x; y] ->
         zero_extend_bits x (int_of_string nw) st
     | "SignExtend", [w;Expr_LitInt nw], [x; y] ->
         sign_extend_bits x (int_of_string nw) st
+      
+    | "add_bits", [Expr_LitInt w], [x; y] -> (match x,y with 
+      | Val x, Val y -> let r = (signed_add_wrap x y) in assert (List.length r == (int_of_string w)); Val r
+        | _,_ -> Top)
+    | "sub_bits", [w], [x; y] -> (match x,y with 
+        | Val x, Val y -> Val (signed_add_wrap x (signed_negation st.man y))
+        | _,_ -> Top) 
+        
+    | "ule_bits", [w], [x; y] -> wrap_bv_bool bvule st.man x y  
+    | "uge_bits", [w], [x; y] -> wrap_bv_bool bvuge st.man x y  
+    | "sle_bits", [w], [x; y] -> wrap_bv_bool bvsle st.man x y  
+    | "sge_bits", [w], [x; y] -> wrap_bv_bool bvsge st.man x y  
+    | "slt_bits", [w], [x; y] -> wrap_bv_bool bvslt st.man x y  
+    | "sgt_bits", [w], [x; y] -> wrap_bv_bool bvsgt st.man x y  
 
-    | "sle_bits", [w], [x; y] -> Top
-    | "add_bits", [w], [x; y] -> Top
-    | "lsr_bits", [w;w'], [x; y] -> Top
+    (*
+
+    | "lsl_bits", [w], [x; y] -> Top
+    | "lsr_bits", [w], [x; y] -> Top
+    | "asr_bits", [w], [x; y] -> Top
+    | "mul_bits", _, [x; y] -> Top
+      *)
 
     | _, _, _ -> 
-        Printf.printf "unknown prim %s\n" f;
+        unknown_prims  :=  (Bindings.find_opt (Ident f) !unknown_prims) |> (function Some x -> x + 1 | None -> 0) 
+            |> (fun x -> Bindings.add (Ident f) x !unknown_prims) ;
         Top
 
   let rec eval_expr e st =
@@ -2328,22 +2474,29 @@ module BDDSimp = struct
     | Expr_Var id -> get_var id st
 
     (* Simply not going to track these *)
-    | Expr_Field _ -> Top
-    | Expr_Array _ -> Top
+    | Expr_Field _ -> Printf.printf "Overapprox field %s\n" (pp_expr e) ; Top
+    | Expr_Array _ ->  Printf.printf "Overapprox array %s\n" (pp_expr e); Top
 
     (* Prims *)
     | Expr_TApply (FIdent (f, 0), tes, es) ->
         let es = List.map (fun e -> eval_expr e st) es in
         eval_prim f tes es st
-    | Expr_Slices(e, [Slice_LoWd(Expr_LitInt lo,Expr_LitInt wd)]) ->
+    | Expr_Slices(e, [Slice_LoWd(Expr_LitInt lo, Expr_LitInt wd)]) ->
         let lo = int_of_string lo in
         let wd = int_of_string wd in
         let e = eval_expr e st in
         extract_bits e lo wd
-    | Expr_Slices(e, [Slice_LoWd(lo,wd)]) ->
-        Top
+    | Expr_Slices(e, [Slice_LoWd(lo,wd)]) -> Printf.printf "Overapprox slice\n" ; Top
+    | Expr_Parens(e) -> eval_expr e st
+    | Expr_Fields _ -> Printf.printf "unexpected Expr_Fields %s" (pp_expr e); Top
+    | Expr_In _ -> Printf.printf "unexpected Expr_In %s" (pp_expr e); Top
+    | Expr_Unop _ -> Printf.printf "unexpected Expr_Unop %s" (pp_expr e); Top
+    | Expr_Unknown _ -> Printf.printf "unexpected Expr_Unkonwn %s" (pp_expr e); Top
+    | Expr_ImpDef _ -> Printf.printf "unexpected Expr_ImpDef %s" (pp_expr e); Top
+    | Expr_LitString _ -> Printf.printf "unexpected Expr_LitString %s" (pp_expr e); Top
+    | Expr_If _ -> Printf.printf "unexpected Expr_If %s" (pp_expr e); Top
 
-    | _ -> failwith @@ "unexpected expr: " ^ (pp_expr e)
+    | _ -> failwith @@ Printf.sprintf "BDDSimp eval_expr: unexpected expr: %s\n"  (pp_expr e)  
 
   (****************************************************************)
   (** Stmt Walk                                                   *)
@@ -2365,7 +2518,7 @@ module BDDSimp = struct
       else true) a
 
 
-  let rebuild_expr e cond st =
+  let bdd_to_expr cond st =
     let bd_to_test b = 
         let bv = Value.to_mask Unknown (Value.from_maskLit b) in
         sym_expr @@ sym_inmask Unknown (Exp (Expr_Var (Ident "enc"))) bv
@@ -2373,13 +2526,6 @@ module BDDSimp = struct
     match cond with
     | Val [cond] ->
         let imps = MLBDD.allprime cond in
-        (*
-        Does not work;
-
-        let c = ctx_to_mask st.ctx in
-        let imps = List.map (fun v -> clear_bits v c) imps in
-        *)
-
         let rebuild = List.fold_right (fun vars ->
           MLBDD.dor
           (List.fold_right (fun (b,v) ->
@@ -2389,89 +2535,112 @@ module BDDSimp = struct
         let imps = MLBDD.allprime rebuild in
         let masks = List.map DecoderChecks.implicant_to_mask imps in
         (match masks with
-        | [] -> Printf.printf "Unsat bdd formula\n" ; e
-        | [b] -> bd_to_test b
+        | [] -> None
+        | [b] -> Some (bd_to_test b)
         | b::bs  ->
               let try2 = MLBDD.dnot cond |> MLBDD.allprime |> List.map DecoderChecks.implicant_to_mask in
               match try2 with
-                | [b] -> Expr_TApply (FIdent ("not_bool", 0), [], [bd_to_test b])
+                | [b] -> Some (Expr_TApply (FIdent ("not_bool", 0), [], [bd_to_test b]))
                 | _ ->  (let r = (let tests = (List.map bd_to_test (b::bs)) in
               let bool_or x y = Expr_TApply(FIdent("or_bool", 0), [], [x;y]) in
               List.fold_left bool_or (List.hd tests) (List.tl tests)) in
-              r)
+              Some r)
           )
-    | _ ->
-        Printf.printf "no value %s %s\n" (pp_expr e) (pp_abs cond);
-        e
+    | _ -> None
 
-  let rec eval_stmt s st =
+  let rebuild_expr e cond st = match bdd_to_expr cond st with 
+      | Some x -> x
+      | None -> Printf.printf "Unable to simplify expr" ; e
+
+
+  class nopvis = object(self) 
+    method xf_stmt (x:stmt) (st:state) : stmt list = [x]
+  end
+
+  let nop_transform = new nopvis
+
+  module EvalWithXfer (Xf: Lattice) = struct 
+
+  let rec eval_stmt (xs:Xf.rt) (s:stmt) (st:state) =
+      (* (transfer : xs, s, st ->  xs', s' ; eval : st -> s -> st' ; write s' : s' , st' -> st'' ) -> xs' s' st''  *)
+    let xs,ns = Xf.xfer_stmt st xs s in
     match s with
     | Stmt_VarDeclsNoInit(t, [v], loc) ->
         let st = add_var v Bot st in
-        write s st
+        writeall ns st, xs
     | Stmt_VarDecl(t, v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        write s st
+        writeall ns st, xs
     | Stmt_ConstDecl(t, v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        write s st
+        writeall ns st,xs
     | Stmt_Assign(LExpr_Var v, e, loc) ->
         let abs = eval_expr e st in
         let st = add_var v abs st in
-        write s st
+        writeall ns st,xs
 
     (* Eval the assert, attempt to discharge it & strengthen ctx *)
     | Stmt_Assert(e, loc) ->
         let abs = eval_expr e st in
-        if is_false abs st then st
+        if is_false abs st then st,xs
         else
           let e = rebuild_expr e abs st in
           let st = write (Stmt_Assert(e,loc)) st in
-          restrict_ctx abs st
+          restrict_ctx abs st, xs
 
     (* State becomes bot - unreachable *)
     | Stmt_Throw _ -> 
         Printf.printf "%s : %s\n" (pp_stmt s) (pp_state st);
-        let st = write s st in
-        halt st
+        let st = writeall ns st in
+        halt st,xs
 
     (* If we can reduce c to true/false, collapse *)
     | Stmt_If(c, tstmts, [], fstmts, loc) ->
         let cond = eval_expr c st in
+
         if is_true cond st then  
-          eval_stmts tstmts st
+          eval_stmts xs tstmts st
         else if is_false cond st then
-          eval_stmts fstmts st
+          eval_stmts xs fstmts st
         else
           let c = rebuild_expr c cond st in
           let ncond = not_bool cond in
-          let tst = eval_stmts tstmts (restrict_ctx cond {st with stmts = []}) in
-          let fst = eval_stmts fstmts (restrict_ctx ncond {st with stmts = []}) in
+
+          let tst,xsa = eval_stmts xs tstmts (restrict_ctx cond {st with stmts = []}) in
+          let fst,xsb = eval_stmts xs fstmts (restrict_ctx ncond {st with stmts = []}) in
           let st' = join_state cond tst fst in
+          let xs = Xf.join tst fst st' xsa xsb in
+
           let st' = writeall st.stmts st' in
           let st' = write (Stmt_If (c, tst.stmts, [], fst.stmts, loc)) st' in
-          st'
+          st',xs
 
     (* Can't do anything here *)
     | Stmt_Assign _
     | Stmt_TCall _ -> 
-        write s st
+        writeall ns st,xs
 
     | _ -> failwith "unknown stmt"
 
-  and eval_stmts stmts st =
-    List.fold_left (fun st s -> if MLBDD.is_false st.ctx then st else eval_stmt s st) st stmts
+  and eval_stmts xs stmts st =
+    List.fold_left (fun (st,xs) s -> if MLBDD.is_false st.ctx then st,xs else (eval_stmt xs s st)) (st,xs) stmts
+
+  end
 
   let set_enc st =
     let enc = Val (List.rev (List.init 32 (MLBDD.ithvar st.man))) in
     {st with vars = Bindings.add (Ident "enc") enc st.vars}
 
+  module Eval = EvalWithXfer(NopAnalysis) 
+
+  let just_eval a b c = fst (Eval.eval_stmts (NopAnalysis.init ()) a b)
+
   let do_transform fn stmts reach =
     let st = init_state reach in
     let st = set_enc st in
-    let st' = eval_stmts stmts st in
+    let st',xs = Eval.eval_stmts (NopAnalysis.init ()) stmts st in
     st'.stmts
 
 
@@ -2509,8 +2678,7 @@ module BDDSimp = struct
         1 + (Int.max d1 d2)
       end
 
-  let transform_all instrs decoder =
-    let st = DecoderChecks.do_transform decoder in
+  let transform_all instrs (st:DecoderChecks.st)=
     (* get all prim implicants for each instruction, one list *)
     let imps = Bindings.fold (fun k e acc ->
       let imps = MLBDD.allprime e in
@@ -2525,7 +2693,9 @@ module BDDSimp = struct
     Bindings.mapi (fun nm fnsig ->
       let i = match nm with FIdent(s,_) -> Ident s | s -> s in
       match Bindings.find_opt i st.instrs with
-      | Some reach -> fnsig_upd_body (fun b -> do_transform nm b reach) fnsig
+      | Some reach -> fnsig_upd_body (fun b -> 
+        Printf.printf "transforming %s\n" (pprint_ident nm);
+        do_transform nm b reach) fnsig
       | None -> fnsig) instrs
 end
 

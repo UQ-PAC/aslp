@@ -155,6 +155,7 @@ let rec prints_expr e st =
   | Expr_LitString s -> "\"" ^ s ^ "\""
   | Expr_Tuple(es) -> "std::make_tuple(" ^ (String.concat "," (List.map (fun e -> prints_expr e st) es)) ^ ")"
   | Expr_Unknown(ty) -> default_value ty st
+  | Expr_If(_, c, t, [], e) -> Printf.sprintf "((%s) ? (%s) : (%s))" (prints_expr c st) (prints_expr t st) (prints_expr e st)
 
   | _ -> failwith @@ "prints_expr: " ^ pp_expr e
 
