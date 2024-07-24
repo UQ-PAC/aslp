@@ -77,7 +77,7 @@ jobs:
     - run: dune build --profile release
     - run: echo ':gen A64 .* cpp' | OCAMLRUNPARAM=b dune exec asli
 
-    - run: offlineASL-cpp/check.py
+    - run: LLVM_CONFIG=$(which llvm-config-17) offlineASL-cpp/check.py
 
     - name: 'syntax check generated C++ lifter'
       run: meson compile -C offlineASL-cpp/build
