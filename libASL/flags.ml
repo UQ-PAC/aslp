@@ -6,7 +6,7 @@ let flags = StringMap.of_seq @@ List.to_seq [
     ("trace:prim",  Eval.trace_primop);
     ("trace:instr", Eval.trace_instruction);
     ("eval:concrete_unknown", Value.concrete_unknown);
-    ("dis:vectors", Dis.use_vectoriser);
+    ("dis:vectors", Symbolic.use_vectoriser);
 ]
 
 let set_flag s =

@@ -379,7 +379,7 @@ let write_dune_file files dir =
     (:standard -w -27 -w -33 -cclib -lstdc++))
   (modules \n";
   List.iter (fun k ->
-    Printf.fprintf oc "    %s\n" (String.lowercase_ascii k)
+    Printf.fprintf oc "    %s\n" k
   ) files;
   Printf.fprintf oc "  )
   (libraries asli.libASL))";

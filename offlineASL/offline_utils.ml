@@ -10,6 +10,8 @@ let from_bitsLit x =
 let frem_int     = Primops.prim_frem_int
 let extract_bits = Primops.prim_extract
 
+let f_Elem_set w _w' vec index size x = Primops.prim_insert vec index size x
+
 let f_eq_bits          _ = Primops.prim_eq_bits
 let f_ne_bits          _ = Primops.prim_ne_bits
 let f_add_bits         _ = Primops.prim_add_bits
@@ -35,6 +37,9 @@ let f_lsl_bits       w _ (x : bitvector) (y : bitvector) = mkBits w (Z.shift_lef
 let f_lsr_bits       w _ (x : bitvector) (y : bitvector) = mkBits w (Z.shift_right_trunc x.v (Z.to_int y.v))
 let f_asr_bits       w _ (x : bitvector) (y : bitvector) = mkBits w (Z.shift_right x.v (Z.to_int y.v))
 let f_cvt_bits_uint w bv = Primops.prim_cvt_bits_uint bv
+
+let f_sdiv_int           = Primops.prim_fdiv_int
+let f_shl_int            = Primops.prim_shl_int
 
 (****************************************************************
  * Runtime State
@@ -156,6 +161,14 @@ let f_gen_array_load a i =
   Expr_Array(a, expr_of_z i)
 let f_gen_array_store a i e =
   push_stmt (Stmt_Assign(LExpr_Array(to_lexpr a, expr_of_z i), e, loc))
+
+(* Vector accesses, with runtime values and indices. *)
+let f_gen_Elem_read w w' vec index size =
+  (* w' should always == size *)
+  Expr_TApply (FIdent ("Elem.read", 0), [expr_of_z w; expr_of_z w'], [vec; index; size])
+let f_gen_Elem_set w w' vec index size x =
+  (* w' should always == size *)
+  Expr_TApply (FIdent ("Elem.set", 0), [expr_of_z w; expr_of_z w'], [vec; index; size; x])
 
 (* Memory ops *)
 let f_gen_Mem_set w x _ y z =

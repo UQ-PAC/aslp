@@ -5,6 +5,8 @@ open Value
 open Asl_utils
 open Primops
 
+let use_vectoriser = ref false
+
 type sym =
   | Val of value
   | Exp of expr
@@ -617,12 +619,12 @@ let sym_insert_bits loc (old_width: int) (old: sym) (lo: sym) (wd: sym) (v: sym)
       else
         sym_append_bits loc (old_width - up) up (sym_slice loc old up (old_width - up))
           (sym_append_bits loc wd lo v (sym_slice loc old 0 lo))
-  | (_, _, Val wd', _) when Primops.prim_zrem_int (Z.of_int old_width) (to_integer Unknown wd') = Z.zero ->
+  | (_, _, Val wd', _) when Primops.prim_zrem_int (Z.of_int old_width) (to_integer Unknown wd') = Z.zero && !use_vectoriser ->
       (* Elem.set *)
       let pos = zdiv_int lo wd in
       Exp ( Expr_TApply (FIdent("Elem.set", 0), [expr_of_int old_width ; sym_expr wd],
           List.map sym_expr [old ; pos ; wd ; v]) )
-  | (_, Val (VInt l), _, _) when l = Z.zero ->
+  | (_, Val (VInt l), _, _) when l = Z.zero && !use_vectoriser ->
       Exp (Expr_TApply (FIdent ("Elem.set", 0), [expr_of_int old_width ; sym_expr wd],
           List.map sym_expr [old ; lo ; wd ; v]))
 

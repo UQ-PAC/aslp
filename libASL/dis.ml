@@ -23,8 +23,6 @@ module StringCmp = struct
 end
 module StringMap = Map.Make(StringCmp)
 
-let use_vectoriser = ref false
-
 let debug_level_none = -1
 let debug_level = ref debug_level_none
 let debug_show_trace = ref false
@@ -110,15 +108,18 @@ let no_inline = [
   "AArch64.MemTag.set",0;
 ]
 
-let no_inline_pure = [
+let no_inline_pure () = [
   "LSL",0;
   "LSR",0;
   "ASR",0;
   "SignExtend",0;
   "ZeroExtend",0;
+] @ (if !Symbolic.use_vectoriser then [
   "Elem.set",0;
   "Elem.read",0;
-]
+] else [])
+
+
 
 (** A variable's stack level and original identifier name.
     The "stack level" is how many scopes deep it is.
@@ -941,15 +942,15 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_LitString(s) -> DisEnv.pure (Val (from_stringLit s))
     )
 
-and no_inline_pure_ids = List.map (fun (x,y) -> FIdent(x,y))
-  no_inline_pure
+and no_inline_pure_ids () = List.map (fun (x,y) -> FIdent(x,y))
+  (no_inline_pure ())
 
 and no_inline_ids = List.map (fun (x,y) -> FIdent (x,y))
   no_inline
 
 (** Disassemble call to function *)
 and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
-    if List.mem f no_inline_pure_ids &&
+    if List.mem f (no_inline_pure_ids ()) &&
       ((List.exists (function Exp _ -> true | _ -> false) tvs) ||
         (List.exists (function Exp _ -> true | _ -> false) vs)) then
       let expr = Exp (Expr_TApply (f, List.map sym_expr tvs, List.map sym_expr vs)) in
@@ -1595,7 +1596,7 @@ let dis_core (env: Eval.Env.t) (unroll_bound) ((lenv,globals): env) (decode: dec
  *)
 let dis_decode_entry_with_inst (env: Eval.Env.t) ((lenv,globals): env) (decode: decode_case) (op: Primops.bigint): string * stmt list =
   let max_upper_bound = Z.of_int64 Int64.max_int in
-  match !use_vectoriser with
+  match !Symbolic.use_vectoriser with
   | false -> dis_core env max_upper_bound (lenv,globals) decode op
   | true ->
     let enc,stmts' = dis_core env Z.one (lenv,globals) decode op in
