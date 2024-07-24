@@ -340,8 +340,10 @@ let dis_wrapper fn fnsig env =
       Printf.printf "Error: %s %s\n" (name_of_FIdent fn) m;
       None
 
+type  offline_result = ident * Eval.fun_sig * Eval.fun_sig Bindings.t * Eval.fun_sig Bindings.t
+
 (* Produce a lifter for the desired parts of the instruction set *)
-let run include_pc iset pat env =
+let run include_pc iset pat env : offline_result =
   Printf.printf "Stage 1: Mock decoder & instruction encoding definitions\n";
   let ((did,dsig),tests,instrs) = Decoder_program.run include_pc iset pat env in
   flush stdout;
@@ -425,3 +427,22 @@ let run include_pc iset pat env =
   Printf.printf "\n";
 
   (did,dsig,tests,offline_fns)
+
+
+let run_marshal include_pc iset pat env : offline_result = 
+  let fname = Printf.sprintf "marshalled-offline-lifter-%x" 
+    (Hashtbl.seeded_hash 1234 (Printf.sprintf "%b %s %s" include_pc iset pat))
+  in
+  if (Sys.file_exists fname) 
+  then begin
+    Printf.printf "Using marshalled lifter (pc: %b iset: %s pat: %s):  %s\n" include_pc iset pat fname;
+    let ic = open_in_bin fname in
+    let r: offline_result = Marshal.from_channel ic in
+    close_in ic;
+    r
+    end
+  else 
+    let r: offline_result = run include_pc iset pat env in
+    let oc = open_out_bin fname in
+    Marshal.to_channel oc r []; close_out oc;
+    r

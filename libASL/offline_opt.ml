@@ -332,6 +332,8 @@ end
 
 module RtCopyProp = struct
 
+  let debug_log = false
+
   type clas =
     Declared |
     Defined of IdentSet.t |
@@ -587,7 +589,7 @@ module RtCopyProp = struct
           self#add_dep impure_ident;
           let _ = List.map (self#vexpr) es in
           SkipChildren
-      | e -> (Printf.printf "Unknown runtime expression: %s\n"  (pp_expr e)); DoChildren
+      | e -> (if debug_log then Printf.printf "Unknown runtime expression: %s\n"  (pp_expr e)); DoChildren
   end
 
   let get_deps e =
@@ -728,7 +730,7 @@ statement s is the only definition of x reaching u on every path from s to u t
               (*Printf.printf "Condcopyprop noprop var %s read => clobbered %s simplifies to TRUE\n" (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [cond])); *)
             No) 
           else PropCond (cond))
-          | Some _, None -> Printf.printf "UNCONCD PROP\n" ; Prop
+          | Some _, None -> if debug_log then Printf.printf "UNCONCD PROP\n" ; Prop
           | _,_ -> (*Printf.printf "Condcopyprop: Clobbered variable missing cond read %s\n" (pprint_ident v);  *)
             No) (* TODO: clobbered but not subsequently read? *)
     | Some Defined _ -> (*Printf.printf "Condcopyprop ONLY DEFINED %s\n" (pprint_ident v);*) Prop 
@@ -759,8 +761,8 @@ statement s is the only definition of x reaching u on every path from s to u t
     method candidate v = (Prop = (cond_candidate v cpst (Option.get rtst)))
     method essential v = (No = (cond_candidate v cpst (Option.get rtst)))
 
-  method! vstmt s = ChangeDoChildrenPost ([s], fun s -> List.concat_map self#stmt_xform s)
-  method! vexpr e = ChangeDoChildrenPost (e, fun e -> self#expr_xform e)
+    method! vstmt s = ChangeDoChildrenPost ([s], fun s -> List.concat_map self#stmt_xform s)
+    method! vexpr e = ChangeDoChildrenPost (e, fun e -> self#expr_xform e)
 
 
   (*
@@ -781,8 +783,7 @@ statement s is the only definition of x reaching u on every path from s to u t
       | Stmt_ConstDecl(t, v, Expr_TApply(f, [], args), loc) when is_var_decl f  ->
           candidates <- Bindings.add v {typ=t} candidates; 
           (match (cond_candidate v cpst (Option.get rtst)) with 
-            | No ->  
-                Printf.printf "Condcopyprop: NOT PROP at DEFINITION of var %s\n " (pprint_ident v);
+            | No -> if debug_log then Printf.printf "Condcopyprop: NOT PROP at DEFINITION of var %s\n " (pprint_ident v);
                 [s] 
             | Prop ->  
                 (* move run-time to lift-time *)
@@ -791,7 +792,7 @@ statement s is the only definition of x reaching u on every path from s to u t
             | PropCond cond -> 
               let ncp,cp = cp_idents v in
                 (* if (cond) lift-time else run-time *)
-              Printf.printf "Condcopyprop: CONDITIONAL prop at DEFINITION %s: %s\n " (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [cond]));
+              if debug_log then Printf.printf "Condcopyprop: CONDITIONAL prop at DEFINITION %s: %s\n " (pprint_ident v) (Transforms.BDDSimp.pp_abs (Val [cond]));
               (*let c = cp_cond cond in *)
               (* lift-time conditionally generates the copy-propagated or non-propagated form *)
               [ 
@@ -804,10 +805,10 @@ statement s is the only definition of x reaching u on every path from s to u t
           (match (cond_candidate v cpst (Option.get rtst)) with 
             | No -> (*(Printf.printf "Condcopyprop: UNCOND DISABLE PROP on STORE of var %s\n " (pprint_ident v));*)  [s]
             | Prop -> 
-                  (Printf.printf "Condcopyprop: UNCOND RT PROP on STORE of var %s\n " (pprint_ident v);
+                  (if debug_log then Printf.printf "Condcopyprop: UNCOND RT PROP on STORE of var %s\n " (pprint_ident v);
                   [(Stmt_Assign (LExpr_Var (snd (cp_idents v)), e, loc))])
             | PropCond cond -> let nocp,cp = cp_idents v in
-                  Printf.printf "Condcopyprop: CONDITIONAL rt prop on STORE of var %s\n " (pprint_ident v);
+                  if debug_log then Printf.printf "Condcopyprop: CONDITIONAL rt prop on STORE of var %s\n " (pprint_ident v);
               (*
                  - if copy-prop'ed form is reachable then generate a store statement
                  - if non-copyprop'ed form is reachable then generate an assignment statement
@@ -842,22 +843,23 @@ statement s is the only definition of x reaching u on every path from s to u t
   end
 
   module AnalysisLat = struct 
+    let debug_log = false
     type rt = state
     type olt = Transforms.BDDSimp.state
     let xfer_stmt (l:olt) (r:rt) (s:stmt) : rt * stmt list = 
       (*Printf.printf "%s ::\n%s\n" (pp_stmt s) (Transforms.BDDSimp.pp_state l);*) 
       (walk_stmt s r,[s])
-    let join (ts:olt) (fs:olt) (js:olt) (rta: rt) (rtb: rt) = Printf.printf "ts %s fs %s" 
+    let join (ts:olt) (fs:olt) (js:olt) (rta: rt) (rtb: rt) = if debug_log then Printf.printf "ts %s fs %s" 
       (Transforms.BDDSimp.pp_abs (Val [ts.ctx])) 
       (Transforms.BDDSimp.pp_abs (Val [fs.ctx]))
       ; 
-      Printf.printf "\n--------------\n";
-      let p s rta = Printf.printf "%s: %s\n" s (pp_state rta) in 
+      if debug_log then Printf.printf "\n--------------\n";
+      let p s rta = if debug_log then  Printf.printf "%s: %s\n" s (pp_state rta) in 
       p "\nTRUE BRANCH: " rta;  p "\nFALSE BRANCH: " rtb ;  
 
       let j = merge_st ts.ctx fs.ctx (js:olt) rta rtb in
       p "\nJOIN STATE: " j;
-      Printf.printf "\n==============\n"; 
+      if debug_log then Printf.printf "\n==============\n"; 
       j
 
     let init s = init_state s 
@@ -884,7 +886,7 @@ statement s is the only definition of x reaching u on every path from s to u t
 
   let run fn reachable  body =
     flush stdout;
-    Printf.printf "transforming %s\n" (pprint_ident fn);
+    if debug_log then Printf.printf "transforming %s\n" (pprint_ident fn);
     let st : AnalysisLat.rt = init_state reachable in
     let rtst = Transforms.BDDSimp.init_state reachable in
     let rtst = Transforms.BDDSimp.set_enc rtst in 

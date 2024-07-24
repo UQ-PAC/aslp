@@ -65,7 +65,7 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
         if not (Sys.file_exists dir) then failwith ("Can't find target dir " ^ dir);
 
         (* Build the symbolic lifter *)
-        let (decoder_id,decoder_fnsig,tests,instrs) = Symbolic_lifter.run include_pc iset pat env in
+        let (decoder_id,decoder_fnsig,tests,instrs) = Symbolic_lifter.run_marshal include_pc iset pat env in
 
         let run_gen_backend : gen_function =
             match backend with

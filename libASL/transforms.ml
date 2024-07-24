@@ -2097,6 +2097,7 @@ module type RTAnalysisLattice = sig
 end
 
 module BDDSimp = struct
+  let log = false
 
   type abs = 
     Top |
@@ -2164,7 +2165,7 @@ module BDDSimp = struct
   let get_var v st =
     match Bindings.find_opt v st.vars with
     | Some v -> v
-    | _ -> (Printf.printf "no var %s\n" (pprint_ident v)); Top (* logically this should be Bot, but need to init globals *)
+    | _ -> if log then (Printf.printf "no var %s\n" (pprint_ident v)); Top (* logically this should be Bot, but need to init globals *)
 
   let add_var v abs st =
     { st with vars = Bindings.add v abs st.vars }
@@ -2360,8 +2361,8 @@ module BDDSimp = struct
   (* https://cs.nyu.edu/pipermail/smt-lib/2007/000182.html *)
 
   let unknown_prims = ref Bindings.empty
-  let print_unknown_prims (c:unit) = Bindings.to_seq !unknown_prims |> List.of_seq |> List.sort (fun a b -> compare (snd a) (snd b)) 
-    |> List.iter (fun (id,c) -> Printf.printf "%d \t : %s\n" c (pprint_ident id))
+  let print_unknown_prims (c:unit) = if log then (Bindings.to_seq !unknown_prims |> List.of_seq |> List.sort (fun a b -> compare (snd a) (snd b)) 
+    |> List.iter (fun (id,c) -> Printf.printf "%d \t : %s\n" c (pprint_ident id)))
 
   let eq_bit a b = MLBDD.dnot (MLBDD.xor a b)
 
@@ -2474,8 +2475,8 @@ module BDDSimp = struct
     | Expr_Var id -> get_var id st
 
     (* Simply not going to track these *)
-    | Expr_Field _ -> Printf.printf "Overapprox field %s\n" (pp_expr e) ; Top
-    | Expr_Array _ ->  Printf.printf "Overapprox array %s\n" (pp_expr e); Top
+    | Expr_Field _ -> if log then Printf.printf "Overapprox field %s\n" (pp_expr e) ; Top
+    | Expr_Array _ -> if log then  Printf.printf "Overapprox array %s\n" (pp_expr e); Top
 
     (* Prims *)
     | Expr_TApply (FIdent (f, 0), tes, es) ->
@@ -2486,15 +2487,15 @@ module BDDSimp = struct
         let wd = int_of_string wd in
         let e = eval_expr e st in
         extract_bits e lo wd
-    | Expr_Slices(e, [Slice_LoWd(lo,wd)]) -> Printf.printf "Overapprox slice\n" ; Top
+    | Expr_Slices(e, [Slice_LoWd(lo,wd)]) -> if log then Printf.printf "Overapprox slice\n" ; Top
     | Expr_Parens(e) -> eval_expr e st
-    | Expr_Fields _ -> Printf.printf "unexpected Expr_Fields %s" (pp_expr e); Top
-    | Expr_In _ -> Printf.printf "unexpected Expr_In %s" (pp_expr e); Top
-    | Expr_Unop _ -> Printf.printf "unexpected Expr_Unop %s" (pp_expr e); Top
-    | Expr_Unknown _ -> Printf.printf "unexpected Expr_Unkonwn %s" (pp_expr e); Top
-    | Expr_ImpDef _ -> Printf.printf "unexpected Expr_ImpDef %s" (pp_expr e); Top
-    | Expr_LitString _ -> Printf.printf "unexpected Expr_LitString %s" (pp_expr e); Top
-    | Expr_If _ -> Printf.printf "unexpected Expr_If %s" (pp_expr e); Top
+    | Expr_Fields _ -> if log then Printf.printf "unexpected Expr_Fields %s" (pp_expr e); Top
+    | Expr_In _ -> if log then Printf.printf "unexpected Expr_In %s" (pp_expr e); Top
+    | Expr_Unop _ -> if log then Printf.printf "unexpected Expr_Unop %s" (pp_expr e); Top
+    | Expr_Unknown _ -> if log then Printf.printf "unexpected Expr_Unkonwn %s" (pp_expr e); Top
+    | Expr_ImpDef _ -> if log then Printf.printf "unexpected Expr_ImpDef %s" (pp_expr e); Top
+    | Expr_LitString _ -> if log then Printf.printf "unexpected Expr_LitString %s" (pp_expr e); Top
+    | Expr_If _ -> if log then Printf.printf "unexpected Expr_If %s" (pp_expr e); Top
 
     | _ -> failwith @@ Printf.sprintf "BDDSimp eval_expr: unexpected expr: %s\n"  (pp_expr e)  
 
@@ -2550,7 +2551,7 @@ module BDDSimp = struct
 
   let rebuild_expr e cond st = match bdd_to_expr cond st with 
       | Some x -> x
-      | None -> Printf.printf "Unable to simplify expr" ; e
+      | None -> if log then Printf.printf "Unable to simplify expr" ; e
 
 
   class nopvis = object(self) 
@@ -2592,7 +2593,7 @@ module BDDSimp = struct
 
     (* State becomes bot - unreachable *)
     | Stmt_Throw _ -> 
-        Printf.printf "%s : %s\n" (pp_stmt s) (pp_state st);
+        if log then Printf.printf "%s : %s\n" (pp_stmt s) (pp_state st);
         let st = writeall ns st in
         halt st,xs
 
@@ -2646,11 +2647,11 @@ module BDDSimp = struct
 
   let rec split_on_bit imps =
     if List.length imps == 0 then begin
-      Printf.printf "Dead end\n";
+      if log then Printf.printf "Dead end\n";
       1
     end
     else if List.length imps == 1 then begin
-      Printf.printf "Match on %s\n" (match imps with [(k,e)] -> pprint_ident k | _ -> failwith "huh");
+      if log then Printf.printf "Match on %s\n" (match imps with [(k,e)] -> pprint_ident k | _ -> failwith "huh");
       1
     end
     else
@@ -2660,16 +2661,16 @@ module BDDSimp = struct
         (i,freq)) in
       let max = List.fold_right (fun (i,f) (j,m) -> if f > m then (i,f) else (j,m)) bits (-1,0) in
       if fst max == -1 then begin
-        Printf.printf "Ended up with %s\n" (Utils.pp_list (fun (k,s) -> pprint_ident k ^ ":" ^ DecoderChecks.implicant_to_mask s) imps);
+        if log then Printf.printf "Ended up with %s\n" (Utils.pp_list (fun (k,s) -> pprint_ident k ^ ":" ^ DecoderChecks.implicant_to_mask s) imps);
         failwith "huh"
       end;
       let set = List.filter (fun (k,e) -> not (List.mem (false,fst max) e)) imps in
       let set = List.map (fun (k,e) -> (k,List.filter (fun (f,i) -> i <> fst max) e)) set in
       let clr = List.filter (fun (k,e) -> not (List.mem (true,fst max) e)) imps in
       let clr = List.map (fun (k,e) -> (k,List.filter (fun (f,i) -> i <> fst max) e)) clr in
-      Printf.printf "Splitting on %d, sub-lists %d %d of %d\n" (fst max) (List.length set) (List.length clr) (List.length imps);
+      if log then Printf.printf "Splitting on %d, sub-lists %d %d of %d\n" (fst max) (List.length set) (List.length clr) (List.length imps);
       if List.length set + List.length clr <> List.length imps then begin
-        Printf.printf "Duplication for %s\n" (Utils.pp_list (fun (k,s) -> pprint_ident k ^ ":" ^ DecoderChecks.implicant_to_mask s) imps);
+        if log then Printf.printf "Duplication for %s\n" (Utils.pp_list (fun (k,s) -> pprint_ident k ^ ":" ^ DecoderChecks.implicant_to_mask s) imps);
         1
       end
       else begin
@@ -2687,14 +2688,14 @@ module BDDSimp = struct
 
     let res = split_on_bit imps in
 
-    Printf.printf "Max depth of %d\n" res;
+    if log then Printf.printf "Max depth of %d\n" res;
 
 
     Bindings.mapi (fun nm fnsig ->
       let i = match nm with FIdent(s,_) -> Ident s | s -> s in
       match Bindings.find_opt i st.instrs with
       | Some reach -> fnsig_upd_body (fun b -> 
-        Printf.printf "transforming %s\n" (pprint_ident nm);
+        if log then Printf.printf "transforming %s\n" (pprint_ident nm);
         do_transform nm b reach) fnsig
       | None -> fnsig) instrs
 end
