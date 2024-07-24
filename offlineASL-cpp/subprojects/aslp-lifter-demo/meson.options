@@ -1,0 +1,2 @@
+option('use-libaslp-lifter-llvm', type : 'feature', value : 'enabled',
+       description : 'whether to use the separately-compiled aslp-lifter-llvm library')

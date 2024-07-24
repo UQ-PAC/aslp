@@ -20,10 +20,11 @@ scripts/output.txt
 scripts/cntlm.bir
 scripts/total.txt
 
-<<<<<<< HEAD
 .cache/
 build/
-||||||| 630277b
-=======
+
 offlineASL/aarch64_*
->>>>>>> partial_eval
+offlineASL-scala/lifter/src/generated/*
+offlineASL-cpp/subprojects/aslp-lifter/src/generated/*
+offlineASL-cpp/subprojects/aslp-lifter/include/aslp/generated/*
+

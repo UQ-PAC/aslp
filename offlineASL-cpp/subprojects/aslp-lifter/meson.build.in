@@ -1,0 +1,40 @@
+project('aslp-lifter', 'cpp',
+  version : '0.1',
+  default_options : ['warning_level=3', 'cpp_std=c++20'])
+
+incdir = 'include'
+srcdir = 'src'
+install_srcdir = get_option('datadir') / 'aslp'
+
+install_subdir(incdir, install_dir : get_option('includedir'), strip_directory : true)
+gen_dep = declare_dependency(include_directories : incdir)
+
+srcfiles = ["SRCFILES"]
+
+install_subdir(srcdir, install_dir: install_srcdir)
+cxxflags = ['-Wno-unused-parameter']
+instantiate_dep = declare_dependency(
+  sources: srcfiles,
+  dependencies: gen_dep,
+  compile_args: cxxflags)
+
+# needed to generate compile_commands.json when building this subproject standalone
+dummy_lib = library('dummy', 'dummy.cpp', dependencies: gen_dep, install: false)
+
+pkg = import('pkgconfig')
+pkg.generate(
+  name: meson.project_name(),
+  description: 'offline aslp lifter library (template headers)',
+)
+
+instantiate_srcfiles = []
+foreach f : srcfiles
+  instantiate_srcfiles += [get_option('prefix') / install_srcdir / f]
+endforeach
+
+pkg.generate(
+  name: meson.project_name() + '-instantiate',
+  description: 'offline aslp lifter library (source files for explicit instantiation)',
+  extra_cflags: cxxflags,
+  variables: { 'srcdir': get_option('prefix') / install_srcdir, 'srcfiles': ';'.join(instantiate_srcfiles) },
+)
