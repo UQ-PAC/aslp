@@ -167,6 +167,43 @@ protected:
 public:
   llvm_run_time_interface(llvm::Function &f) : function{f} {}
 
+  rt_lexpr v_PSTATE_UAO() override {
+    static rt_lexpr x{getOrInsertGlobal(1, intty(1), "UAO")};
+    return x;
+  }
+  rt_lexpr v_PSTATE_PAN() override {
+    static rt_lexpr x{getOrInsertGlobal(1, intty(1), "PAN")};
+    return x;
+  }
+  rt_lexpr v_PSTATE_DIT() override {
+    static rt_lexpr x{getOrInsertGlobal(1, intty(1), "DIT")};
+    return x;
+  }
+  rt_lexpr v_PSTATE_SSBS() override {
+    static rt_lexpr x{getOrInsertGlobal(1, intty(1), "SSBS")};
+    return x;
+  }
+  rt_lexpr v_PSTATE_G() override {
+    static rt_lexpr x{getOrInsertGlobal(1, intty(1), "G")};
+    return x;
+  }
+  rt_lexpr v_PSTATE_A() override {
+    static rt_lexpr x{getOrInsertGlobal(1, intty(1), "A")};
+    return x;
+  }
+  rt_lexpr v_PSTATE_I() override {
+    static rt_lexpr x{getOrInsertGlobal(1, intty(1), "I")};
+    return x;
+  }
+  rt_lexpr v_PSTATE_F() override {
+    static rt_lexpr x{getOrInsertGlobal(1, intty(1), "F")};
+    return x;
+  }
+  rt_lexpr v_PSTATE_D() override {
+    static rt_lexpr x{getOrInsertGlobal(1, intty(1), "D")};
+    return x;
+  }
+
 
   rt_lexpr v_PSTATE_C() override {
     static rt_lexpr x{getOrInsertGlobal(1, intty(1), "C")};

@@ -41,6 +41,15 @@ public:
   virtual rt_lexpr v_SP_EL0() = 0;
   virtual rt_lexpr v_FPSR() = 0;
   virtual rt_lexpr v_FPCR() = 0;
+  virtual rt_lexpr v_PSTATE_UAO() = 0;
+  virtual rt_lexpr v_PSTATE_PAN() = 0;
+  virtual rt_lexpr v_PSTATE_DIT() = 0;
+  virtual rt_lexpr v_PSTATE_SSBS() = 0;
+  virtual rt_lexpr v_PSTATE_G() = 0;
+  virtual rt_lexpr v_PSTATE_A() = 0;
+  virtual rt_lexpr v_PSTATE_I() = 0;
+  virtual rt_lexpr v_PSTATE_F() = 0;
+  virtual rt_lexpr v_PSTATE_D() = 0;
 
   virtual rt_lexpr v_PSTATE_BTYPE() = 0;
   virtual rt_lexpr v_BTypeCompatible() = 0;
