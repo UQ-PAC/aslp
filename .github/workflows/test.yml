@@ -53,7 +53,7 @@ jobs:
     - run: echo 'preparing nix shell environment'
 
     - run: dune build --profile release -j4
-    - run: echo ':gen A64 aarch64_* ocaml offlineASL' | OCAMLRUNPARAM=b dune exec asli
+    - run: echo ':gen A64 aarch64_* ocaml false offlineASL' | OCAMLRUNPARAM=b dune exec asli
 
     - run: dune build offlineASL -j4
 

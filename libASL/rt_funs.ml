@@ -13,9 +13,9 @@ let rt_gen_int_lit      = FIdent("gen_int_lit", 0)     (* int -> int rt *)
 let rt_gen_slice        = FIdent("gen_slice", 0)       (* bv rt -> int -> int -> bv rt *)
 
 let rt_gen_branch       = FIdent("gen_branch", 0)      (* bool rt -> (rt_label, rt_label, rt_label) *)
-let rt_true_branch = FIdent("true_branch", 0)
-let rt_false_branch = FIdent("false_branch", 0)
-let rt_merge_branch = FIdent("merge_branch", 0)
+let rt_true_branch      = FIdent("true_branch", 0)
+let rt_false_branch     = FIdent("false_branch", 0)
+let rt_merge_branch     = FIdent("merge_branch", 0)
 
 let rt_switch_context   = FIdent("switch_context", 0)  (* rt_label -> unit *)
 let rt_gen_load         = FIdent("gen_load", 0)        (* sym -> 'a rt *)
