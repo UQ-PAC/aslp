@@ -3,9 +3,9 @@ name: Build with opam
 on:
   push:
     branches: [ partial_eval ]
-    paths: [ '*.opam', '.github/**' ]
+    paths: [ '*.opam', '.github/workflows/opam.yml' ]
   pull_request:
-    paths: [ '*.opam', '.github/**' ]
+    paths: [ '*.opam', '.github/workflows/opam.yml' ]
   workflow_dispatch:
 
 # only run one instance of this action at a time.
