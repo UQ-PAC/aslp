@@ -290,10 +290,8 @@ let dis_wrapper fn fnsig env =
   let (lenv,globals) = Dis.build_env env in
   let body = fnsig_get_body fnsig in
   let args = fnsig_get_typed_args fnsig in
-  let sym = Symbolic.Exp (Expr_Var (Decoder_program.enc)) in
   let config = {Dis.eval_env = env ; unroll_bound = Z.of_int64 Int64.max_int} in
   try
-
     (* Setup initial environment based on function arguments *)
     let lenv =
       (match args with
@@ -307,9 +305,6 @@ let dis_wrapper fn fnsig env =
 
     (* Run dis over the function body and extract the residual program *)
     let ((),lenv',stmts) = Dis.dis_stmts body config lenv in
-    let body = fnsig_get_body fnsig in
-    let (_,lenv,_) = (Dis.declare_assign_var Unknown (Type_Bits (Expr_LitInt "32")) (Ident "enc") sym) config lenv in
-    let ((),lenv',stmts) = (Dis.dis_stmts body) config lenv in
     let stmts = Dis.flatten stmts [] in
 
     (* Optional post-pass to prune unsupported globals and their fields *)
