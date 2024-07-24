@@ -1380,9 +1380,9 @@ module RedundantSlice = struct
       (* Last chance to convert dynamic slices into shift & static slice *)
       | Expr_Slices(x, [Slice_LoWd(l,w)]) when non_const l ->
           (match option_or (infer_type x) (self#var_type' x) with
-          (*| Some (Type_Bits xw) ->
+          | Some (Type_Bits xw) ->
               let e = Expr_TApply (FIdent ("LSR", 0), [xw], [x; l]) in
-              Expr_Slices(e, [Slice_LoWd (Expr_LitInt "0", w)])*)
+              Expr_Slices(e, [Slice_LoWd (Expr_LitInt "0", w)])
           | _ -> e)
       | Expr_Slices(e', [Slice_LoWd (Expr_LitInt "0", wd)]) ->
           let try_match (opt: ty option): expr =

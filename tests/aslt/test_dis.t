@@ -73,91 +73,107 @@ run asli with these commands
   0x0e000000
   "
   Decoding instruction A64 e000000
-  constant bits ( 16 ) Cse7__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 0 +: 8 ],16 ) ;
-  constant bits ( 16 ) Cse6__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 8 +: 8 ],16 ) ;
-  constant bits ( 16 ) Cse5__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 16 +: 8 ],16 ) ;
-  constant bits ( 16 ) Cse4__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 24 +: 8 ],16 ) ;
-  constant bits ( 16 ) Cse3__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 32 +: 8 ],16 ) ;
-  constant bits ( 16 ) Cse2__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 40 +: 8 ],16 ) ;
-  constant bits ( 16 ) Cse1__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 48 +: 8 ],16 ) ;
-  constant bits ( 16 ) Cse0__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 56 +: 8 ],16 ) ;
+  constant bits ( 16 ) Cse15__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 0 +: 8 ],16 ) ;
+  constant bits ( 16 ) Cse14__5 = mul_bits.0 {{ 16 }} ( ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 0 +: 8 ],16 ),'0000000000001000' ) ;
+  constant bits ( 16 ) Cse13__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 8 +: 8 ],16 ) ;
+  constant bits ( 16 ) Cse12__5 = mul_bits.0 {{ 16 }} ( ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 8 +: 8 ],16 ),'0000000000001000' ) ;
+  constant bits ( 16 ) Cse11__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 16 +: 8 ],16 ) ;
+  constant bits ( 16 ) Cse10__5 = mul_bits.0 {{ 16 }} ( ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 16 +: 8 ],16 ),'0000000000001000' ) ;
+  constant bits ( 16 ) Cse9__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 24 +: 8 ],16 ) ;
+  constant bits ( 16 ) Cse8__5 = mul_bits.0 {{ 16 }} ( ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 24 +: 8 ],16 ),'0000000000001000' ) ;
+  constant bits ( 16 ) Cse7__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 32 +: 8 ],16 ) ;
+  constant bits ( 16 ) Cse6__5 = mul_bits.0 {{ 16 }} ( ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 32 +: 8 ],16 ),'0000000000001000' ) ;
+  constant bits ( 16 ) Cse5__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 40 +: 8 ],16 ) ;
+  constant bits ( 16 ) Cse4__5 = mul_bits.0 {{ 16 }} ( ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 40 +: 8 ],16 ),'0000000000001000' ) ;
+  constant bits ( 16 ) Cse3__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 48 +: 8 ],16 ) ;
+  constant bits ( 16 ) Cse2__5 = mul_bits.0 {{ 16 }} ( ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 48 +: 8 ],16 ),'0000000000001000' ) ;
+  constant bits ( 16 ) Cse1__5 = ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 56 +: 8 ],16 ) ;
+  constant bits ( 16 ) Cse0__5 = mul_bits.0 {{ 16 }} ( ZeroExtend.0 {{ 8,16 }} ( __array _Z [ 0 ] [ 56 +: 8 ],16 ),'0000000000001000' ) ;
   bits ( 64 ) result__4 ;
   result__4 = '0000000000000000000000000000000000000000000000000000000000000000' ;
-  if slt_bits.0 {{ 16 }} ( Cse7__5,'0000000000010000' ) then {
-  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse7__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( mul_bits.0 {{ 16 }} ( Cse7__5,'0000000000001000' ),'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
-  result__4 = ZeroExtend.0 {{ 8,64 }} ( __array _Z [ 0 ] [ mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 8 }} ( __array _Z [ 0 ] [ 0 +: 8 ] ),8 ) +: 8 ],64 ) ;
+  if slt_bits.0 {{ 16 }} ( Cse15__5,'0000000000010000' ) then {
+  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse15__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( Cse14__5,'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
+  result__4 = ZeroExtend.0 {{ 8,64 }} ( lsr_bits.0 {{ 128,32 }} ( __array _Z [ 0 ],ZeroExtend.0 {{ 16,32 }} ( Cse14__5,32 ) ) [ 0 +: 8 ],64 ) ;
   }
-  if slt_bits.0 {{ 16 }} ( Cse6__5,'0000000000010000' ) then {
-  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse6__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( mul_bits.0 {{ 16 }} ( Cse6__5,'0000000000001000' ),'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
-  result__4 = append_bits.0 {{ 48,16 }} ( result__4 [ 16 +: 48 ],append_bits.0 {{ 8,8 }} ( __array _Z [ 0 ] [ mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 8 }} ( __array _Z [ 0 ] [ 8 +: 8 ] ),8 ) +: 8 ],result__4 [ 0 +: 8 ] ) ) ;
+  if slt_bits.0 {{ 16 }} ( Cse13__5,'0000000000010000' ) then {
+  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse13__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( Cse12__5,'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
+  result__4 = append_bits.0 {{ 48,16 }} ( result__4 [ 16 +: 48 ],append_bits.0 {{ 8,8 }} ( lsr_bits.0 {{ 128,32 }} ( __array _Z [ 0 ],ZeroExtend.0 {{ 16,32 }} ( Cse12__5,32 ) ) [ 0 +: 8 ],result__4 [ 0 +: 8 ] ) ) ;
+  }
+  if slt_bits.0 {{ 16 }} ( Cse11__5,'0000000000010000' ) then {
+  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse11__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( Cse10__5,'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
+  result__4 = append_bits.0 {{ 40,24 }} ( result__4 [ 24 +: 40 ],append_bits.0 {{ 8,16 }} ( lsr_bits.0 {{ 128,32 }} ( __array _Z [ 0 ],ZeroExtend.0 {{ 16,32 }} ( Cse10__5,32 ) ) [ 0 +: 8 ],result__4 [ 0 +: 16 ] ) ) ;
+  }
+  if slt_bits.0 {{ 16 }} ( Cse9__5,'0000000000010000' ) then {
+  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse9__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( Cse8__5,'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
+  result__4 = append_bits.0 {{ 32,32 }} ( result__4 [ 32 +: 32 ],append_bits.0 {{ 8,24 }} ( lsr_bits.0 {{ 128,32 }} ( __array _Z [ 0 ],ZeroExtend.0 {{ 16,32 }} ( Cse8__5,32 ) ) [ 0 +: 8 ],result__4 [ 0 +: 24 ] ) ) ;
+  }
+  if slt_bits.0 {{ 16 }} ( Cse7__5,'0000000000010000' ) then {
+  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse7__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( Cse6__5,'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
+  result__4 = append_bits.0 {{ 24,40 }} ( result__4 [ 40 +: 24 ],append_bits.0 {{ 8,32 }} ( lsr_bits.0 {{ 128,32 }} ( __array _Z [ 0 ],ZeroExtend.0 {{ 16,32 }} ( Cse6__5,32 ) ) [ 0 +: 8 ],result__4 [ 0 +: 32 ] ) ) ;
   }
   if slt_bits.0 {{ 16 }} ( Cse5__5,'0000000000010000' ) then {
-  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse5__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( mul_bits.0 {{ 16 }} ( Cse5__5,'0000000000001000' ),'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
-  result__4 = append_bits.0 {{ 40,24 }} ( result__4 [ 24 +: 40 ],append_bits.0 {{ 8,16 }} ( __array _Z [ 0 ] [ mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 8 }} ( __array _Z [ 0 ] [ 16 +: 8 ] ),8 ) +: 8 ],result__4 [ 0 +: 16 ] ) ) ;
-  }
-  if slt_bits.0 {{ 16 }} ( Cse4__5,'0000000000010000' ) then {
-  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse4__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( mul_bits.0 {{ 16 }} ( Cse4__5,'0000000000001000' ),'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
-  result__4 = append_bits.0 {{ 32,32 }} ( result__4 [ 32 +: 32 ],append_bits.0 {{ 8,24 }} ( __array _Z [ 0 ] [ mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 8 }} ( __array _Z [ 0 ] [ 24 +: 8 ] ),8 ) +: 8 ],result__4 [ 0 +: 24 ] ) ) ;
+  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse5__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( Cse4__5,'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
+  result__4 = append_bits.0 {{ 16,48 }} ( result__4 [ 48 +: 16 ],append_bits.0 {{ 8,40 }} ( lsr_bits.0 {{ 128,32 }} ( __array _Z [ 0 ],ZeroExtend.0 {{ 16,32 }} ( Cse4__5,32 ) ) [ 0 +: 8 ],result__4 [ 0 +: 40 ] ) ) ;
   }
   if slt_bits.0 {{ 16 }} ( Cse3__5,'0000000000010000' ) then {
-  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse3__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( mul_bits.0 {{ 16 }} ( Cse3__5,'0000000000001000' ),'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
-  result__4 = append_bits.0 {{ 24,40 }} ( result__4 [ 40 +: 24 ],append_bits.0 {{ 8,32 }} ( __array _Z [ 0 ] [ mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 8 }} ( __array _Z [ 0 ] [ 32 +: 8 ] ),8 ) +: 8 ],result__4 [ 0 +: 32 ] ) ) ;
-  }
-  if slt_bits.0 {{ 16 }} ( Cse2__5,'0000000000010000' ) then {
-  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse2__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( mul_bits.0 {{ 16 }} ( Cse2__5,'0000000000001000' ),'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
-  result__4 = append_bits.0 {{ 16,48 }} ( result__4 [ 48 +: 16 ],append_bits.0 {{ 8,40 }} ( __array _Z [ 0 ] [ mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 8 }} ( __array _Z [ 0 ] [ 40 +: 8 ] ),8 ) +: 8 ],result__4 [ 0 +: 40 ] ) ) ;
+  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse3__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( Cse2__5,'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
+  result__4 = append_bits.0 {{ 8,56 }} ( result__4 [ 56 +: 8 ],append_bits.0 {{ 8,48 }} ( lsr_bits.0 {{ 128,32 }} ( __array _Z [ 0 ],ZeroExtend.0 {{ 16,32 }} ( Cse2__5,32 ) ) [ 0 +: 8 ],result__4 [ 0 +: 48 ] ) ) ;
   }
   if slt_bits.0 {{ 16 }} ( Cse1__5,'0000000000010000' ) then {
-  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse1__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( mul_bits.0 {{ 16 }} ( Cse1__5,'0000000000001000' ),'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
-  result__4 = append_bits.0 {{ 8,56 }} ( result__4 [ 56 +: 8 ],append_bits.0 {{ 8,48 }} ( __array _Z [ 0 ] [ mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 8 }} ( __array _Z [ 0 ] [ 48 +: 8 ] ),8 ) +: 8 ],result__4 [ 0 +: 48 ] ) ) ;
-  }
-  if slt_bits.0 {{ 16 }} ( Cse0__5,'0000000000010000' ) then {
-  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse0__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( mul_bits.0 {{ 16 }} ( Cse0__5,'0000000000001000' ),'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
-  result__4 = append_bits.0 {{ 8,56 }} ( __array _Z [ 0 ] [ mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 8 }} ( __array _Z [ 0 ] [ 56 +: 8 ] ),8 ) +: 8 ],result__4 [ 0 +: 56 ] ) ;
+  assert and_bool.0 {{  }} ( sle_bits.0 {{ 16 }} ( '0000000000000000',Cse1__5 ),sle_bits.0 {{ 32 }} ( ZeroExtend.0 {{ 16,32 }} ( add_bits.0 {{ 16 }} ( Cse0__5,'0000000000001000' ),32 ),'00000000000000000000000010000000' ) ) ;
+  result__4 = append_bits.0 {{ 8,56 }} ( lsr_bits.0 {{ 128,32 }} ( __array _Z [ 0 ],ZeroExtend.0 {{ 16,32 }} ( Cse0__5,32 ) ) [ 0 +: 8 ],result__4 [ 0 +: 56 ] ) ;
   }
   __array _Z [ 0 ] = ZeroExtend.0 {{ 64,128 }} ( result__4,128 ) ;
   ""
-  Stmt_ConstDecl(Type_Bits(16),"Cse7__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(0,8)]);16]))
-  Stmt_ConstDecl(Type_Bits(16),"Cse6__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(8,8)]);16]))
-  Stmt_ConstDecl(Type_Bits(16),"Cse5__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(16,8)]);16]))
-  Stmt_ConstDecl(Type_Bits(16),"Cse4__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(24,8)]);16]))
-  Stmt_ConstDecl(Type_Bits(16),"Cse3__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(32,8)]);16]))
-  Stmt_ConstDecl(Type_Bits(16),"Cse2__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(40,8)]);16]))
-  Stmt_ConstDecl(Type_Bits(16),"Cse1__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(48,8)]);16]))
-  Stmt_ConstDecl(Type_Bits(16),"Cse0__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(56,8)]);16]))
+  Stmt_ConstDecl(Type_Bits(16),"Cse15__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(0,8)]);16]))
+  Stmt_ConstDecl(Type_Bits(16),"Cse14__5",Expr_TApply("mul_bits.0",[16],[Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(0,8)]);16]);'0000000000001000']))
+  Stmt_ConstDecl(Type_Bits(16),"Cse13__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(8,8)]);16]))
+  Stmt_ConstDecl(Type_Bits(16),"Cse12__5",Expr_TApply("mul_bits.0",[16],[Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(8,8)]);16]);'0000000000001000']))
+  Stmt_ConstDecl(Type_Bits(16),"Cse11__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(16,8)]);16]))
+  Stmt_ConstDecl(Type_Bits(16),"Cse10__5",Expr_TApply("mul_bits.0",[16],[Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(16,8)]);16]);'0000000000001000']))
+  Stmt_ConstDecl(Type_Bits(16),"Cse9__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(24,8)]);16]))
+  Stmt_ConstDecl(Type_Bits(16),"Cse8__5",Expr_TApply("mul_bits.0",[16],[Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(24,8)]);16]);'0000000000001000']))
+  Stmt_ConstDecl(Type_Bits(16),"Cse7__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(32,8)]);16]))
+  Stmt_ConstDecl(Type_Bits(16),"Cse6__5",Expr_TApply("mul_bits.0",[16],[Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(32,8)]);16]);'0000000000001000']))
+  Stmt_ConstDecl(Type_Bits(16),"Cse5__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(40,8)]);16]))
+  Stmt_ConstDecl(Type_Bits(16),"Cse4__5",Expr_TApply("mul_bits.0",[16],[Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(40,8)]);16]);'0000000000001000']))
+  Stmt_ConstDecl(Type_Bits(16),"Cse3__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(48,8)]);16]))
+  Stmt_ConstDecl(Type_Bits(16),"Cse2__5",Expr_TApply("mul_bits.0",[16],[Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(48,8)]);16]);'0000000000001000']))
+  Stmt_ConstDecl(Type_Bits(16),"Cse1__5",Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(56,8)]);16]))
+  Stmt_ConstDecl(Type_Bits(16),"Cse0__5",Expr_TApply("mul_bits.0",[16],[Expr_TApply("ZeroExtend.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(56,8)]);16]);'0000000000001000']))
   Stmt_VarDeclsNoInit(Type_Bits(64),["result__4"])
   Stmt_Assign(LExpr_Var("result__4"),'0000000000000000000000000000000000000000000000000000000000000000')
-  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse7__5");'0000000000010000']),[
-  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse7__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_TApply("mul_bits.0",[16],[Expr_Var("Cse7__5");'0000000000001000']);'0000000000001000']);32]);'00000000000000000000000010000000'])]));
-  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("ZeroExtend.0",[8;64],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(Expr_TApply("mul_int.0",[],[Expr_TApply("cvt_bits_uint.0",[8],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(0,8)])]);8]),8)]);64]))
+  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse15__5");'0000000000010000']),[
+  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse15__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_Var("Cse14__5");'0000000000001000']);32]);'00000000000000000000000010000000'])]));
+  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("ZeroExtend.0",[8;64],[Expr_Slices(Expr_TApply("lsr_bits.0",[128;32],[Expr_Array(Expr_Var("_Z"),0);Expr_TApply("ZeroExtend.0",[16;32],[Expr_Var("Cse14__5");32])]),[Slice_LoWd(0,8)]);64]))
   ],[],[])
-  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse6__5");'0000000000010000']),[
-  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse6__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_TApply("mul_bits.0",[16],[Expr_Var("Cse6__5");'0000000000001000']);'0000000000001000']);32]);'00000000000000000000000010000000'])]));
-  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[48;16],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(16,48)]);Expr_TApply("append_bits.0",[8;8],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(Expr_TApply("mul_int.0",[],[Expr_TApply("cvt_bits_uint.0",[8],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(8,8)])]);8]),8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,8)])])]))
+  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse13__5");'0000000000010000']),[
+  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse13__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_Var("Cse12__5");'0000000000001000']);32]);'00000000000000000000000010000000'])]));
+  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[48;16],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(16,48)]);Expr_TApply("append_bits.0",[8;8],[Expr_Slices(Expr_TApply("lsr_bits.0",[128;32],[Expr_Array(Expr_Var("_Z"),0);Expr_TApply("ZeroExtend.0",[16;32],[Expr_Var("Cse12__5");32])]),[Slice_LoWd(0,8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,8)])])]))
+  ],[],[])
+  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse11__5");'0000000000010000']),[
+  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse11__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_Var("Cse10__5");'0000000000001000']);32]);'00000000000000000000000010000000'])]));
+  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[40;24],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(24,40)]);Expr_TApply("append_bits.0",[8;16],[Expr_Slices(Expr_TApply("lsr_bits.0",[128;32],[Expr_Array(Expr_Var("_Z"),0);Expr_TApply("ZeroExtend.0",[16;32],[Expr_Var("Cse10__5");32])]),[Slice_LoWd(0,8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,16)])])]))
+  ],[],[])
+  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse9__5");'0000000000010000']),[
+  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse9__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_Var("Cse8__5");'0000000000001000']);32]);'00000000000000000000000010000000'])]));
+  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[32;32],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(32,32)]);Expr_TApply("append_bits.0",[8;24],[Expr_Slices(Expr_TApply("lsr_bits.0",[128;32],[Expr_Array(Expr_Var("_Z"),0);Expr_TApply("ZeroExtend.0",[16;32],[Expr_Var("Cse8__5");32])]),[Slice_LoWd(0,8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,24)])])]))
+  ],[],[])
+  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse7__5");'0000000000010000']),[
+  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse7__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_Var("Cse6__5");'0000000000001000']);32]);'00000000000000000000000010000000'])]));
+  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[24;40],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(40,24)]);Expr_TApply("append_bits.0",[8;32],[Expr_Slices(Expr_TApply("lsr_bits.0",[128;32],[Expr_Array(Expr_Var("_Z"),0);Expr_TApply("ZeroExtend.0",[16;32],[Expr_Var("Cse6__5");32])]),[Slice_LoWd(0,8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,32)])])]))
   ],[],[])
   Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse5__5");'0000000000010000']),[
-  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse5__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_TApply("mul_bits.0",[16],[Expr_Var("Cse5__5");'0000000000001000']);'0000000000001000']);32]);'00000000000000000000000010000000'])]));
-  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[40;24],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(24,40)]);Expr_TApply("append_bits.0",[8;16],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(Expr_TApply("mul_int.0",[],[Expr_TApply("cvt_bits_uint.0",[8],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(16,8)])]);8]),8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,16)])])]))
-  ],[],[])
-  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse4__5");'0000000000010000']),[
-  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse4__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_TApply("mul_bits.0",[16],[Expr_Var("Cse4__5");'0000000000001000']);'0000000000001000']);32]);'00000000000000000000000010000000'])]));
-  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[32;32],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(32,32)]);Expr_TApply("append_bits.0",[8;24],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(Expr_TApply("mul_int.0",[],[Expr_TApply("cvt_bits_uint.0",[8],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(24,8)])]);8]),8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,24)])])]))
+  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse5__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_Var("Cse4__5");'0000000000001000']);32]);'00000000000000000000000010000000'])]));
+  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[16;48],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(48,16)]);Expr_TApply("append_bits.0",[8;40],[Expr_Slices(Expr_TApply("lsr_bits.0",[128;32],[Expr_Array(Expr_Var("_Z"),0);Expr_TApply("ZeroExtend.0",[16;32],[Expr_Var("Cse4__5");32])]),[Slice_LoWd(0,8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,40)])])]))
   ],[],[])
   Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse3__5");'0000000000010000']),[
-  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse3__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_TApply("mul_bits.0",[16],[Expr_Var("Cse3__5");'0000000000001000']);'0000000000001000']);32]);'00000000000000000000000010000000'])]));
-  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[24;40],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(40,24)]);Expr_TApply("append_bits.0",[8;32],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(Expr_TApply("mul_int.0",[],[Expr_TApply("cvt_bits_uint.0",[8],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(32,8)])]);8]),8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,32)])])]))
-  ],[],[])
-  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse2__5");'0000000000010000']),[
-  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse2__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_TApply("mul_bits.0",[16],[Expr_Var("Cse2__5");'0000000000001000']);'0000000000001000']);32]);'00000000000000000000000010000000'])]));
-  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[16;48],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(48,16)]);Expr_TApply("append_bits.0",[8;40],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(Expr_TApply("mul_int.0",[],[Expr_TApply("cvt_bits_uint.0",[8],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(40,8)])]);8]),8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,40)])])]))
+  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse3__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_Var("Cse2__5");'0000000000001000']);32]);'00000000000000000000000010000000'])]));
+  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[8;56],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(56,8)]);Expr_TApply("append_bits.0",[8;48],[Expr_Slices(Expr_TApply("lsr_bits.0",[128;32],[Expr_Array(Expr_Var("_Z"),0);Expr_TApply("ZeroExtend.0",[16;32],[Expr_Var("Cse2__5");32])]),[Slice_LoWd(0,8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,48)])])]))
   ],[],[])
   Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse1__5");'0000000000010000']),[
-  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse1__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_TApply("mul_bits.0",[16],[Expr_Var("Cse1__5");'0000000000001000']);'0000000000001000']);32]);'00000000000000000000000010000000'])]));
-  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[8;56],[Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(56,8)]);Expr_TApply("append_bits.0",[8;48],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(Expr_TApply("mul_int.0",[],[Expr_TApply("cvt_bits_uint.0",[8],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(48,8)])]);8]),8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,48)])])]))
-  ],[],[])
-  Stmt_If(Expr_TApply("slt_bits.0",[16],[Expr_Var("Cse0__5");'0000000000010000']),[
-  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse0__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_TApply("mul_bits.0",[16],[Expr_Var("Cse0__5");'0000000000001000']);'0000000000001000']);32]);'00000000000000000000000010000000'])]));
-  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[8;56],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(Expr_TApply("mul_int.0",[],[Expr_TApply("cvt_bits_uint.0",[8],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(56,8)])]);8]),8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,56)])]))
+  Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[16],['0000000000000000';Expr_Var("Cse1__5")]);Expr_TApply("sle_bits.0",[32],[Expr_TApply("ZeroExtend.0",[16;32],[Expr_TApply("add_bits.0",[16],[Expr_Var("Cse0__5");'0000000000001000']);32]);'00000000000000000000000010000000'])]));
+  Stmt_Assign(LExpr_Var("result__4"),Expr_TApply("append_bits.0",[8;56],[Expr_Slices(Expr_TApply("lsr_bits.0",[128;32],[Expr_Array(Expr_Var("_Z"),0);Expr_TApply("ZeroExtend.0",[16;32],[Expr_Var("Cse0__5");32])]),[Slice_LoWd(0,8)]);Expr_Slices(Expr_Var("result__4"),[Slice_LoWd(0,56)])]))
   ],[],[])
   Stmt_Assign(LExpr_Array(LExpr_Var("_Z"),0),Expr_TApply("ZeroExtend.0",[64;128],[Expr_Var("result__4");128]))
   "
