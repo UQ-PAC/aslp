@@ -58,3 +58,26 @@ jobs:
     - run: dune build offlineASL -j4
 
     - run: dune build @offline-coverage -j4
+
+  offline-cpp:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: cachix/install-nix-action@v25
+    - run: echo 'preparing nix shell environment'
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - run: python -m pip install 'meson~=1.4.0' 'ninja'
+
+    - run: dune build --profile release
+    - run: echo ':gen A64 .* cpp' | OCAMLRUNPARAM=b dune exec asli
+
+    - run: LLVM_CONFIG=$(which llvm-config-17) offlineASL-cpp/check.py
+
+    - name: 'syntax check generated C++ lifter'
+      run: meson compile -C offlineASL-cpp/build

@@ -3,7 +3,7 @@ project('aslp-lifter-llvm', 'cpp',
   default_options : [ 'warning_level=3', 'cpp_std=c++20' ])
 
 version = meson.project_version()
-llvm_dep = dependency('llvm', version: ['>=17', '<19'])
+llvm_dep = dependency('llvm', version: ['>=16', '<19'])
 empty_dep = dependency('', required: false)
 
 lifter_dep = dependency('aslp-lifter', version: version, fallback: ['aslp-lifter', 'gen_dep'])
