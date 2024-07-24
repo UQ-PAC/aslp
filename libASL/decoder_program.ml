@@ -179,10 +179,10 @@ let run include_pc iset pat env =
 
   (* Find all matching instructions, pulled from testing.ml *)
   let decoder = Eval.Env.getDecoder env (Ident iset) in
-  let re = Pcre.regexp pat in
+  let re = Str.regexp pat in
   let filterfn = function
     | ((Encoding_Block (Ident nm, Ident is, _, _, _, _, _, _)),_,_,_) ->
-        is = iset && Pcre.pmatch ~rex:re nm
+        is = iset && Str.string_match re nm 0
     | _ -> assert false
   in
   let encs = List.filter filterfn (Eval.Env.listInstructions env) in

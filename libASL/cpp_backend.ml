@@ -514,21 +514,7 @@ let write_explicit_instantiations cppfuns prefix dir =
     files
 
 (* Installs non-generated support headers, e.g. interface definition *)
-let install_headers prefix dir =
-  let res = List.nth Res.Sites.aslfiles 0 ^ "/include/aslp" in
-  let files = Array.to_list @@ Sys.readdir res in
-  let files = List.filter (String.ends_with ~suffix:".hpp") files in
-  List.map
-    (fun f ->
-      let i = open_in_bin (res ^ "/" ^ f) in
-      let size = in_channel_length i in
-      let path = (prefix ^ "/" ^ dir ^ "/" ^ Filename.basename f) in
-      let o = open_out_bin path in
-      output_string o (really_input_string i size);
-      close_in i;
-      close_out o;
-      path)
-    files
+let install_headers prefix dir = ()
 
 (* Write all of the above, expecting Utils.ml to already be present in dir *)
 let run dfn dfnsig tests fns root =

@@ -23,13 +23,13 @@ let opt_prelude : string ref = ref "prelude.asl"
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
 let opt_no_default_aarch64 = ref false
-let opt_print_aarch64_dir = ref false
+let opt_export_aarch64_dir = ref ""
 let opt_verbose = ref false
 
-let opt_debug_level = ref (-1)
 
-
-let () = Printexc.register_printer
+let () = 
+    Printexc.record_backtrace true ;
+    Printexc.register_printer
     (function
     | Value.EvalError (loc, msg) ->
         Some (Printf.sprintf "EvalError at %s: %s" (pp_loc loc) msg)
@@ -60,22 +60,7 @@ let help_msg = [
 let gen_backends = [
     ("ocaml", (Cpu.Ocaml, "offlineASL"));
     ("cpp",   (Cpu.Cpp, "offlineASL-cpp"));
-    ("scala",   (Cpu.Scala, "offlineASL-cpp"));
 ]
-
-let flags = [
-    ("trace:write", Eval.trace_write);
-    ("trace:fun",   Eval.trace_funcall);
-    ("trace:prim",  Eval.trace_primop);
-    ("trace:instr", Eval.trace_instruction);
-    ("eval:concrete_unknown", Value.concrete_unknown)
-]
-
-let mkLoc (fname: string) (input: string): AST.l =
-    let len = String.length input in
-    let start : Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 } in
-    let finish: Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = len } in
-    AST.Range (start, finish)
 
 let () = Random.self_init ()
 
@@ -136,7 +121,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                 let lenv = Dis.build_env disEnv in
 
                 let opcode = input_line inchan in
-                let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
+                let op = Z.of_string opcode in
 
                 (* Printf.printf "PRE Eval env: %s\n\n" (Testing.pp_eval_env evalEnv);
                 Printf.printf "PRE Dis eval env: %s\n\n" (Testing.pp_eval_env disEvalEnv); *)
@@ -174,7 +159,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     | [":help"] | [":?"] ->
         List.iter print_endline help_msg;
         print_endline "\nFlags:";
-        List.iter (fun (nm, v) -> Printf.printf "  %s%s\n" (if !v then "+" else "-") nm) flags
+        Flags.StringMap.iter (fun nm v -> Printf.printf "  %s%s\n" (if v then "+" else "-") nm) (Flags.get_flags ())
     | [":opcode"; iset; opcode] ->
         (* todo: make this code more robust *)
         let op = Z.of_string opcode in
@@ -206,7 +191,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
         cpu'.sem iset op
     | ":ast" :: iset :: opcode :: rest when List.length rest <= 1 ->
-        let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_string opcode)) in
+        let op = Z.of_string opcode in
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
         let chan_opt = Option.map open_out (List.nth_opt rest 0) in
         let chan = Option.value chan_opt ~default:stdout in
@@ -215,7 +200,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             (Dis.dis_decode_entry cpu.env cpu.denv decoder op);
         Option.iter close_out chan_opt
     | ":gen" :: iset :: id :: rest when List.length rest <= 3 ->
-        let pc_option = Option.value List.(nth_opt rest 1) ~default:"false" in
+        let pc_option = Option.value List.(nth_opt rest 0) ~default:"false" in
         let backend = Option.value List.(nth_opt rest 0) ~default:"ocaml" in
         Printf.printf "Generating lifter for %s %s with pc option %s using %s backend\n" iset id pc_option backend;
 
@@ -241,9 +226,8 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         in
         let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env) cpu.denv in
         let op = Z.of_string opcode in
-        let bits = VBits (Primops.prim_cvt_int_bits (Z.of_int 32) op) in
         let decoder = Eval.Env.getDecoder cpu'.env (Ident iset) in
-        let stmts = Dis.dis_decode_entry cpu'.env cpu.denv decoder bits in
+        let stmts = Dis.dis_decode_entry cpu'.env cpu.denv decoder op in
         let chan = open_out_bin fname in
         Printf.printf "Dumping instruction semantics for %s %s" iset (Z.format "%x" op);
         Printf.printf " to file %s\n" fname;
@@ -251,21 +235,9 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         Marshal.to_channel chan (stmts : stmt list) [];
         close_out chan
     | (":set" :: "impdef" :: rest) ->
-        let cmd = String.concat " " rest in
-        let loc = mkLoc fname cmd in
-        let (x, e) = LoadASL.read_impdef tcenv loc cmd in
-        let v = Eval.eval_expr loc cpu.env e in
-        Eval.Env.setImpdef cpu.env x v
-    | [":set"; flag] when Utils.startswith flag "+" ->
-        (match List.assoc_opt (Utils.stringDrop 1 flag) flags with
-        | None -> Printf.printf "Unknown flag %s\n" flag;
-        | Some f -> f := true
-        )
-    | [":set"; flag] when Utils.startswith flag "-" ->
-        (match List.assoc_opt (Utils.stringDrop 1 flag) flags with
-        | None -> Printf.printf "Unknown flag %s\n" flag;
-        | Some f -> f := false
-        )
+        Eval.set_impdef tcenv cpu.env fname rest
+    | [":set"; flag] ->
+        Flags.set_flag flag
     | [":project"; prj] ->
         let inchan = open_in prj in
         (try
@@ -292,7 +264,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             let s = LoadASL.read_stmt tcenv input in
             Eval.eval_stmt cpu.env s
         end else begin
-            let loc = mkLoc fname input in
+            let loc = LoadASL.mkLoc fname input in
             let e   = LoadASL.read_expr tcenv loc input in
             let v   = Eval.eval_expr loc cpu.env e in
             print_endline (Value.pp_value v)
@@ -326,12 +298,13 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
     )
 
 let options = Arg.align ([
-    ( "-x", Arg.Set_int opt_debug_level,      "       Partial evaluation debugging (requires debug level argument >= 0)");
+    ( "-x", Arg.Set_int Dis.debug_level,      "       Partial evaluation debugging (requires debug level argument >= 0)");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
-    ( "--no-aarch64", Arg.Set opt_no_default_aarch64 , "       Disable bundled AArch64 semantics");
-    ( "--aarch64-dir", Arg.Set opt_print_aarch64_dir, "       Print directory of bundled AArch64 semantics");
+    ( "--no-aarch64", Arg.Set opt_no_default_aarch64 ,    "       Disable bundled AArch64 semantics");
+    ( "--export-aarch64", Arg.Set_string opt_export_aarch64_dir,  "       Export bundled AArch64 MRA to the given directory");
     ( "--version", Arg.Set opt_print_version, "       Print version");
     ( "--prelude", Arg.Set_string opt_prelude,"       ASL prelude file (default: ./prelude.asl)");
+    ( "--flag", Arg.String Flags.set_flag,          "       Behaviour flags to set (+) or unset (-)");
 ] )
 
 let version = "ASL 0.2.0 alpha"
@@ -357,39 +330,40 @@ let _ =
 
 let main () =
     if !opt_print_version then Printf.printf "%s\n" version
-    else if !opt_print_aarch64_dir then 
-        match aarch64_asl_dir with 
-        | Some d -> Printf.printf "%s\n" d
-        | None -> (Printf.eprintf "Unable to retrieve installed asl directory\n"; exit 1)
+    else if "" <> !opt_export_aarch64_dir then
+        let dir = !opt_export_aarch64_dir in
+        ignore @@ Sys.readdir dir;
+        List.iter LoadASL.(write_source dir) Arm_env.(prelude_blob :: asl_blobs);
     else begin
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
+
+        let sources = List.map (fun x -> LoadASL.FileSource x) !opt_filenames in
+        (* Note: .prj files are handled by `evaluation_environment`. *)
         let env_opt =
             if (!opt_no_default_aarch64)  
-            then evaluation_environment !opt_prelude !opt_filenames !opt_verbose
+            then evaluation_environment (FileSource !opt_prelude) sources !opt_verbose
             else begin
                 if List.length (!opt_filenames) != 0 then
                     Printf.printf
                         "Warning: asl file arguments ignored without --no-aarch64 (%s)\n"
                         (String.concat " " !opt_filenames)
                 else ();
-                aarch64_evaluation_environment ~verbose:!opt_verbose ();
+                Arm_env.aarch64_evaluation_environment ~verbose:!opt_verbose ();
             end in
+
         let env = (match env_opt with 
             | Some e -> e
             | None -> failwith "Unable to build evaluation environment.") in
-        if not !opt_no_default_aarch64 then
-            opt_filenames := snd (Option.get aarch64_asl_files); (* (!) should be safe if environment built successfully. *)
+
         if !opt_verbose then Printf.printf "Built evaluation environment\n";
-        Dis.debug_level := !opt_debug_level;
 
         LNoise.history_load ~filename:"asl_history" |> ignore;
         LNoise.history_set ~max_length:100 |> ignore;
         
         let denv = Dis.build_env env in
-        let prj_files = List.filter (fun f -> Utils.endswith f ".prj") !opt_filenames in
-        let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env denv in
-        List.iter (fun f -> process_command tcenv cpu "<args>" (":project " ^ f)) prj_files;
+        let tcenv = TC.Env.mkEnv !TC.env0 and cpu = Cpu.mkCPU env denv in
+
         repl tcenv cpu
     end
 

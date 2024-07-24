@@ -39,7 +39,9 @@ bits(N) sdiv_bits(bits(N) x, bits(N) y)
 
 bits(N1) lsl_bits(bits(N1) x, bits(N2) y)
     integer yn = SInt(y);
-    return LSL(x, yn);
+    // LSL will assert if yn is negative, but we assume this
+    // operation is pure. Wrap it to be identity in this case.
+    return if yn < 0 then x else LSL(x, yn);
 
 bits(N1) lsr_bits(bits(N1) x, bits(N2) y)
     integer yn = SInt(y);
@@ -325,7 +327,115 @@ integer LowestSetBit(bits(N) x)
     else
         return N;
 
+bits(W) ite(boolean c, bits(W) x, bits(W) y)
+  return if c then x else y;
 
+// Vector Operations
+
+bits(W * N) add_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, W] = Elem[x, i, W] + Elem[y, i, W];
+  return result;
+
+bits(W * N) sub_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, W] = Elem[x, i, W] - Elem[y, i, W];
+  return result;
+
+bits(W * N) mul_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, W] = Elem[x, i, W] * Elem[y, i, W];
+  return result;
+
+bits(W * N) sdiv_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, W] = sdiv_bits(Elem[x, i, W], Elem[y, i, W]);
+  return result;
+
+bits(W * N) lsr_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, W] = lsr_bits(Elem[x, i, W], Elem[y, i, W]);
+  return result;
+
+bits(W * N) asr_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, W] = asr_bits(Elem[x, i, W], Elem[y, i, W]);
+  return result;
+
+bits(W * N) lsl_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, W] = lsl_bits(Elem[x, i, W], Elem[y, i, W]);
+  return result;
+
+bits(W * N) ite_vec(bits(N) c, bits(W * N) x, bits(W * N) y, integer N)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, W] = if c[i] == '1' then Elem[x, i, W] else Elem[y, i, W];
+  return result;
+
+bits(N) sle_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, 1] = if sle_bits(Elem[x, i, W],Elem[y, i, W]) then '1' else '0';
+  return result;
+
+bits(N) slt_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, 1] = if slt_bits(Elem[x, i, W], Elem[y, i, W]) then '1' else '0';
+  return result;
+
+bits(N) eq_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, 1] = if (Elem[x, i, W] == Elem[y, i, W]) then '1' else '0';
+  return result;
+
+bits(NW * N) zcast_vec(bits(W * N) x, integer N, integer NW)
+  bits(NW * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, NW] = ZeroExtend(Elem[x, i, W], NW);
+  return result;
+
+bits(NW * N) scast_vec(bits(W * N) x, integer N, integer NW)
+  bits(NW * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, NW] = SignExtend(Elem[x, i, W], NW);
+  return result;
+
+bits(NW * N) trunc_vec(bits(W * N) x, integer N, integer NW)
+  bits(NW * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, NW] = (Elem[x, i, W])[ 0 +: NW ];
+  return result;
+
+bits(W * N) select_vec(bits(W * M) x, bits(32 * N) sel)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    integer pos = UInt(Elem[sel,i,32]);
+    Elem[result, i, W] = Elem[x,pos,W];
+  return result;
+
+bits(W * N) shuffle_vec(bits(W * M) x, bits(W * M) y, bits(32 * N) sel)
+  bits(W * N) result;
+  bits(W * M * 2) input = x:y;
+  for i = 0 to (N - 1)
+    integer pos = UInt(Elem[sel,i,32]);
+    Elem[result, i, W] = Elem[input,pos,W];
+  return result;
+
+bits(W) reduce_add(bits(W * N) x, bits(W) init)
+  bits(W) result = init;
+  for i = 0 to (N - 1)
+    result = result + Elem[x,i,W];
+  return result;
 
 // bits(8*size) _Mem[AddressDescriptor desc, integer size, AccessDescriptor accdesc];
 // _Mem[AddressDescriptor desc, integer size, AccessDescriptor accdesc] = bits(8*size) value;

@@ -13,16 +13,13 @@ open Asl_utils
    These "try" decoding each opcode. *)
 
 (** Try to evaluate an "encoding" block to the given opcode. *)
-let rec try_encoding (env: Env.t) (x: encoding) (op: value): bool =
+let rec try_encoding (env: Env.t) (x: encoding) (op: Primops.bigint): bool =
   let Encoding_Block (nm, iset, fields, opcode, guard, unpreds, b, loc) = x in
   (* todo: consider checking iset *)
   (* Printf.printf "Checking opcode match %s == %s\n" (Utils.to_string (PP.pp_opcode_value opcode)) (pp_value op); *)
-  let ok = (match opcode with
-  | Opcode_Bits b -> eval_eq     loc op (from_bitsLit b)
-  | Opcode_Mask m -> eval_inmask loc op (from_maskLit m)
-  ) in
   let trace_instruction = ref false in
-  if ok then begin
+  match Eval.eval_opcode_guard loc opcode op with
+  | Some op ->
       if !trace_instruction then Printf.printf "TRACE: instruction %s\n" (pprint_ident nm);
       List.iter (function (IField_Field (f, lo, wd)) ->
           let v = extract_bits' loc op lo wd in
@@ -42,12 +39,10 @@ let rec try_encoding (env: Env.t) (x: encoding) (op: value): bool =
       end else begin
           false
       end
-  end else begin
-      false
-  end
+  | None -> false
 
 (** Tests whether the given opcode can be decoded by the given decode case. *)
-and try_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): ident option =
+and try_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: Primops.bigint): ident option =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
             let vs = List.map (fun s -> Eval.eval_decode_slice loc env s op) ss in
@@ -65,7 +60,7 @@ and try_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): iden
     )
 
 (** Tests whether the given opcode is decodable by the given decode case alternative.  *)
-and try_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): ident option =
+and try_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: Primops.bigint): ident option =
     if List.for_all2 (Eval.eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
@@ -81,6 +76,7 @@ and try_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
         | DecoderBody_Decoder (fs, c, loc) ->
                 (* let env = Env.empty in  *)
                 List.iter (function (IField_Field (f, lo, wd)) ->
+                    let op = Value.from_bitsInt (lo+wd) op in
                     Env.addLocalVar loc env f (extract_bits' loc op lo wd)
                 ) fs;
                 try_decode_case loc env c op
@@ -152,7 +148,7 @@ let enumerate_opcodes (env: Env.t) (case: decode_case) start stop fname: unit =
 
   while !i <> stop do
     let opresult =
-      (try try_decode_case Unknown env case (VBits {n=32; v=Z.of_int !i})
+      (try try_decode_case Unknown env case (Z.of_int !i)
       with Throw _ -> None) in
 
     (match opresult with
@@ -370,7 +366,7 @@ type 'a opresult = ('a, operror) Result.t
 
 let pp_opresult f = Result.fold ~ok:f ~error:pp_operror
 
-let op_eval (env: Env.t) (iset: string) (op: value): Env.t opresult =
+let op_eval (env: Env.t) (iset: string) (op: Primops.bigint): Env.t opresult =
   let evalenv = Env.copy env in
   let decoder = Eval.Env.getDecoder evalenv (Ident iset) in
   try
@@ -379,7 +375,7 @@ let op_eval (env: Env.t) (iset: string) (op: value): Env.t opresult =
   with
     | e -> Result.Error (Op_EvalFail e)
 
-let op_dis (env: Env.t) (iset: string) (op: value): stmt list opresult =
+let op_dis (env: Env.t) (iset: string) (op: Primops.bigint): stmt list opresult =
   let env = Env.copy env in
   let lenv = Dis.build_env env in
   let decoder = Eval.Env.getDecoder env (Ident iset) in
@@ -404,7 +400,7 @@ let op_compare ((evalenv, disenv): Env.t * Env.t): Env.t opresult =
     Result.Error (Op_DisEvalNotEqual)
 
 let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
-  let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int op)) in
+  let op = Z.of_int op in
 
   let initenv = Env.copy env in
   Random.self_init ();
@@ -423,10 +419,10 @@ let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
 let get_opcodes (opt_verbose: bool ref) (iset: string) (instr: string) (env: Env.t): (string * instr_field list * ((int * bool) list) option) list =
   if !opt_verbose then Printf.printf "Coverage for encoding %s\n" instr;
 
-  let re = Pcre.regexp instr in
+  let re = Str.regexp instr in
   let encoding_matches = function
       | (Encoding_Block (Ident nm, Ident is, _, _, _, _, _, _)) ->
-          is = iset && Pcre.pmatch ~rex:re nm
+          is = iset && Str.string_match re nm 0
       | _ -> assert false
   in
   let encs = List.map (fun (x,_,_,_) -> x) (Env.listInstructions env) in

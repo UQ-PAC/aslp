@@ -5,6 +5,8 @@ open Value
 open Asl_utils
 open Primops
 
+let use_vectoriser = ref false
+
 type sym =
   | Val of value
   | Exp of expr
@@ -549,11 +551,16 @@ and sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
 
 (** Wrapper around sym_slice to handle cases of symbolic slice bounds *)
 let sym_extract_bits loc v i w =
-  match ( i, w) with
-  | (Val i', Val w') ->
+  match (v, i, w) with
+  (* Constant slice *)
+  | _, Val i', Val w' ->
       let i' = to_int loc i' in
       let w' = to_int loc w' in
       sym_slice loc v i' w'
+  (* Nested slice *)
+  | Exp (Expr_Slices (e, [Slice_LoWd (lo,wd)])), lo', wd' ->
+      let lo = sym_add_int loc (Exp lo) lo' in
+      Exp (Expr_Slices (e, [Slice_LoWd (sym_expr lo, sym_expr wd')]))
   | _ -> Exp (Expr_Slices (sym_expr v, [Slice_LoWd (sym_expr i, sym_expr w)]))
 
 let sym_zero_extend num_zeros old_width e =
@@ -589,6 +596,12 @@ let sym_lsl_bits loc w x y =
   | _ ->
       sym_prim (FIdent ("LSL", 0)) [sym_of_int w] [x;y]
 
+let zdiv_int x y =
+  match x, y with
+  | Val (VInt i), Val (VInt j) -> Val (VInt (Z.div i j))
+  | _, Val (VInt i) when i = Z.one -> x
+  | _ -> Exp (Expr_TApply (FIdent ("sdiv_int", 0), [], [sym_expr x; sym_expr y]))
+
 (** Overwrite bits from position lo up to (lo+wd) exclusive of old with the value v.
     Needs to know the widths of both old and v to perform the operation.
     Assumes width of v is equal to wd.
@@ -606,6 +619,15 @@ let sym_insert_bits loc (old_width: int) (old: sym) (lo: sym) (wd: sym) (v: sym)
       else
         sym_append_bits loc (old_width - up) up (sym_slice loc old up (old_width - up))
           (sym_append_bits loc wd lo v (sym_slice loc old 0 lo))
+  | (_, _, Val wd', _) when Primops.prim_zrem_int (Z.of_int old_width) (to_integer Unknown wd') = Z.zero && !use_vectoriser ->
+      (* Elem.set *)
+      let pos = zdiv_int lo wd in
+      Exp ( Expr_TApply (FIdent("Elem.set", 0), [expr_of_int old_width ; sym_expr wd],
+          List.map sym_expr [old ; pos ; wd ; v]) )
+  | (_, Val (VInt l), _, _) when l = Z.zero && !use_vectoriser ->
+      Exp (Expr_TApply (FIdent ("Elem.set", 0), [expr_of_int old_width ; sym_expr wd],
+          List.map sym_expr [old ; lo ; wd ; v]))
+
   | (_, _, Val wd', _) ->
       (* Build an insert out of bitvector masking operations *)
       let wd = to_int loc wd' in
@@ -665,6 +687,25 @@ let is_insert_mask (b: bitvector): (int * int) option =
       end
   | _ -> None
 
+(*
+let rec elem_read_collapse vw ew v j =
+  match v with
+  | Expr_TApply (FIdent ("Elem.set", 0), [Expr_LitInt vw'; Expr_LitInt ew'], [v; Expr_LitInt i; _; e])
+      when vw = Z.of_string vw' && ew = Z.of_string ew' && Z.of_string i = j ->
+        e
+  | Expr_TApply (FIdent ("Elem.set", 0), [Expr_LitInt vw'; Expr_LitInt ew'], [v; Expr_LitInt i; _; e])
+      when vw = Z.of_string vw' && ew = Z.of_string ew' && Z.of_string i <> j ->
+        elem_read_collapse vw ew v j
+  | Expr_Slices (v, [Slice_LoWd(Expr_LitInt lo, Expr_LitInt wd)]) 
+      when Z.equal (Z.rem (Z.of_string lo) ew) Z.zero ->
+        elem_read_collapse (Z.add vw vw) ew v (Z.add j (Z.div (Z.of_string lo) ew))
+  | _ -> 
+    (Expr_TApply (FIdent ("Elem.read", 0), [Expr_LitInt (Z.to_string vw); Expr_LitInt (Z.to_string ew)], [v; Expr_LitInt (Z.to_string j); Expr_LitInt (Z.to_string ew)]))
+*)
+  (*| ("Elem.read", [Val (VInt vw); Val (VInt ew)], [Exp v; Val (VInt j); _]) ->
+      let e = elem_read_collapse vw ew v j in
+      Some (Exp e)*)
+
 let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option =
   let loc = Unknown in
 
@@ -679,7 +720,6 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
 
   | ("sub_int",     _,                [x1; x2]) -> 
       Some (sym_sub_int loc x1 x2)
-
 
   | ("mul_int",     _,                [Val x1; x2])       when is_one x1 -> Some x2
   | ("mul_int",     _,                [x1; Val x2])       when is_one x2 -> Some x1

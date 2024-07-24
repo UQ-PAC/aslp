@@ -54,6 +54,7 @@ let prim_type fi targs =
   | ("mul_int",           [      ])     -> Some (Value.type_integer )
   | ("zdiv_int",          [      ])     -> Some (Value.type_integer )
   | ("zrem_int",          [      ])     -> Some (Value.type_integer )
+  | ("sdiv_int",          [      ])     -> Some (Value.type_integer )
   | ("fdiv_int",          [      ])     -> Some (Value.type_integer )
   | ("frem_int",          [      ])     -> Some (Value.type_integer )
   | ("mod_pow2_int",      [      ])     -> Some (Value.type_integer )
