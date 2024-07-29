@@ -1508,15 +1508,11 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
 
                     let@ (lenv',stmts) = DisEnv.locally_ (
                         let@ () = DisEnv.modify (LocalEnv.addLevel) in
-                        let@ () = (match opost with
-                          | Some post ->
-                              if !debug_level >= 2 then begin
-                                Printf.printf "also disassembling __postdecode...\n"
-                              end;
-                              dis_stmts post
-                          | None -> DisEnv.unit
+                        let exec_with_post = (match opost with
+                          | Some post -> post @ exec
+                          | None -> exec
                         ) in
-                        let@ () = dis_stmts exec in
+                        let@ () = dis_stmts exec_with_post in
                         DisEnv.modify (LocalEnv.popLevel)
                     ) in
                     let stmts = flatten stmts [] in
