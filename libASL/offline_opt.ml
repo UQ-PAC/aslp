@@ -313,7 +313,7 @@ module TailCallForm = struct
   end
 
   type st = {
-    const_var_types: ty Bindings.t; (* not here means global *)
+    const_var_types: (ty * bool) Bindings.t; (* not here means global *)
     live_vars: IdentSet.t;
   }
 
@@ -334,36 +334,53 @@ module TailCallForm = struct
     body: stmt list;
   }
 
-    (* backwards walk, assuming rem has body in reverse order *)
+    (* backwards walk, accumlate statements in accl until over outline threshold, then replace with a call 
+       to a function including accl statements. Assuming rem has body in reverse order 
+
+      rem: function being processed containing reversed statement list, minus statements in accl
+      accl: forwards statement list of the previously-visited last n statements of the function rem
+      acc: list of functions emitted by analysis
+      count: cumulative count of accl statement/expression complexity
+      returning: is the current function rem returning a value.
+    *)
     let rec walk_stmts threshold (st:st) (rem:fn) (accl:stmt list) (acc:fn list) count returning =
     (* TODO: also outline if statement bodies*)
       match rem.body with 
         | [] -> {rem with body = accl}::acc
         | s::tl -> 
-          let returning = match s with 
+          (let returning = (match s with 
             | Stmt_FunReturn _ -> true
-            | _ -> returning
-          in 
-        let scount = (s_count s) in
-        let count = count + scount  in
-        let st' = {st with live_vars = IdentSet.union (fv_stmt s) st.live_vars} in
-        if (count > threshold) then 
-          let nfname = new_name (rem.name)  in
-          let arglist = IdentSet.filter (fun i -> (Bindings.mem i st.const_var_types)) st.live_vars in
-          let arglist = IdentSet.to_seq arglist |> List.of_seq in
-          let newfun : fn = {name=nfname; targs=[]; args=List.map (fun i -> Bindings.find i st.const_var_types, i) arglist; 
-            returning; 
-            body=s::accl} 
-          in
-          let argslist = List.map (fun i -> Expr_Var i) arglist in
-          let call =  if returning 
-            then Stmt_FunReturn (Expr_TApply (newfun.name, [], argslist), Unknown) 
-            else Stmt_TCall (newfun.name, [], argslist, Unknown) in
-          (walk_stmts threshold st' {rem with body = tl; returning = returning} [s; call] (newfun::acc) 
-          (if scount < threshold then scount else (Printf.printf "warn: single statement over outline threshold %d in %s\n" scount (pprint_ident rem.name); 0 ))
-          returning)
-        else
-          (walk_stmts threshold st' {rem with body = tl; returning = returning} (s::accl) acc count returning)
+            | _ -> returning)
+          in let scount = (s_count s) in
+          if (scount > threshold) then (Printf.printf "warn: single statement over outline threshold %d in %s\n" scount (pprint_ident rem.name));
+          let count = count + scount  in
+          let st' = {st with live_vars = IdentSet.union (fv_stmt s) st.live_vars} in
+          if (count > threshold) then 
+            let nfname = new_name (rem.name)  in
+            let arglist = IdentSet.filter (fun i -> (Bindings.mem i st.const_var_types)) st.live_vars in
+            let id_mutable_arg i = (match (i, Bindings.find i st.const_var_types) with 
+              | (Ident n, (_, true)) -> Ident (n ^ "_mutable")
+              | (i, _) -> i
+              )
+            in
+            let arglist = IdentSet.map id_mutable_arg arglist in
+            let arglist = IdentSet.to_seq arglist |> List.of_seq in
+            let mutable_decls = Bindings.filter (fun i (t,b) -> b) st.const_var_types in
+            let mutable_decls = Bindings.to_seq mutable_decls |> Seq.map (fun (i,(t,b)) -> Stmt_VarDecl (t, i, Expr_Var (id_mutable_arg i), Unknown)) |> List.of_seq in
+            let newfun : fn = {name=nfname; targs=[]; args=List.map (fun i -> fst (Bindings.find i st.const_var_types) , i) arglist; 
+              returning; 
+              body=mutable_decls @ s::accl}
+            in
+            let argslist = List.map (fun i -> Expr_Var i) arglist in
+            let call =  if returning 
+              then Stmt_FunReturn (Expr_TApply (newfun.name, [], argslist), Unknown) 
+              else Stmt_TCall (newfun.name, [], argslist, Unknown) in
+            (walk_stmts threshold st' {rem with body = tl; returning = returning} [s; call] (newfun::acc) 
+            (if scount < threshold then scount else 0)
+            returning)
+          else
+            (walk_stmts threshold st' {rem with body = tl; returning = returning} (s::accl) acc count returning)
+          )
 
   let outline threshold name (fn: Eval.fun_sig) : (ident * Eval.fun_sig) list =  
     let f = {name=name; 
@@ -372,9 +389,8 @@ module TailCallForm = struct
       args=fnsig_get_typed_args fn; 
       body=List.rev (fnsig_get_body fn);
     } in 
-    (* TODO: handle mutable parameters (probably just another identset)*)
-    let defs = locals_of_stmts (fnsig_get_body fn) in
-    let ns =  {const_var_types = defs; live_vars = IdentSet.empty} in 
+    let mutabledefs = (mutable_locals_of_stmts (fnsig_get_body fn)) in
+    let ns =  {const_var_types = mutabledefs ; live_vars = IdentSet.empty} in 
     let upd x y = x  in
     let funcs = walk_stmts threshold ns f [] [] 0 false  in
     List.map (fun f -> f.name, 

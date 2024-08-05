@@ -272,6 +272,10 @@ class localsClass = object (self)
         List.fold_right (Bindings.union merge) stack Bindings.empty |>
         Bindings.filter (fun _ (_,b) -> b)
 
+    method all_locals =
+        let merge _ x y = Some x in
+        List.fold_right (Bindings.union merge) stack Bindings.empty
+
     method locals =
         let merge _ x y = Some x in
         List.fold_right (Bindings.union merge) stack Bindings.empty |>
@@ -304,10 +308,16 @@ let locals_of_stmts stmts =
     ignore @@ Asl_visitor.visit_stmts lc stmts;
     lc#locals
 
+let mutable_locals_of_stmts stmts =
+    let lc = new localsClass in
+    ignore @@ Asl_visitor.visit_stmts lc stmts;
+    lc#all_locals
+
 let locals_of_decl decl =
     let lc = new localsClass in
     ignore (Visitor.mapNoCopy (visit_decl (lc :> aslVisitor)) decl);
     lc#locals
+
 
 (****************************************************************)
 (** {2 Calculate types used in expressions and statements}      *)
