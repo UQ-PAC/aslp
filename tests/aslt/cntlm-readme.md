@@ -6,3 +6,7 @@ to generate cntlm-ops.txt:
 ```bash
 cat cntlm-isns.txt | cut -d' ' -f1 | xargs printf '0x%s\n'
 ```
+to generate cntlm-vec-ops.txt:
+```bash
+grep 'v[0-9]\.' cntlm-isns.txt | cut -d' ' -f1 | xargs printf '0x%s\n'
+```
