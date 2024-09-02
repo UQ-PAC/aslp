@@ -13,7 +13,7 @@ object Main {
     val op_num = BigInt(opc.stripPrefix("0x"), 16);
     val pc_num = BigInt(pcn);
 
-    Lifter.liftOpcode(op_num, pc_num)
+    TrivialLifter.liftOpcode(op_num, pc_num)
   }
 
   def main(args: Array[String]): Unit = ParserForMethods(this).runOrExit(args)

@@ -5,11 +5,11 @@ import lifter._
  * User-provided implementation of the lift-time semantics (e.g. f_eq_bits) and IBI (e.g. f_gen_eq_bits).
  */
 
-sealed trait RExpr 
-case class BitVec(val value: BigInt, val size: BigInt) extends RExpr
-case class OtherExpr() extends RExpr
+sealed trait BitVecExpr 
+case class BitVec(val value: BigInt, val size: BigInt) extends BitVecExpr
+case class OtherExpr() extends BitVecExpr
 
-class NotImplementedLifter extends LiftState[RExpr, String, BitVec] {
+class NotImplementedLifter[RExpr, BitVec <: RExpr] extends LiftState[RExpr, String, BitVec] {
   type BV = BitVec /* Lift-time bitvector representation, must be BV <: RTSym */
   type RTSym = RExpr /* Run-time expression representation */
   type RTLabel = String  /* Block/branch labels for gen_branch */
@@ -36,8 +36,8 @@ class NotImplementedLifter extends LiftState[RExpr, String, BitVec] {
   def f_asr_bits(targ0: BigInt, targ1: BigInt, arg0: BV, arg1: BV): BV = throw NotImplementedError()
   def f_lsl_bits(targ0: BigInt, targ1: BigInt, arg0: BV, arg1: BV): BV = throw NotImplementedError()
   def f_lsr_bits(targ0: BigInt, targ1: BigInt, arg0: BV, arg1: BV): BV = throw NotImplementedError()
-  def f_decl_bool(arg0: String): RTSym = throw NotImplementedError()
-  def f_decl_bv(arg0: String, arg1: BigInt): RTSym = throw NotImplementedError()
+  def f_decl_bool(arg0: String): RExpr = throw NotImplementedError()
+  def f_decl_bv(arg0: String, arg1: BigInt): RExpr = throw NotImplementedError()
   def f_AtomicEnd(): RTSym = throw NotImplementedError()
   def f_AtomicStart(): RTSym = throw NotImplementedError()
 
@@ -159,16 +159,16 @@ class NotImplementedLifter extends LiftState[RExpr, String, BitVec] {
 object Lifter {
 
   def liftOpcode(op: BigInt, sp: BigInt) = {
-    var liftState = NotImplementedLifter()
+    var liftState = NotImplementedLifter[BitVecExpr, BitVec]()
     /* Invoking the lifter */
-    val dec = f_A64_decoder[RExpr, String, BitVec](liftState, BitVec(op, 32), BitVec(sp, 64))
+    val dec = f_A64_decoder[BitVecExpr, String, BitVec](liftState, BitVec(op, 32), BitVec(sp, 64))
   }
 
 
   def liftOpcode(op: BigInt) = {
-    var liftState = NotImplementedLifter()
+    var liftState = NotImplementedLifter[BitVecExpr, BitVec]()
     /* Invoking the lifter */
-    val dec = f_A64_decoder[RExpr, String, BitVec](liftState, BitVec(op, 32), BitVec(0, 64))
+    val dec = f_A64_decoder[BitVecExpr, String, BitVec](liftState, BitVec(op, 32), BitVec(0, 64))
   }
 
 }
