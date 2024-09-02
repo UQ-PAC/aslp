@@ -8,3 +8,6 @@ cd offlineASL-scala
 mill lifter.assembly
 mill main.run --opcode 0x8b031041
 ```
+This should compile successfully. However, the last command will fail since
+the default instruction-building interface simply throws "not implemented"
+on all methods.
