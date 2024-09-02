@@ -94,7 +94,7 @@ jobs:
     - uses: coursier/cache-action@v6
     - uses: coursier/setup-action@v1
       with:
-        jvm: adopt:11
+        jvm: adopt:17
         apps: sbt mill
 
     - run: dune build --profile release
