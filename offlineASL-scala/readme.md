@@ -1,9 +1,9 @@
-Build standalone Scala lifter interface
+Build standalone Scala lifter interface.
 
-```
-# (in parent direictory)
-~ echo ':gen A64 aarch64.+ scala true scalaOfflineASL/lifter/generated' | dune exec asli
-~ cd scalaOfflineASL
-~ ./mill lifter.assembly
-~ ./mill main.run
+Requires Mill (e.g. installed by Coursier). Run in parent directory:
+```bash
+echo ':gen A64 aarch64.+ scala true offlineASL-scala/lifter/generated' | dune exec asli
+cd offlineASL-scala
+mill lifter.assembly
+mill main.run --opcode 0x8b031041
 ```

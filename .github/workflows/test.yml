@@ -60,7 +60,7 @@ jobs:
     - run: dune build @offline-coverage -j4
 
   offline-cpp:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04  # for recent llvm version
 
     steps:
     - uses: actions/checkout@v4
@@ -81,3 +81,27 @@ jobs:
 
     - name: 'syntax check generated C++ lifter'
       run: meson compile -C offlineASL-cpp/build
+
+  offline-scala:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: cachix/install-nix-action@v25
+    - run: echo 'preparing nix shell environment'
+
+    - uses: actions/setup-java@v4
+      with:
+        distribution: adopt
+        java-version: 17
+
+    - uses: coursier/cache-action@v6
+    - run: cs install mill
+
+    - run: dune build --profile release
+    - run: echo ':gen A64 .* scala true offlineASL-scala/lifter/generated' | OCAMLRUNPARAM=b dune exec asli
+
+    - run: mill lifter.assembly
+    - run: mill main.compile
+    - run: mill main.run --opcode 0x8b031041
