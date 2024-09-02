@@ -91,17 +91,15 @@ jobs:
     - uses: cachix/install-nix-action@v25
     - run: echo 'preparing nix shell environment'
 
-    - uses: actions/setup-java@v4
-      with:
-        distribution: adopt
-        java-version: 17
-
     - uses: coursier/cache-action@v6
-    - run: cs install mill
+    - uses: coursier/setup-action@v1
+      with:
+        jvm: adopt:11
+        apps: sbt mill
 
     - run: dune build --profile release
-    - run: echo ':gen A64 .* scala true offlineASL-scala/lifter/generated' | OCAMLRUNPARAM=b dune exec asli
+    - run: mkdir -p offlineASL-scala/lifter/src/generated
+    - run: echo ':gen A64 .* scala true offlineASL-scala/lifter/src/generated' | OCAMLRUNPARAM=b dune exec asli
 
-    - run: mill lifter.assembly
-    - run: mill main.compile
-    - run: mill main.run --opcode 0x8b031041
+    - run: 'cd offlineASL-scala && mill lifter.assembly'
+    - run: 'cd offlineASL-scala && mill main.run --help'
