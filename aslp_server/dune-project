@@ -5,26 +5,24 @@
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github  UQ-PAC/aslp))
 
-(authors "Author Name")
+(authors "ailrst")
+(maintainers "ailrst")
 
-(maintainers "Maintainer Name")
+(license BSD-3-Clause)
 
-(license LICENSE)
-
-(documentation https://url/to/documentation)
+(documentation https://github.com/UQ-PAC/aslp)
 
 (package
  (name aslp_server)
- (synopsis "A short synopsis")
- (description "A longer description")
+ (synopsis "REST server for ASLp")
+ (description "")
  (depends ocaml dune
     "cohttp-lwt-unix"
     "yojson"
     "asli"
  )
- (tags
-  (topics "to describe" your project)))
+ )
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
