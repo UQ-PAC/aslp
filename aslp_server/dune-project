@@ -22,7 +22,7 @@
  (depends ocaml dune
     "cohttp-lwt-unix"
     "yojson"
-    ("asli" (= 0.2.0))
+    "asli"
  )
  (tags
   (topics "to describe" your project)))
