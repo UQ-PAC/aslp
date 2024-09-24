@@ -9,15 +9,6 @@
  )
 
 (executable
- (name server)
- (public_name aslp-server)
- (modes exe)
- (modules server)
- (flags (-cclib -lstdc++))
- (libraries asli.libASL pprint lwt.unix yojson cohttp-lwt cohttp-lwt-unix))
-
-
-(executable
  (name testlexer)
  (modes exe)
  ; (public_name test_asl_lexer)
