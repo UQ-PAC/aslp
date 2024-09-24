@@ -26,6 +26,5 @@ jobs:
     - run: opam install . --deps-only --with-test
     - run: opam exec -- dune build --profile release
     - run: opam exec -- dune install
-    - run: cd aslp_server && opam install . --deps-only
-    - run: cd aslp_server && opam exec -- dune build --profile release
+    - run: opam exec -- dune build aslp_server --profile release
 
