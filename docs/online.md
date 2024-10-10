@@ -9,23 +9,24 @@ It does this "online" by recording,
 for each variable,
 whether that variable is a concrete, symbolic, or unknown value
 (in order of simplification potential).
-Concrete values are simple literals which can almost always be immediately evaluated
-in expressions.
-Pure symbolic expressions are pure transformations of a combination
-of concrete and symbolic/unknown values.
-For example, this includes "(x + 1) - 1" and this can be used to simplify
-using algebraic properties of integers and bitvectors.
-The last type, unknown, is any computation which is opaque at partial-evaluation time.
-Most often, this is register and memory accesses.
-When used in an expression, this will emit code to perform the computation and store
-it into a read-only variable, transforming it into a pure symbolic expression.
+
+- Concrete values are simple literals which can almost always be immediately evaluated
+  in expressions.
+- Pure symbolic expressions are pure transformations of a combination
+  of concrete and symbolic/unknown values.
+  For example, this includes "(x + 1) - 1" and this can be used to simplify
+  using algebraic properties of integers and bitvectors.
+- The last type, unknown, is any computation which is opaque at partial-evaluation time.
+  Most often, this is register and memory accesses.
+  When encountered in an expression, this will emit code to perform the computation and store
+  it into a read-only variable, transforming it into a pure symbolic expression.
 
 ## Implementation
 
 Within ASLp, the partial evaluation features are implemented by three files
 with different responsibilities.
 These are: symbolic.ml, dis.ml, and transforms.ml.
-This is also the order from lower-level concepts (expressions)
+This corresponds to the order from lower-level concepts (expressions)
 to higher-level ones (statements and programs).
 
 ### symbolic.ml
