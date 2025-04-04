@@ -8,6 +8,7 @@ let flags = StringMap.of_seq @@ List.to_seq [
     ("eval:concrete_unknown", Value.concrete_unknown);
     ("dis:vectors", Symbolic.use_vectoriser);
     ("dis:check_rasl", Dis.check_rasl);
+    ("tx:encode_sdiv", Transforms.encode_sdiv);
 ]
 
 let set_flag s =

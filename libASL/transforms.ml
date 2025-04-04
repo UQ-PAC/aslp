@@ -6,6 +6,8 @@ open Asl_visitor
 open Symbolic
 open Value
 
+let encode_sdiv = ref false
+
 (* TODO: Central definition of prims in result + sanity test pass *)
 let infer_type (e: expr): ty option =
   match e with
@@ -356,6 +358,12 @@ module StatefulIntToBits = struct
   let wrapper_ident = FIdent ("StatefulIntToBit_wrapper", 0)
 
   let build_div x y =
+  if (not !encode_sdiv) then  
+      let w = merge_abs (*abs_of_div*) (snd x) (snd y) in                       
+      let ex = extend w in                                                      
+      let f = sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_abs w] [ex x; ex y] in 
+      (f,w)                                                                     
+    else begin
       let wx = width (snd x) in
       let wy = width (snd y) in
       let abs = abs_of_div (snd x) (snd y) in
@@ -382,6 +390,7 @@ module StatefulIntToBits = struct
           (sym_prim (FIdent ("ite", 0)) [sym_of_abs abs] [test; Val res; ex (base_div,mgr)], abs)
         end
       end
+    end
 
   (** Covert an integer expression tree into a bitvector equivalent *)
   let rec bv_of_int_expr (st: state) (e: expr): (sym * abs) =
