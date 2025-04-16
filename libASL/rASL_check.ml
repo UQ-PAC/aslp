@@ -114,6 +114,7 @@ module AllowedIntrinsics = struct
       FIdent("slt_bits",0);
       FIdent("sle_bits",0);
       FIdent("sdiv_bits",0);
+      FIdent("udiv_bits",0);
       FIdent("ite",0);
       FIdent("eq_bool",0);
       FIdent("ne_bool",0);
@@ -143,6 +144,7 @@ module AllowedIntrinsics = struct
       FIdent("sub_vec",0);
       FIdent("mul_vec",0);
       FIdent("sdiv_vec",0);
+      FIdent("udiv_vec",0);
       FIdent("lsr_vec",0);
       FIdent("asr_vec",0);
       FIdent("lsl_vec",0);

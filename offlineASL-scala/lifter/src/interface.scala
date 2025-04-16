@@ -93,6 +93,7 @@ trait LiftState[RTSym, RTLabel, BV <: RTSym] {
   def f_gen_or_bits(targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym
   def f_gen_or_bool(arg0: RTSym, arg1: RTSym): RTSym
   def f_gen_sdiv_bits(targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym
+  def f_gen_udiv_bits(targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym
   def f_gen_sle_bits(targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym
   def f_gen_slt_bits(targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym
   def f_gen_sub_bits(targ0: BigInt, arg0: RTSym, arg1: RTSym): RTSym

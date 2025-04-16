@@ -73,6 +73,7 @@ let infer_type (e: expr): ty option =
     | "sub_bits"           -> Some(Type_Bits(num))
     | "mul_bits"           -> Some(Type_Bits(num))
     | "sdiv_bits"          -> Some(Type_Bits(num))
+    | "udiv_bits"          -> Some(Type_Bits(num))
     | "and_bits"           -> Some(Type_Bits(num))
     | "or_bits"            -> Some(Type_Bits(num))
     | "eor_bits"           -> Some(Type_Bits(num))
@@ -356,10 +357,16 @@ module StatefulIntToBits = struct
   let wrapper_ident = FIdent ("StatefulIntToBit_wrapper", 0)
 
   let build_div x y =
-    let w = abs_of_div (snd x) (snd y) in
-    let ex = extend w in
-    let f = sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_abs w] [ex x; ex y] in
-    (f,w)
+    if signed (snd x) || signed (snd y) then
+      let w = abs_of_div (snd x) (snd y) in
+      let ex = extend w in
+      let f = sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_abs w] [ex x; ex y] in
+      (f,w)
+    else
+      let w = merge_abs (snd x) (snd y) in
+      let ex = extend w in
+      let f = sym_prim (FIdent ("udiv_bits", 0)) [sym_of_abs w] [ex x; ex y] in
+      (f,w)
 
   (** Covert an integer expression tree into a bitvector equivalent *)
   let rec bv_of_int_expr (st: state) (e: expr): (sym * abs) =
@@ -417,8 +424,8 @@ module StatefulIntToBits = struct
 
     (* Interface only supports zero rounding division at present, force fdiv result to be positive *)
     | Expr_TApply (FIdent ("fdiv_int", 0), [], [x; y]) ->
-        let x = force_signed (bv_of_int_expr st x) in
-        let y = force_signed (bv_of_int_expr st y) in
+        let x = bv_of_int_expr st x in
+        let y = bv_of_int_expr st y in
         assert (is_pos x = is_pos y);
         build_div x y
 
@@ -478,8 +485,8 @@ module StatefulIntToBits = struct
         bv_of_int_expr st (Expr_LitInt n)
 
     | Expr_TApply (FIdent ("divide_real",0), [], [x; y]) ->
-        let x = force_signed (bv_of_real_expr st x) in
-        let y = force_signed (bv_of_real_expr st y) in
+        let x = bv_of_real_expr st x in
+        let y = bv_of_real_expr st y in
         build_div x y
 
     | Expr_TApply (FIdent ("cvt_int_real", 0), [], [x]) ->
@@ -865,6 +872,7 @@ module IntToBits = struct
       | FIdent ("sub_bits", 0), [Expr_LitInt n], _
       | FIdent ("mul_bits", 0), [Expr_LitInt n], _
       | FIdent ("sdiv_bits", 0), [Expr_LitInt n], _
+      | FIdent ("udiv_bits", 0), [Expr_LitInt n], _
       | FIdent ("and_bits", 0), [Expr_LitInt n], _
       | FIdent ("or_bits", 0), [Expr_LitInt n], _
       | FIdent ("eor_bits", 0), [Expr_LitInt n], _
@@ -3152,6 +3160,7 @@ module LoopClassify = struct
     "sub_bits";
     "mul_bits";
     "sdiv_bits";
+    "udiv_bits";
     "sle_bits";
     "slt_bits";
     "eq_bits";
@@ -3470,6 +3479,8 @@ module LoopClassify = struct
         Expr_TApply(FIdent("mul_vec", 0),  [iters; w], vec_args [x; y])
     | "sdiv_bits", 0, [w], [x;y] ->
         Expr_TApply(FIdent("sdiv_vec", 0), [iters; w], vec_args [x; y])
+    | "udiv_bits", 0, [w], [x;y] ->
+        Expr_TApply(FIdent("udiv_vec", 0), [iters; w], vec_args [x; y])
     | "sle_bits", 0, [w], [x;y] ->
         Expr_TApply(FIdent("sle_vec", 0),  [iters; w], vec_args [x; y])
     | "slt_bits", 0, [w], [x;y] ->

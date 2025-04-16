@@ -134,6 +134,7 @@ public:
   virtual rt_expr f_gen_add_bits(rt_expr x, rt_expr y) = 0;
   virtual rt_expr f_gen_sub_bits(rt_expr x, rt_expr y) = 0;
   virtual rt_expr f_gen_sdiv_bits(rt_expr x, rt_expr y) = 0;
+  virtual rt_expr f_gen_udiv_bits(rt_expr x, rt_expr y) = 0;
   virtual rt_expr f_gen_sle_bits(rt_expr x, rt_expr y) = 0;
   virtual rt_expr f_gen_slt_bits(rt_expr x, rt_expr y) = 0;
   virtual rt_expr f_gen_mul_bits(rt_expr x, rt_expr y) = 0;

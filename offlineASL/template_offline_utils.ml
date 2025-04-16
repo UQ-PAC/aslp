@@ -227,6 +227,8 @@ let f_gen_sub_bits w e1 e2 =
   Expr_TApply (FIdent ("sub_bits", 0), [expr_of_z w], [e1;e2])
 let f_gen_sdiv_bits w e1 e2 =
   Expr_TApply (FIdent ("sdiv_bits", 0), [expr_of_z w], [e1;e2])
+let f_gen_udiv_bits w e1 e2 =
+  Expr_TApply (FIdent ("udiv_bits", 0), [expr_of_z w], [e1;e2])
 let f_gen_sle_bits w e1 e2 =
   Expr_TApply (FIdent ("sle_bits", 0), [expr_of_z w], [e1;e2])
 let f_gen_slt_bits w e1 e2 =

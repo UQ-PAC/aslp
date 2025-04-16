@@ -37,6 +37,11 @@ bits(N) sdiv_bits(bits(N) x, bits(N) y)
     integer yn = SInt(y);
     return RoundTowardsZero(Real(xn) / Real (yn))[N-1:0];
 
+bits(N) udiv_bits(bits(N) x, bits(N) y)
+    integer xn = UInt(x);
+    integer yn = UInt(y);
+    return RoundTowardsZero(Real(xn) / Real (yn))[N-1:0];
+
 bits(N1) lsl_bits(bits(N1) x, bits(N2) y)
     integer yn = SInt(y);
     // LSL will assert if yn is negative, but we assume this
@@ -354,6 +359,12 @@ bits(W * N) sdiv_vec(bits(W * N) x, bits(W * N) y, integer N)
   bits(W * N) result;
   for i = 0 to (N - 1)
     Elem[result, i, W] = sdiv_bits(Elem[x, i, W], Elem[y, i, W]);
+  return result;
+
+bits(W * N) udiv_vec(bits(W * N) x, bits(W * N) y, integer N)
+  bits(W * N) result;
+  for i = 0 to (N - 1)
+    Elem[result, i, W] = udiv_bits(Elem[x, i, W], Elem[y, i, W]);
   return result;
 
 bits(W * N) lsr_vec(bits(W * N) x, bits(W * N) y, integer N)
