@@ -9,3 +9,9 @@
 :set impdef "Has MPAM extension" = FALSE
 
 :set impdef "Have CRC extension" = TRUE
+
+:set impdef "ARMv8.4-IDST" = FALSE
+:set impdef "Has AES Crypto instructions" = FALSE
+:set impdef "Have SVE ISA" = FALSE
+:set impdef "Has SHA256 Crypto instructions" = FALSE
+:set impdef "Has 128-bit form of PMULL instructions" = FALSE
