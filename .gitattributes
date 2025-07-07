@@ -3,5 +3,5 @@
 *.t     linguist-vendored
 *.asl   linguist-vendored
 dune.generated linguist-generated
-mill    linguist-vendored
-mill.bat linguist-vendored
+mill    linguist-generated
+mill.bat linguist-generated
