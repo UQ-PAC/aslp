@@ -5,7 +5,6 @@
 package build
 import mill._, scalalib._, publish._
 
-import build.millfiles.SonatypeCentralPublishModule
 import mill.contrib.artifactory.ArtifactoryPublishModule
 
 object lifter extends ScalaModule with ArtifactoryPublishModule {
@@ -16,13 +15,13 @@ object lifter extends ScalaModule with ArtifactoryPublishModule {
 
   override def publishVersion = "0.1.0"
 
-  // override def docSources = Seq[PathRef]()
+  override def docSources = Seq[PathRef]()
 
   override def pomSettings = PomSettings(
     description = "ASLp Offline Scala Lifter",
     organization = "io.github.uq-pac",
     url = "https://github.com/UQ-PAC/aslp",
-    licenses = Seq(License.MIT),
+    licenses = Seq(License.`BSD-3-Clause`),
     versionControl = VersionControl.github("UQ-PAC", "aslp"),
     developers = Seq(Developer("katrinafyi", "rina", "https://github.com/katrinafyi"))
   )
