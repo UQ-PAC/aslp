@@ -1,14 +1,31 @@
 //| mill-version: 1.0.0-RC3-31-eb2d11-jvm
-//| mvnDeps: ["com.lumidion::sonatype-central-client-requests:0.6.0"]
+//| mvnDeps: ["com.lumidion::sonatype-central-client-requests:0.6.0", "com.lihaoyi::mill-contrib-codeartifact:$MILL_VERSION", "com.lihaoyi::mill-contrib-artifactory:$MILL_VERSION"]
 
 // vim: ts=2 sts=2 et sw=2 syntax=scala
 package build
-import mill._, scalalib._
+import mill._, scalalib._, publish._
 
 import build.millfiles.SonatypeCentralPublishModule
+import mill.contrib.artifactory.ArtifactoryPublishModule
 
-object lifter extends ScalaModule {
+object lifter extends ScalaModule with ArtifactoryPublishModule {
   override def scalaVersion = "3.3.6"
+
+  override def artifactoryUri = "https://maven.pkg.github.com/UQ-PAC/aslp"
+  override def artifactorySnapshotUri: String = artifactoryUri
+
+  override def publishVersion = "0.0.1"
+
+  override def docSources = Seq[PathRef]()
+
+  override def pomSettings = PomSettings(
+    description = "ASLp Offline Scala Lifter",
+    organization = "io.github.uq-pac",
+    url = "https://github.com/UQ-PAC/aslp",
+    licenses = Seq(License.MIT),
+    versionControl = VersionControl.github("UQ-PAC", "aslp"),
+    developers = Seq(Developer("katrinafyi", "rina", "https://github.com/katrinafyi"))
+  )
 }
 
 object main extends ScalaModule {

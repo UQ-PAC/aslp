@@ -1,4 +1,5 @@
 package build.millfiles
+// vim: ts=2 sts=2 et sw=2 syntax=scala
 
 import com.lumidion.sonatype.central.client.core.{PublishingType, SonatypeCredentials}
 import mill._
@@ -41,8 +42,8 @@ trait SonatypeCentralPublishModule extends PublishModule {
   def sonatypeCentralShouldRelease: T[Boolean] = Task { true }
 
   def publishSonatypeCentral(
-      username: String = defaultCredentials,
-      password: String = defaultCredentials
+      username: String = "",
+      password: String = ""
   ): Task.Command[Unit] =
     Task.Command {
       val publishData = publishArtifacts()
@@ -68,7 +69,7 @@ trait SonatypeCentralPublishModule extends PublishModule {
     }
 }
 
-object SonatypeCentralPublishModule extends ExternalModule with TaskModule {
+object SonatypeCentralPublishModule extends TaskModule {
 
   def self = this
   val defaultCredentials: String = ""
@@ -83,8 +84,8 @@ object SonatypeCentralPublishModule extends ExternalModule with TaskModule {
   def publishAll(
       publishArtifacts: mill.util.Tasks[PublishModule.PublishData] =
         Tasks.resolveMainDefault("__:PublishModule.publishArtifacts"),
-      username: String = defaultCredentials,
-      password: String = defaultCredentials,
+      username: String = "",
+      password: String = "",
       shouldRelease: Boolean = defaultShouldRelease,
       gpgArgs: String = "",
       readTimeout: Int = defaultReadTimeout,
@@ -190,7 +191,10 @@ class SonatypeCentralPublisher(
     awaitTimeout: Int
 ) {
   private val sonatypeCentralClient =
-    new SyncSonatypeClient(credentials, readTimeout = readTimeout, connectTimeout = connectTimeout)
+    new SyncSonatypeClient(
+      credentials, readTimeout = readTimeout, connectTimeout = connectTimeout,
+      overrideEndpoint = Some("https://maven.pkg.github.com/UQ-PAC/aslp")
+    )
 
   def publish(
       fileMapping: Seq[(os.Path, String)],
