@@ -103,15 +103,14 @@ jobs:
     - uses: cachix/install-nix-action@v25
     - run: echo 'preparing nix shell environment'
 
-    - uses: coursier/cache-action@v6
-    - uses: coursier/setup-action@v1
+    - uses: actions/setup-java@v4
       with:
-        jvm: adoptium:1.17
-        apps: mill
+        distribution: 'temurin'
+        java-version: '17'
 
     - run: dune build --profile release
     - run: mkdir -p offlineASL-scala/lifter/src/generated
     - run: echo ':gen A64 .* scala true offlineASL-scala/lifter/src/generated' | OCAMLRUNPARAM=b dune exec asli
 
-    - run: 'cd offlineASL-scala && mill lifter.assembly'
-    - run: 'cd offlineASL-scala && mill main.run --help'
+    - run: 'cd offlineASL-scala && ./mill lifter.assembly'
+    - run: 'cd offlineASL-scala && ./mill main.run --help'

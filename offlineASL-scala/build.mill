@@ -8,7 +8,7 @@ import mill._, scalalib._, publish._
 import mill.contrib.artifactory.ArtifactoryPublishModule
 
 object lifter extends ScalaModule with ArtifactoryPublishModule {
-  override def scalaVersion = "3.3.6"
+  override def scalaVersion = "3.3.4"
 
   override def artifactoryUri = "https://maven.pkg.github.com/UQ-PAC/aslp"
   override def artifactorySnapshotUri: String = artifactoryUri
@@ -23,12 +23,12 @@ object lifter extends ScalaModule with ArtifactoryPublishModule {
     url = "https://github.com/UQ-PAC/aslp",
     licenses = Seq(License.`BSD-3-Clause`),
     versionControl = VersionControl.github("UQ-PAC", "aslp"),
-    developers = Seq(Developer("katrinafyi", "rina", "https://github.com/katrinafyi"))
+    developers = Seq(Developer("uqpac", "UQ PAC", "https://github.com/UQ-PAC"))
   )
 }
 
 object main extends ScalaModule {
-  override def scalaVersion = "3.3.6"
+  override def scalaVersion = "3.3.4"
 
   override def moduleDeps = Seq(lifter)
 
