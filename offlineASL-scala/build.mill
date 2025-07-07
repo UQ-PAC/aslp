@@ -1,7 +1,7 @@
 //| mill-version: 1.0.0-RC3-31-eb2d11-jvm
-//| mvnDeps: ["com.lumidion::sonatype-central-client-requests:0.6.0", "com.lihaoyi::mill-contrib-codeartifact:$MILL_VERSION", "com.lihaoyi::mill-contrib-artifactory:$MILL_VERSION"]
+//| mvnDeps: ["com.lihaoyi::mill-contrib-artifactory:$MILL_VERSION"]
 
-// vim: ts=2 sts=2 et sw=2 syntax=scala
+// vim: ts=2 sts=2 et sw=2 ft=scala
 package build
 import mill._, scalalib._, publish._
 
@@ -14,9 +14,9 @@ object lifter extends ScalaModule with ArtifactoryPublishModule {
   override def artifactoryUri = "https://maven.pkg.github.com/UQ-PAC/aslp"
   override def artifactorySnapshotUri: String = artifactoryUri
 
-  override def publishVersion = "0.0.1"
+  override def publishVersion = "0.1.0"
 
-  override def docSources = Seq[PathRef]()
+  // override def docSources = Seq[PathRef]()
 
   override def pomSettings = PomSettings(
     description = "ASLp Offline Scala Lifter",
