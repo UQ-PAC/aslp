@@ -1,6 +1,11 @@
 //| mill-version: 1.0.0-RC3-31-eb2d11-jvm
+//| mvnDeps: ["com.lumidion::sonatype-central-client-requests:0.6.0"]
 
+// vim: ts=2 sts=2 et sw=2 syntax=scala
+package build
 import mill._, scalalib._
+
+import build.millfiles.SonatypeCentralPublishModule
 
 object lifter extends ScalaModule {
   override def scalaVersion = "3.3.6"
