@@ -497,6 +497,8 @@ let op_try_bnfc (stmts: stmt list): unit opresult =
   let s = String.concat "\n" @@ List.map
       (fun s -> (Utils.to_string (PP.pp_raw_stmt s)))
       stmts in
+  ignore s;
+  Result.Ok ()
 
 let op_diseval (env: Env.t) (stmts: stmt list): Env.t opresult =
   let env = Env.copy env in

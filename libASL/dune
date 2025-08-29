@@ -28,7 +28,7 @@
  (public_name asli.libASL-stage0)
  (flags (:standard -w -27))
  (modules asl_ast asl_parser asl_parser_pp asl_utils asl_visitor visitor utils value primops symbolic)
- (libraries pprint (re_export zarith)))
+ (libraries pprint (re_export zarith) libASL_bnfc))
 
 (library
  (name libASL_stage1)
