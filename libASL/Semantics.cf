@@ -1,14 +1,17 @@
-entrypoints [Stmt];
+entrypoints [StmtLines];
 
 token Binary ('\'' ["01"]+ '\'');
 
 separator Stmt ";";
 separator String ";";
 
+separator StmtLines "";
+rules StmtLines ::= Stmt;
+
 Stmt_Assign.Stmt ::= "Stmt_Assign" "(" Lexpr "," Expr ")";
 Stmt_ConstDecl.Stmt ::= "Stmt_ConstDecl" "(" Type "," String "," Expr ")";
 Stmt_VarDecl.Stmt ::= "Stmt_VarDecl" "(" Type "," String "," Expr ")";
-Stmt_VarDeclsNoInit.Stmt ::= "Stmt_VarDeclsNoInit" "(" Type "," [String] ")";
+Stmt_VarDeclsNoInit.Stmt ::= "Stmt_VarDeclsNoInit" "(" Type "," "[" [String] "]" ")";
 Stmt_Assert.Stmt ::= "Stmt_Assert" "(" Expr ")";
 Stmt_Throw.Stmt ::= "Stmt_Throw" "(" String ")";
 Stmt_TCall.Stmt ::= "Stmt_TCall" "(" CallName "," "[" [Integer] "]" "," "[" [Expr] "]" ")";
@@ -31,6 +34,8 @@ Lexpr_Array.Lexpr ::= "LExpr_Array" "(" "LExpr_Var" "(" ArrayName ")" "," Intege
 separator Integer ";";
 separator Expr ";";
 
+Expr_True.Expr ::= "Expr_Var" "(" "\"TRUE\"" ")";
+Expr_False.Expr ::= "Expr_Var" "(" "\"FALSE\"" ")";
 Expr_KnownVar.Expr ::= "Expr_Var" "(" VarName ")";
 Expr_LocalVar.Expr ::= "Expr_Var" "(" String ")";
 Expr_Prim.Expr ::= "Expr_TApply" "(" PrimName "," "[" [Integer] "]" "," "[" [Expr] "]" ")";
