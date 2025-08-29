@@ -1,0 +1,59 @@
+entrypoints Expr;
+
+token Binary ('\'' ["01"]+ '\'');
+
+Stmt_Assign.Stmt ::= "Stmt_Assign" "(" ")";
+Stmt_ConstDecl.Stmt ::= "Stmt_ConstDecl" "(" ")";
+Stmt_VarDecl.Stmt ::= "Stmt_VarDecl" "(" ")";
+Stmt_VarDeclsNoInit.Stmt ::= "Stmt_VarDeclsNoInit" "(" ")";
+Stmt_Assert.Stmt ::= "Stmt_Assert" "(" ")";
+Stmt_Throw.Stmt ::= "Stmt_Throw" "(" ")";
+Stmt_TCall.Stmt ::= "Stmt_TCall" "(" ")";
+Stmt_If.Stmt ::= "Stmt_TCall" "(" ")";
+
+separator nonempty RegTypeSlices ",";
+
+Slice_HiLo.RegTypeSlices ::= "(" "[" "Slice_HiLo" "(" Expr ","; -- TODO
+
+Type_Bits.Type ::= "Type_Bits" "(" Expr ")";
+Type_Boolean.Type ::= "Type_Bits" "(" "\"boolean\"" ")";
+Type_Constructor.Type ::= "Type_Bits" "(" String ")";
+--Type_Register.Type ::= "Type_Register" "(" String RegSlice ")";
+
+Struct_Pstate.StructName ::= "\"PSTATE\"";
+Field_N.StructField ::= "\"N\"";
+Field_Z.StructField ::= "\"Z\"";
+Field_C.StructField ::= "\"C\"";
+Field_V.StructField ::= "\"V\"";
+
+Array_R.ArrayName ::= "\"_R\"";
+Array_Z.ArrayName ::= "\"_Z\"";
+
+Lexpr_Var.Lexpr ::= "LExpr_Var" "(" String ")";
+Lexpr_Field.Lexpr ::= "LExpr_Field" "(" StructName "," StructField ")";
+Lexpr_Array.Lexpr ::= "LExpr_Array" "(" ArrayName "," Integer ")";
+
+separator Integer ";";
+separator Expr ";";
+
+Fun_int_add.FunctionName ::= "\"int_add\"";
+
+Var_FPCR.VarName ::= "\"FPCR\"";
+
+Expr_KnownVar.Expr ::= "Expr_Var" "(" VarName ")";
+Expr_LocalVar.Expr ::= "Expr_Var" "(" String ")";
+Expr_TApply.Expr ::= "Expr_TApply" "(" FunctionName "," "[" [Integer] "]" "," "[" [Expr] "]" ")";
+Expr_Slices.Expr ::= "Expr_Slices" "(" Expr "," "[" Slice "]" ")";
+Expr_Field.Expr ::= "Expr_Field" "(" StructName "," StructField ")";
+Expr_Array.Expr ::= "Expr_Array" "(" ArrayName "," Integer ")";
+Expr_LitInt.Expr ::= Integer;
+Expr_LitBin.Expr ::= Binary;
+_.Expr ::= "(" Expr ")";
+
+Slice_LoWd.Slice ::= "Slice_LoWd" "(" Integer "," Integer ")";
+
+{-
+RegSlice_HiLo.RegSlice ::= "," "(" "Slice_HiLo" "(" Integer "," Integer ")";
+separator RegSlice "";
+-}
+
