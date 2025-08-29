@@ -5,3 +5,14 @@
 dune.generated linguist-generated
 mill    linguist-generated
 mill.bat linguist-generated
+
+libASL/bnfc/AbsSemantics.ml linguist-generated
+libASL/bnfc/LexSemantics.mll linguist-generated
+libASL/bnfc/ParSemantics.mly linguist-generated
+libASL/bnfc/SkelSemantics.ml linguist-generated
+libASL/bnfc/PrintSemantics.ml linguist-generated
+libASL/bnfc/ShowSemantics.ml linguist-generated
+libASL/bnfc/TestSemantics.ml linguist-generated
+libASL/bnfc/BNFC_Util.ml linguist-generated
+libASL/bnfc/Makefile linguist-generated
+
