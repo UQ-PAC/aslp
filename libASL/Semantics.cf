@@ -14,8 +14,6 @@ Stmt_Throw.Stmt ::= "Stmt_Throw" "(" String ")";
 Stmt_TCall.Stmt ::= "Stmt_TCall" "(" CallName "," "[" [Integer] "]" "," "[" [Expr] "]" ")";
 Stmt_If.Stmt ::= "Stmt_If" "(" Expr "," "[" [Stmt] "]" "," "[" "]" "," "[" [Stmt] "]" ")";
 
-Call_Mem_read.CallName ::= "\"Mem.read\"";
-
 separator nonempty RegTypeSlices ",";
 
 Slice_HiLo.RegTypeSlices ::= "(" "[" "Slice_HiLo" "(" Expr ","; -- TODO
@@ -25,35 +23,23 @@ Type_Boolean.Type ::= "Type_Constructor" "(" "\"boolean\"" ")";
 Type_Constructor.Type ::= "Type_Constructor" "(" String ")";
 --Type_Register.Type ::= "Type_Register" "(" String RegSlice ")";
 
-Struct_Pstate.StructName ::= "\"PSTATE\"";
-Field_N.StructField ::= "\"N\"";
-Field_Z.StructField ::= "\"Z\"";
-Field_C.StructField ::= "\"C\"";
-Field_V.StructField ::= "\"V\"";
-
-Array_R.ArrayName ::= "\"_R\"";
-Array_Z.ArrayName ::= "\"_Z\"";
-
 Lexpr_KnownVar.Lexpr ::= "LExpr_Var" "(" VarName ")";
 Lexpr_LocalVar.Lexpr ::= "LExpr_Var" "(" String ")";
-Lexpr_Field.Lexpr ::= "LExpr_Field" "(" StructName "," StructField ")";
-Lexpr_Array.Lexpr ::= "LExpr_Array" "(" ArrayName "," Integer ")";
+Lexpr_Field.Lexpr ::= "LExpr_Field" "(" "LExpr_Var" "(" StructName ")" "," StructField ")";
+Lexpr_Array.Lexpr ::= "LExpr_Array" "(" "LExpr_Var" "(" ArrayName ")" "," Integer ")";
 
 separator Integer ";";
 separator Expr ";";
 
-Apply_int_add.ApplyName ::= "\"int_add\"";
-
-Var_FPCR.VarName ::= "\"FPCR\"";
-
 Expr_KnownVar.Expr ::= "Expr_Var" "(" VarName ")";
 Expr_LocalVar.Expr ::= "Expr_Var" "(" String ")";
-Expr_TApply.Expr ::= "Expr_TApply" "(" ApplyName "," "[" [Integer] "]" "," "[" [Expr] "]" ")";
+Expr_Prim.Expr ::= "Expr_TApply" "(" PrimName "," "[" [Integer] "]" "," "[" [Expr] "]" ")";
+Expr_VecPrim.Expr ::= "Expr_TApply" "(" VecPrimName "," "[" [Integer] "]" "," "[" [Expr] "]" ")";
 Expr_Slices.Expr ::= "Expr_Slices" "(" Expr "," "[" Slice "]" ")";
-Expr_Field.Expr ::= "Expr_Field" "(" StructName "," StructField ")";
-Expr_Array.Expr ::= "Expr_Array" "(" ArrayName "," Integer ")";
+Expr_Field.Expr ::= "Expr_Field" "(" "Expr_Var" "("  StructName ")" "," StructField ")";
+Expr_Array.Expr ::= "Expr_Array" "(" "Expr_Var" "(" ArrayName ")" "," Integer ")";
 Expr_LitInt.Expr ::= Integer;
-Expr_LitBin.Expr ::= Binary;
+Expr_LitBits.Expr ::= Binary;
 _.Expr ::= "(" Expr ")";
 
 Slice_LoWd.Slice ::= "Slice_LoWd" "(" Integer "," Integer ")";
@@ -62,4 +48,120 @@ Slice_LoWd.Slice ::= "Slice_LoWd" "(" Integer "," Integer ")";
 RegSlice_HiLo.RegSlice ::= "," "(" "Slice_HiLo" "(" Integer "," Integer ")";
 separator RegSlice "";
 -}
+
+-- largely taken from template_offline_utils.ml
+
+Var_PC.VarName ::= "\"_PC\"";
+Var_SP_EL0.VarName ::= "\"SP_EL0\"";
+Var_FPCR.VarName ::= "\"FPCR\"";
+Var_FPSR.VarName ::= "\"FPSR\"";
+Var_BTypeCompatible.VarName ::= "\"BTypeCompatible\"";
+Var_BranchTaken.VarName ::= "\"__BranchTaken\"";
+Var_BTypeNext.VarName ::= "\"BTypeNext\"";
+Var_ExclusiveLocal.VarName ::= "\"__ExclusiveLocal\"";
+
+Struct_Pstate.StructName ::= "\"PSTATE\"";
+
+Field_N.StructField ::= "\"N\"";
+Field_Z.StructField ::= "\"Z\"";
+Field_C.StructField ::= "\"C\"";
+Field_V.StructField ::= "\"V\"";
+
+Field_A.StructField ::= "\"A\"";
+Field_D.StructField ::= "\"D\";
+Field_DIT.StructField ::= "\"DIT\";
+Field_F.StructField ::= "\"F\";
+Field_I.StructField ::= "\"I\";
+Field_PAN.StructField ::= "\"PAN\";
+Field_SP.StructField ::= "\"SP\";
+Field_SSBS.StructField ::= "\"SSBS\";
+Field_TCO.StructField ::= "\"TCO\";
+Field_UAO.StructField ::= "\"UAO\";
+Field_BTYPE.StructField ::= "\"BTYPE\";
+
+Array_R.ArrayName ::= "\"_R\"";
+Array_Z.ArrayName ::= "\"_Z\"";
+
+Call_Mem_set.CallName ::= "\"Mem.set\"";
+Call_AtomicStart.CallName ::= "\"AtomicStart\"";
+Call_AtomicEnd.CallName ::= "\"AtomicEnd\"";
+Call_Memtag_read.CallName ::= "\"AArch64.MemTag.read\"";
+Call_Memtag_set.CallName ::= "\"AArch64.MemTag.set\"";
+
+Prim_Mem_read.PrimName ::= "\"Mem.read\"";
+Prim_and_bool.PrimName ::= "\"and_bool\"";
+Prim_or_bool.PrimName ::= "\"or_bool\"";
+Prim_not_bool.PrimName ::= "\"not_bool\"";
+Prim_cvt_bits_uint.PrimName ::= "\"cvt_bits_uint\"";
+Prim_eq_bits.PrimName ::= "\"eq_bits\"";
+Prim_ne_bits.PrimName ::= "\"ne_bits\"";
+Prim_not_bits.PrimName ::= "\"not_bits\"";
+Prim_cvt_bool_bv.PrimName ::= "\"cvt_bool_bv\"";
+Prim_or_bits.PrimName ::= "\"or_bits\"";
+Prim_eor_bits.PrimName ::= "\"eor_bits\"";
+Prim_and_bits.PrimName ::= "\"and_bits\"";
+Prim_add_bits.PrimName ::= "\"add_bits\"";
+Prim_sub_bits.PrimName ::= "\"sub_bits\"";
+Prim_sdiv_bits.PrimName ::= "\"sdiv_bits\"";
+Prim_sle_bits.PrimName ::= "\"sle_bits\"";
+Prim_slt_bits.PrimName ::= "\"slt_bits\"";
+Prim_mul_bits.PrimName ::= "\"mul_bits\"";
+Prim_append_bits.PrimName ::= "\"append_bits\"";
+Prim_lsr_bits.PrimName ::= "\"lsr_bits\"";
+Prim_lsl_bits.PrimName ::= "\"lsl_bits\"";
+Prim_asr_bits.PrimName ::= "\"asr_bits\"";
+Prim_replicate_bits.PrimName ::= "\"replicate_bits\"";
+Prim_ZeroExtend.PrimName ::= "\"ZeroExtend\"";
+Prim_SignExtend.PrimName ::= "\"SignExtend\"";
+Prim_FPCompare.PrimName ::= "\"FPCompare\"";
+Prim_FPCompareEQ.PrimName ::= "\"FPCompareEQ\"";
+Prim_FPCompareGE.PrimName ::= "\"FPCompareGE\"";
+Prim_FPCompareGT.PrimName ::= "\"FPCompareGT\"";
+Prim_FPAdd.PrimName ::= "\"FPAdd\"";
+Prim_FPSub.PrimName ::= "\"FPSub\"";
+Prim_FPMulAdd.PrimName ::= "\"FPMulAdd\"";
+Prim_FPMulAddH.PrimName ::= "\"FPMulAddH\"";
+Prim_FPMulX.PrimName ::= "\"FPMulX\"";
+Prim_FPMul.PrimName ::= "\"FPMul\"";
+Prim_FPDiv.PrimName ::= "\"FPDiv\"";
+Prim_FPMin.PrimName ::= "\"FPMin\"";
+Prim_FPMinNum.PrimName ::= "\"FPMinNum\"";
+Prim_FPMax.PrimName ::= "\"FPMax\"";
+Prim_FPMaxNum.PrimName ::= "\"FPMaxNum\"";
+Prim_FPRecpX.PrimName ::= "\"FPRecpX\"";
+Prim_FPSqrt.PrimName ::= "\"FPSqrt\"";
+Prim_FPRecipEstimate.PrimName ::= "\"FPRecipEstimate\"";
+Prim_UnsignedRSqrtEstimate.PrimName ::= "\"UnsignedRSqrtEstimate\"";
+Prim_FPRSqrtEstimate.PrimName ::= "\"FPRSqrtEstimate\"";
+Prim_BFAdd.PrimName ::= "\"BFAdd\"";
+Prim_BFMul.PrimName ::= "\"BFMul\"";
+Prim_FPConvertBF.PrimName ::= "\"FPConvertBF\"";
+Prim_FPRecipStepFused.PrimName ::= "\"FPRecipStepFused\"";
+Prim_FPRSqrtStepFused.PrimName ::= "\"FPRSqrtStepFused\"";
+Prim_FPToFixed.PrimName ::= "\"FPToFixed\"";
+Prim_FixedToFP.PrimName ::= "\"FixedToFP\"";
+Prim_FPConvert.PrimName ::= "\"FPConvert\"";
+Prim_FPRoundInt.PrimName ::= "\"FPRoundInt\"";
+Prim_FPRoundIntN.PrimName ::= "\"FPRoundIntN\"";
+Prim_FPToFixedJS_impl.PrimName ::= "\"FPToFixedJS_impl\"";
+
+VecPrim_Elem_set.VecPrimName ::= "\"Elem.set\"";
+VecPrim_Elem_read.VecPrimName ::= "\"Elem.read\"";
+VecPrim_add_vec.VecPrimName ::= "\"add_vec\"";
+VecPrim_sub_vec.VecPrimName ::= "\"sub_vec\"";
+VecPrim_mul_vec.VecPrimName ::= "\"mul_vec\"";
+VecPrim_sdiv_vec.VecPrimName ::= "\"sdiv_vec\"";
+VecPrim_lsr_vec.VecPrimName ::= "\"lsr_vec\"";
+VecPrim_asr_vec.VecPrimName ::= "\"asr_vec\"";
+VecPrim_lsl_vec.VecPrimName ::= "\"lsl_vec\"";
+VecPrim_ite_vec.VecPrimName ::= "\"ite_vec\"";
+VecPrim_sle_vec.VecPrimName ::= "\"sle_vec\"";
+VecPrim_slt_vec.VecPrimName ::= "\"slt_vec\"";
+VecPrim_eq_vec.VecPrimName ::= "\"eq_vec\"";
+VecPrim_zcast_vec.VecPrimName ::= "\"zcast_vec\"";
+VecPrim_scast_vec.VecPrimName ::= "\"scast_vec\"";
+VecPrim_trunc_vec.VecPrimName ::= "\"trunc_vec\"";
+VecPrim_select_vec.VecPrimName ::= "\"select_vec\"";
+VecPrim_shuffle_vec.VecPrimName ::= "\"shuffle_vec\"";
+VecPrim_reduce_add.VecPrimName ::= "\"reduce_add\"";
 
