@@ -19,11 +19,12 @@ Stmt_If.Stmt ::= "Stmt_If" "(" Expr "," "[" [Stmt] "]" "," "[" "]" "," "[" [Stmt
 
 separator nonempty RegTypeSlices ",";
 
-Slice_HiLo.RegTypeSlices ::= "(" "[" "Slice_HiLo" "(" Expr ","; -- TODO
+-- is this needed?
+-- Slice_HiLo.RegTypeSlices ::= "(" "[" "Slice_HiLo" "(" Expr ","; 
 
 Type_Bits.Type ::= "Type_Bits" "(" Integer ")";
 Type_Boolean.Type ::= "Type_Constructor" "(" "\"boolean\"" ")";
-Type_Constructor.Type ::= "Type_Constructor" "(" String ")";
+--Type_Constructor.Type ::= "Type_Constructor" "(" String ")";
 --Type_Register.Type ::= "Type_Register" "(" String RegSlice ")";
 
 Lexpr_KnownVar.Lexpr ::= "LExpr_Var" "(" VarName ")";
