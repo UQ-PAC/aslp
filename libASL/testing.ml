@@ -454,6 +454,7 @@ type operror =
   | Op_DisFail of exn
   | Op_DisEvalFail of exn
   | Op_DisEvalNotEqual
+  | Op_BnfcFailure
 
 let pp_operror: operror -> string =
   function
@@ -462,6 +463,7 @@ let pp_operror: operror -> string =
   | Op_DisFail e -> "[2] Disassembly failure: " ^ Printexc.to_string e
   | Op_DisEvalFail e -> "[3] Dissassembled evaluation failure: " ^ Printexc.to_string e
   | Op_DisEvalNotEqual -> "[4] Evaluation results not equal"
+  | Op_BnfcFailure -> "[5] BNFC parsing of RASL failed"
 
 type 'a opresult = ('a, operror) Result.t
 
@@ -486,6 +488,15 @@ let op_dis (env: Env.t) (iset: string) (op: Primops.bigint): stmt list opresult 
     Result.Ok stmts
   with
     | e -> Result.Error (Op_DisFail e)
+
+let op_try_bnfc (stmts: stmt list): unit opresult =
+  (* let prog = "/home/rina/progs/aslp/libASL/x/TestSemantics" in *)
+  (* let prog = "cat" in *)
+  (* let (stdout, stdin) as proc = Unix.open_process_args prog [| prog |] in *)
+
+  let s = String.concat "\n" @@ List.map
+      (fun s -> (Utils.to_string (PP.pp_raw_stmt s)))
+      stmts in
 
 let op_diseval (env: Env.t) (stmts: stmt list): Env.t opresult =
   let env = Env.copy env in
@@ -514,6 +525,7 @@ let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
   let (let*) = Result.bind in
   let* evalenv = op_eval initenv iset op in
   let* disstmts = op_dis env iset op in
+  let* _ = op_try_bnfc disstmts in
   let* disevalenv = op_diseval initenv disstmts in
   op_compare (evalenv, disevalenv)
 
