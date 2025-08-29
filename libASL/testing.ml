@@ -490,15 +490,15 @@ let op_dis (env: Env.t) (iset: string) (op: Primops.bigint): stmt list opresult 
     | e -> Result.Error (Op_DisFail e)
 
 let op_try_bnfc (stmts: stmt list): unit opresult =
-  (* let prog = "/home/rina/progs/aslp/libASL/x/TestSemantics" in *)
-  (* let prog = "cat" in *)
-  (* let (stdout, stdin) as proc = Unix.open_process_args prog [| prog |] in *)
-
-  let s = String.concat "\n" @@ List.map
-      (fun s -> (Utils.to_string (PP.pp_raw_stmt s)))
-      stmts in
-  ignore s;
-  Result.Ok ()
+  let open LibASL_bnfc in
+  try
+    List.iter
+      (fun s ->
+        let lexbuf = Lexing.from_string @@ Utils.to_string @@ PP.pp_raw_stmt s in
+        ignore @@ ParSemantics.pStmtLines_list LexSemantics.token lexbuf)
+      stmts;
+    Result.Ok ()
+  with ParSemantics.Error -> Result.Error Op_BnfcFailure
 
 let op_diseval (env: Env.t) (stmts: stmt list): Env.t opresult =
   let env = Env.copy env in
