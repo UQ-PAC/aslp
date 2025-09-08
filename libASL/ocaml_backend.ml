@@ -220,9 +220,6 @@ let write_if_end st =
   write_nl st;
   write_line "end" st
 
-let write_ignore st =
-  write_line "ignore @@\n" st
-
 (****************************************************************
  * Stmt Printing
  ****************************************************************)
@@ -263,7 +260,13 @@ let rec write_assign v e st =
 
   | _ -> failwith @@ "write_assign: " ^ (pp_lexpr v)
 
-let rec write_stmt s st =
+let has_runtime_statement = function
+  | Stmt_TCall _ -> true
+  | Stmt_Throw _ -> true
+  | Stmt_Assert _ -> true
+  | _ -> false
+
+let rec write_stmt has_tail s st =
   match s with
   | Stmt_ConstDecl(_, _, Expr_TApply(id, [], [cond]), _) when id = Offline_transform.rt_gen_branch ->
       let e = prints_expr cond st in
@@ -299,7 +302,6 @@ let rec write_stmt s st =
 
   | Stmt_Assign(l, r, loc) ->
       let e = prints_expr r st in
-      write_ignore st;
       write_assign l e st
 
   | Stmt_TCall(f, tes, es, loc) ->
@@ -320,18 +322,22 @@ let rec write_stmt s st =
       write_unsupported st
 
   | Stmt_If(c, t, els, f, loc) ->
+      if has_tail then write_line "let _ =\n" st;
       let rec iter = function
       | S_Elsif_Cond(c,b)::xs ->
           write_if_elsif (prints_expr c st) st;
           write_stmts b st;
           iter xs
       | [] -> () in
-      write_ignore st;
       write_if_start (prints_expr c st) st;
       write_stmts t st;
       iter els;
       if f <> [] then (write_if_else st; write_stmts f st);
-      write_if_end st
+      write_if_end st;
+      if has_tail then begin
+        Printf.fprintf st.oc " in\n";
+        st.skip_seq <- true
+      end
 
   | _ -> failwith @@ "write_stmt: " ^ (pp_stmt s);
 
@@ -342,11 +348,17 @@ and write_stmts s st =
       write_proc_return st;
       dec_depth st
   | x::xs ->
-      write_stmt x st;
-      List.iter (fun s ->
+      let has_tails = List.fold_right
+          (fun stmt tails ->
+            let tail_has_tail = Option.value ~default:false (List.nth_opt tails 0) in
+            (tail_has_tail || has_runtime_statement stmt) :: tails)
+          (x::xs)
+          [] in
+      write_stmt (List.hd has_tails) x st;
+      List.iter2 (fun s has_tail ->
         write_seq st;
-        write_stmt s st
-      ) xs;
+        write_stmt has_tail s st
+      ) xs (List.tl has_tails);
       dec_depth st
       (*assert (not st.skip_seq)*)
 
