@@ -397,7 +397,6 @@ let run include_pc iset pat env : offline_result =
   Printf.printf "Stages 7-8: Offline Transform\n";
   flush stdout;
   let offline_fns = Offline_transform.run fns env in
-  let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.DeadContextSwitch.run k)) offline_fns in
 
   let freachable k =
     let k = match k with

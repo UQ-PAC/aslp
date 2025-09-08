@@ -262,6 +262,26 @@ let rec write_assign v e st =
 
 let rec write_stmt s st =
   match s with
+  | Stmt_ConstDecl(_, _, Expr_TApply(id, [], [cond]), _) when id = Offline_transform.rt_gen_branch ->
+      let e = prints_expr cond st in
+      let s = Printf.sprintf "f_gen_if (%s) [\n" e in
+      write_line s st;
+      inc_depth st;
+      st.skip_seq <- true
+
+  | Stmt_TCall(sw, [], [Expr_TApply(kind, [], [_])], _) when sw = Offline_transform.rt_switch_context ->
+      if kind = Offline_transform.rt_true_branch then (st.skip_seq <- true)
+      else if kind = Offline_transform.rt_false_branch then begin
+        dec_depth st;
+        write_line "] [\n" st;
+        inc_depth st;
+        st.skip_seq <- true
+      end else if kind = Offline_transform.rt_merge_branch then begin
+        dec_depth st;
+        write_line "]\n" st;
+        ()
+      end
+
   | Stmt_VarDeclsNoInit(ty, vs, loc) ->
       let e = default_value ty st in
       List.iter (fun v -> write_ref v e st) vs
@@ -334,6 +354,7 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
   let args = build_args targs args in
   let ret = prints_ret_type ret_tyo in
   Printf.fprintf st.oc "let %s %s : %s = \n" (name_of_ident name) args ret;
+  List.iter (fun x -> print_endline @@ pp_stmt x) body;
   write_stmts body st;
   Printf.fprintf st.oc "\n\n"
 

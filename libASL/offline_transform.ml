@@ -834,7 +834,7 @@ and gen_expr loc e : (taint * expr) wrm =
           let@ lo = lt_expr loc lo in
           let@ wd = lt_expr loc wd in
           gen_slice_expr e lo wd
-      | Expr_TApply(f,tes,es) -> 
+      | Expr_TApply(f,tes,es) ->
           gen_prim loc f tes es
 
       (* State loads *)
