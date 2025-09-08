@@ -220,6 +220,9 @@ let write_if_end st =
   write_nl st;
   write_line "end" st
 
+let write_ignore st =
+  write_line "ignore @@\n" st
+
 (****************************************************************
  * Stmt Printing
  ****************************************************************)
@@ -233,18 +236,18 @@ let rec write_assign v e st =
 
   | LExpr_Var v ->
       let v = name_of_ident v in
-      let s = Printf.sprintf "(%s := %s)" v e in
+      let s = Printf.sprintf "%s := %s" v e in
       write_line s st
 
   | LExpr_Array (LExpr_Var v, i) ->
       let i = prints_expr i st in
       let v = name_of_ident v in
-      let s = Printf.sprintf "(%s := list_update (%s) (%s) (%s))" v v i e in
+      let s = Printf.sprintf "%s := list_update (%s) (%s) (%s)" v v i e in
       write_line s st
 
   | LExpr_Field (l, f) ->
       let v = name_of_lexpr l in
-      let s = Printf.sprintf "(%s = %s)" v e in
+      let s = Printf.sprintf "%s = %s" v e in
       write_line s st
 
   | LExpr_Tuple (ls) ->
@@ -260,13 +263,7 @@ let rec write_assign v e st =
 
   | _ -> failwith @@ "write_assign: " ^ (pp_lexpr v)
 
-let has_runtime_statement = function
-  | Stmt_TCall _ -> true
-  | Stmt_Throw _ -> true
-  | Stmt_Assert _ -> true
-  | _ -> false
-
-let rec write_stmt has_tail s st =
+let rec write_stmt s st =
   match s with
   | Stmt_ConstDecl(_, _, Expr_TApply(id, [], [cond]), _) when id = Offline_transform.rt_gen_branch ->
       let e = prints_expr cond st in
@@ -319,10 +316,9 @@ let rec write_stmt has_tail s st =
       write_assert (prints_expr e st) st
 
   | Stmt_Throw _ ->
-      write_unsupported st
+      write_unsupported st;
 
   | Stmt_If(c, t, els, f, loc) ->
-      if has_tail then write_line "let _ =\n" st;
       let rec iter = function
       | S_Elsif_Cond(c,b)::xs ->
           write_if_elsif (prints_expr c st) st;
@@ -333,11 +329,7 @@ let rec write_stmt has_tail s st =
       write_stmts t st;
       iter els;
       if f <> [] then (write_if_else st; write_stmts f st);
-      write_if_end st;
-      if has_tail then begin
-        Printf.fprintf st.oc " in\n";
-        st.skip_seq <- true
-      end
+      write_if_end st
 
   | _ -> failwith @@ "write_stmt: " ^ (pp_stmt s);
 
@@ -348,17 +340,11 @@ and write_stmts s st =
       write_proc_return st;
       dec_depth st
   | x::xs ->
-      let has_tails = List.fold_right
-          (fun stmt tails ->
-            let tail_has_tail = Option.value ~default:false (List.nth_opt tails 0) in
-            (tail_has_tail || has_runtime_statement stmt) :: tails)
-          (x::xs)
-          [] in
-      write_stmt (List.hd has_tails) x st;
-      List.iter2 (fun s has_tail ->
+      write_stmt x st;
+      List.iter (fun s ->
         write_seq st;
-        write_stmt has_tail s st
-      ) xs (List.tl has_tails);
+        write_stmt s st
+      ) xs;
       dec_depth st
       (*assert (not st.skip_seq)*)
 
