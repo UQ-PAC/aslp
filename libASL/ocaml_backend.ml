@@ -272,6 +272,7 @@ let rec write_stmt s st =
       inc_depth st;
       st.skip_seq <- true
 
+  (* *)
   | Stmt_TCall(sw, [], [Expr_TApply(kind, [], [_])], _) when sw = Offline_transform.rt_switch_context ->
       if kind = Offline_transform.rt_true_branch then (st.skip_seq <- true)
       else if kind = Offline_transform.rt_false_branch then begin
