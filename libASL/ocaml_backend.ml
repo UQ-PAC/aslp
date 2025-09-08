@@ -220,6 +220,9 @@ let write_if_end st =
   write_nl st;
   write_line "end" st
 
+let write_ignore st =
+  write_line "ignore @@\n" st
+
 (****************************************************************
  * Stmt Printing
  ****************************************************************)
@@ -233,18 +236,18 @@ let rec write_assign v e st =
 
   | LExpr_Var v ->
       let v = name_of_ident v in
-      let s = Printf.sprintf "%s := %s" v e in
+      let s = Printf.sprintf "(%s := %s)" v e in
       write_line s st
 
   | LExpr_Array (LExpr_Var v, i) ->
       let i = prints_expr i st in
       let v = name_of_ident v in
-      let s = Printf.sprintf "%s := list_update (%s) (%s) (%s)" v v i e in
+      let s = Printf.sprintf "(%s := list_update (%s) (%s) (%s))" v v i e in
       write_line s st
 
   | LExpr_Field (l, f) ->
       let v = name_of_lexpr l in
-      let s = Printf.sprintf "%s = %s" v e in
+      let s = Printf.sprintf "(%s = %s)" v e in
       write_line s st
 
   | LExpr_Tuple (ls) ->
@@ -296,6 +299,7 @@ let rec write_stmt s st =
 
   | Stmt_Assign(l, r, loc) ->
       let e = prints_expr r st in
+      write_ignore st;
       write_assign l e st
 
   | Stmt_TCall(f, tes, es, loc) ->
@@ -322,6 +326,7 @@ let rec write_stmt s st =
           write_stmts b st;
           iter xs
       | [] -> () in
+      write_ignore st;
       write_if_start (prints_expr c st) st;
       write_stmts t st;
       iter els;
