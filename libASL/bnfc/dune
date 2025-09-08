@@ -17,3 +17,13 @@
  (public_name asli.libASL-bnfc)
  (flags (:standard -w -27-33-39))
  (modules LexSemantics ParSemantics AbsSemantics BNFC_Util PrintSemantics ShowSemantics SkelSemantics))
+
+(executable
+ (name TestSemantics)
+ (public_name TestSemantics)
+ (package asli)
+ (modes exe byte)
+ (modules TestSemantics)
+ (flags (:standard -open LibASL_bnfc))
+ (libraries asli.libASL asli.libASL-bnfc))
+
