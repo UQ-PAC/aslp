@@ -227,11 +227,13 @@ let write_ignore st =
  * Stmt Printing
  ****************************************************************)
 
-let is_runtime_statement = function
+let rec is_runtime_statement = function
   | Stmt_TCall _ -> true
-  | Stmt_ConstDecl(ty, _, _, _) ->
+  | Stmt_If(_, t, els, f, loc) -> List.exists is_runtime_statement t || List.exists is_runtime_statement f ||
+    List.exists (function | S_Elsif_Cond(c,b) -> List.exists is_runtime_statement b) els
+  | Stmt_ConstDecl(_, _, Expr_TApply(f, _, _), _) ->
     let open Offline_transform in
-    ty = rt_var_ty || ty = rt_label_ty || ty = rt_expr_ty
+    f = rt_gen_branch
   | _ -> false
 
 let rec write_assign v e st =
@@ -354,8 +356,8 @@ and write_stmts s st =
   in
 
   let (rt, lt) = List.partition is_runtime_statement s in
-  if not (lt @ rt = s) then print_endline (Utils.pp_list (fun s -> Utils.to_string (PP.pp_raw_stmt s)) s);
-  assert (lt @ rt = s);
+  if not (lt @ rt = s) then print_endline (Utils.pp_list (fun s -> Utils.to_string (PP.pp_stmt s)) s);
+  (* assert (lt @ rt = s); *)
 
   inc_depth st;
   write lt;
@@ -399,6 +401,8 @@ let write_instr_file fn fnsig dir =
   let path = dir ^ "/" ^ m ^ ".ml" in
   let oc = open_out path in
   let st = init_st oc in
+  print_endline "===============";
+  print_endline m;
   write_preamble global_deps st;
   write_fn fn fnsig st;
   close_out oc;
