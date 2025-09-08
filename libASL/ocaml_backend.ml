@@ -227,6 +227,13 @@ let write_ignore st =
  * Stmt Printing
  ****************************************************************)
 
+let is_runtime_statement = function
+  | Stmt_TCall _ -> true
+  | Stmt_ConstDecl(ty, _, _, _) ->
+    let open Offline_transform in
+    ty = rt_var_ty || ty = rt_label_ty || ty = rt_expr_ty
+  | _ -> false
+
 let rec write_assign v e st =
   match v with
   | LExpr_Wildcard ->
@@ -335,19 +342,35 @@ let rec write_stmt s st =
   | _ -> failwith @@ "write_stmt: " ^ (pp_stmt s);
 
 and write_stmts s st =
-  inc_depth st;
-  match s with
+  let write = function
   | [] ->
-      write_proc_return st;
-      dec_depth st
+      write_proc_return st
   | x::xs ->
       write_stmt x st;
       List.iter (fun s ->
         write_seq st;
         write_stmt s st
-      ) xs;
-      dec_depth st
-      (*assert (not st.skip_seq)*)
+      ) xs
+  in
+
+  let (rt, lt) = List.partition is_runtime_statement s in
+  if not (lt @ rt = s) then print_endline (Utils.pp_list (fun s -> Utils.to_string (PP.pp_raw_stmt s)) s);
+  assert (lt @ rt = s);
+
+  inc_depth st;
+  write lt;
+  if not (List.is_empty rt) then begin
+    st.skip_seq <- false;
+    write_seq st;
+    write_line "[\n" st;
+    inc_depth st;
+    write rt;
+    write_nl st;
+    dec_depth st;
+    write_line "]" st;
+  end;
+  dec_depth st
+  (*assert (not st.skip_seq)*)
 
 let build_args targs args =
   if List.length targs = 0 && List.length args = 0 then "()"
