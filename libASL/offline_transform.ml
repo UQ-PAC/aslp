@@ -668,6 +668,7 @@ let rt_switch_context   = FIdent("switch_context", 0)  (* rt_label -> unit *)
 let rt_gen_load         = FIdent("gen_load", 0)        (* sym -> 'a rt *)
 let rt_gen_store        = FIdent("gen_store", 0)       (* sym -> 'a rt -> unit *)
 let rt_gen_assert       = FIdent("gen_assert", 0)      (* bool rt -> unit *)
+let rt_gen_noop         = FIdent("gen_noop", 0)
 
 let rt_gen_array_store  = FIdent("gen_array_store", 0) (* sym -> int -> 'a rt -> unit *)
 let rt_gen_array_load   = FIdent("gen_array_load", 0)  (* sym -> int -> 'a rt *)

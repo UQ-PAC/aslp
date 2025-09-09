@@ -261,12 +261,25 @@ let reconstruct_rt_branches stmts =
   List.iter go stmts;
   List.rev @@ StringMap.find root !branches
 
-let rec has_runtime_statement st = function
+let rec has_runtime_statement = function
   | Stmt_TCall _ -> true
   | Stmt_If(Expr_TApply(id, [], [_]), _, _, _, _) when id = Offline_transform.rt_gen_branch -> true
-  | Stmt_If(_, ts, _, fs, _) -> List.exists (has_runtime_statement st) ts || List.exists (has_runtime_statement st) fs
+  | Stmt_If(_, ts, _, fs, _) -> List.exists has_runtime_statement ts || List.exists has_runtime_statement fs
   (* | Stmt_Assign(LExpr_Var v, _, _) when IdentSet.mem v st.ref_vars ->  true *)
   | _ -> false
+
+let rec inject_runtime_sentinel ~needs_rt xs =
+  let xs = List.map
+    (function
+      | Stmt_If(c, ts, els, fs, loc) as s ->
+          let needs_rt = has_runtime_statement s in
+          Stmt_If(c, inject_runtime_sentinel ~needs_rt ts, els, inject_runtime_sentinel ~needs_rt fs, loc)
+      | s -> s)
+    xs in
+  if needs_rt && not (List.exists has_runtime_statement xs) then
+    xs @ [Stmt_TCall(Offline_transform.rt_gen_noop, [], [], Unknown)]
+  else
+    xs
 
 let rec write_assign v e st =
   match v with
@@ -364,46 +377,47 @@ let rec write_stmt s st =
   | _ -> failwith @@ "write_stmt: " ^ (pp_stmt s);
 
 and write_stmts s st =
-  let (rt,lt) = List.partition (has_runtime_statement st) s in
+  let (rt,lt) = List.partition has_runtime_statement s in
+  let is_rt = rt <> [] in
+  let empty = if is_rt then "[]" else "()" in
+  let rt = List.filter (function | Stmt_TCall(id, _, _, _) when id = Offline_transform.rt_gen_noop -> false | _ -> true) rt in
   (* if not (lt @ rt = s) then List.iter (fun x -> print_endline @@ pp_stmt x) s; *)
   (* assert (lt @ rt = s); *)
 
-  let write_stmt ~lt s st =
-    match (lt, s) with
-    | (true, Stmt_If _) ->
-      write_line "let [@warning \"-8\"] [] =\n" st;
-      write_stmt s st;
-      Printf.fprintf st.oc " in\n";
-      st.skip_seq <- true
-    | _ -> write_stmt s st
-  in
-  let do_write ~lt = function
-    | [] -> ()
+  let do_write ?empty = function
+    | [] -> Option.iter (fun x -> write_line x st) empty
     | x::xs ->
-      write_stmt ~lt x st;
+      write_stmt x st;
       List.iter (fun s ->
         write_seq st;
-        write_stmt ~lt s st
+        write_stmt s st
       ) xs;
   in
-  if lt = [] && rt = [] then
-    write_line "[]" st
+  if not is_rt then begin
+    write_line "begin\n" st;
+    inc_depth st;
+    do_write lt;
+    write_nl st;
+    dec_depth st;
+    write_line "end" st
+  end else if lt = [] && rt = [] then
+    write_line empty st
   else begin
     if lt <> [] then begin
       write_line "begin\n" st;
       inc_depth st;
-      do_write ~lt:true lt;
+      do_write lt;
       write_seq st;
     end;
     if rt = [] then
       write_line "[]" st
     else begin
-      write_line "List.flatten [\n" st;
+      write_line "(List.flatten [\n" st;
       inc_depth st;
-      do_write ~lt:false rt;
+      do_write rt;
       write_nl st;
       dec_depth st;
-      write_line "]" st;
+      write_line "])" st;
     end;
     if lt <> [] then begin
       write_nl st;
@@ -423,6 +437,7 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
   let ret = prints_ret_type ret_tyo in
   Printf.fprintf st.oc "let %s %s : %s = \n" (name_of_ident name) args ret;
   let body = reconstruct_rt_branches body in
+  let body = inject_runtime_sentinel ~needs_rt:true body in
   inc_depth st;
   write_stmts body st;
   dec_depth st;

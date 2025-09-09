@@ -44,7 +44,7 @@
    cpp_backend
    scala_backend
    arm_env pretransforms flags
-   boop
+   ; boop
    )
  (preprocessor_deps (alias ../asl_files) (alias cpp_backend_files) ../offlineASL/template_offline_utils.ml)
  (preprocess (pps ppx_blob))
