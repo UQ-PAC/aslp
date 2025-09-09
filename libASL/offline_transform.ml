@@ -715,8 +715,11 @@ let rt_false_branch = FIdent("false_branch", 0)
 let rt_merge_branch = FIdent("merge_branch", 0)
 
 (* Generate a branch in the runtime program, with some way to refer to its targets and merge point *)
-let gen_branch loc c ts fs =
-  write [Stmt_If(Expr_TApply(rt_gen_branch, [], [c]), ts, [], fs, loc)]
+let gen_branch loc c =
+  let@ res = get_fresh_name in
+  let v = Expr_Var res in
+  let+ _ = write [Stmt_ConstDecl( rt_label_ty, res, Expr_TApply(rt_gen_branch, [], [c]), loc) ] in
+  (Expr_TApply(rt_true_branch, [], [v]),Expr_TApply(rt_false_branch,[],[v]),Expr_TApply(rt_merge_branch,[],[v]))
 
 (* Switch the implicit context to one produced by gen_branch *)
 let switch_context loc t =
@@ -807,10 +810,13 @@ and gen_if loc (c: expr) (tcase: unit wrm) (fcase: unit wrm) =
     let@ c = rt_expr loc c in
     let@ ctx = wstate get_context in
     let@ _ = set_context RunTime in
-    let@ (tstmts,tcase) = wrap tcase in
-    let@ (fstmts,fcase) = wrap fcase in
-    let@ _ = write [Stmt_If(Expr_TApply(rt_gen_branch, [], [c]), tstmts, [], fstmts, loc)] in
-    set_context ctx
+    let@ (lt,lf,lm) = gen_branch loc c in
+    let@ _ = switch_context loc lt in
+    let@ tcase = tcase in
+    let@ _ = switch_context loc lf in
+    let@ fcase = fcase in
+    let@ _ = set_context ctx in
+    switch_context loc lm
   else
     let@ (tstmts,tcase) = wrap tcase in
     let@ (fstmts,fcase) = wrap fcase in

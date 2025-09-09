@@ -228,6 +228,39 @@ let write_ignore st =
  * Stmt Printing
  ****************************************************************)
 
+module StringMap = Map.Make(String)
+
+let reconstruct_rt_branches stmts =
+  let root = "root" in
+  let current = ref root in
+  let parents = ref @@ StringMap.empty in
+  let branches = ref @@ StringMap.singleton !current [] in
+  let append s =
+    branches := StringMap.update !current (fun x -> Some (s :: Option.get x)) !branches in
+  let go = function
+    | Stmt_ConstDecl(_, Ident id, Expr_TApply(f, [], [c]), _) when f = Offline_transform.rt_gen_branch ->
+      parents := StringMap.add id (!current, c) !parents;
+      branches := StringMap.add (id^"true") [] !branches;
+      branches := StringMap.add (id^"false") [] !branches;
+    | Stmt_TCall(f, [], [Expr_TApply(kind, [], [Expr_Var(Ident id)])], loc) when f = Offline_transform.rt_switch_context ->
+      if kind = Offline_transform.rt_true_branch then
+        current := id ^ "true"
+      else if kind = Offline_transform.rt_false_branch then
+        current := id ^ "false"
+      else if kind = Offline_transform.rt_merge_branch then
+        let (cur, c) = StringMap.find id !parents in
+        current := cur;
+        let ts = StringMap.find (id^"true") !branches in
+        let fs = StringMap.find (id^"false") !branches in
+        let s = Stmt_If(Expr_TApply(Offline_transform.rt_gen_branch, [], [c]), List.rev ts, [], List.rev fs, loc) in
+        append s
+      else
+        failwith "unknown rt_switch_context kind"
+    | s -> append s
+  in
+  List.iter go stmts;
+  List.rev @@ StringMap.find root !branches
+
 let has_runtime_statement = function
   | Stmt_TCall _ -> true
   | Stmt_If(Expr_TApply(id, [], [_]), _, _, _, _) when id = Offline_transform.rt_gen_branch -> true
@@ -331,6 +364,7 @@ and write_stmts s st =
   write_line "begin\n" st;
   inc_depth st;
   let (rt,lt) = List.partition has_runtime_statement s in
+  if not (lt @ rt = s) then List.iter (fun x -> print_endline @@ pp_stmt x) s;
   assert (lt @ rt = s);
 
   let write_stmts ~empty = function
@@ -367,7 +401,7 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
   let args = build_args targs args in
   let ret = prints_ret_type ret_tyo in
   Printf.fprintf st.oc "let %s %s : %s = \n" (name_of_ident name) args ret;
-  (* List.iter (fun x -> print_endline @@ pp_stmt x) body; *)
+  let body = reconstruct_rt_branches body in
   inc_depth st;
   write_stmts body st;
   dec_depth st;
