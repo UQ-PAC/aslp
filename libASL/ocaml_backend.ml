@@ -188,7 +188,7 @@ let write_call f targs args st =
   let f = name_of_ident f in
   let args = targs @ args in
   let call = f ^ " (" ^ (String.concat ") (" args) ^ ")" in
-  write_line call st
+  write_line ("[" ^ call ^ "]") st
 
 let write_ref v e st =
   let name = name_of_ident v in
@@ -261,9 +261,11 @@ let reconstruct_rt_branches stmts =
   List.iter go stmts;
   List.rev @@ StringMap.find root !branches
 
-let has_runtime_statement = function
+let rec has_runtime_statement st = function
   | Stmt_TCall _ -> true
   | Stmt_If(Expr_TApply(id, [], [_]), _, _, _, _) when id = Offline_transform.rt_gen_branch -> true
+  | Stmt_If(_, ts, _, fs, _) -> List.exists (has_runtime_statement st) ts || List.exists (has_runtime_statement st) fs
+  (* | Stmt_Assign(LExpr_Var v, _, _) when IdentSet.mem v st.ref_vars ->  true *)
   | _ -> false
 
 let rec write_assign v e st =
@@ -355,41 +357,60 @@ let rec write_stmt s st =
       write_if_start (prints_expr c st) st;
       write_stmts t st;
       iter els;
-      if f <> [] then (write_if_else st; write_stmts f st);
+      write_if_else st;
+      write_stmts f st;
       write_if_end st
 
   | _ -> failwith @@ "write_stmt: " ^ (pp_stmt s);
 
 and write_stmts s st =
-  write_line "begin\n" st;
-  inc_depth st;
-  let (rt,lt) = List.partition has_runtime_statement s in
-  if not (lt @ rt = s) then List.iter (fun x -> print_endline @@ pp_stmt x) s;
-  assert (lt @ rt = s);
+  let (rt,lt) = List.partition (has_runtime_statement st) s in
+  (* if not (lt @ rt = s) then List.iter (fun x -> print_endline @@ pp_stmt x) s; *)
+  (* assert (lt @ rt = s); *)
 
-  let write_stmts ~empty = function
-    | [] -> write_line empty st
+  let write_stmt ~lt s st =
+    match (lt, s) with
+    | (true, Stmt_If _) ->
+      write_line "let [@warning \"-8\"] [] =\n" st;
+      write_stmt s st;
+      Printf.fprintf st.oc " in\n";
+      st.skip_seq <- true
+    | _ -> write_stmt s st
+  in
+  let do_write ~lt = function
+    | [] -> ()
     | x::xs ->
-      write_stmt x st;
+      write_stmt ~lt x st;
       List.iter (fun s ->
         write_seq st;
-        write_stmt s st
+        write_stmt ~lt s st
       ) xs;
   in
-  if lt = [] && rt = [] then write_line "[]\n" st;
-  if lt <> [] then write_stmts ~empty:"()\n" lt;
-  if lt <> [] && rt <> [] then write_seq st;
-  if lt <> [] && rt = [] then write_nl st;
-  if rt <> [] then begin
-    write_line "[\n" st;
-    inc_depth st;
-    write_stmts ~empty:"\n" rt;
-    write_nl st;
-    dec_depth st;
-    write_line "]\n" st;
-  end;
-  dec_depth st;
-  write_line "end" st
+  if lt = [] && rt = [] then
+    write_line "[]" st
+  else begin
+    if lt <> [] then begin
+      write_line "begin\n" st;
+      inc_depth st;
+      do_write ~lt:true lt;
+      write_seq st;
+    end;
+    if rt = [] then
+      write_line "[]" st
+    else begin
+      write_line "List.flatten [\n" st;
+      inc_depth st;
+      do_write ~lt:false rt;
+      write_nl st;
+      dec_depth st;
+      write_line "]" st;
+    end;
+    if lt <> [] then begin
+      write_nl st;
+      dec_depth st;
+      write_line "end" st
+    end
+  end
   (*assert (not st.skip_seq)*)
 
 let build_args targs args =
@@ -418,6 +439,7 @@ let offline_utils_file = [%blob "../offlineASL/template_offline_utils.ml"]
 (* Write an instruction file, containing just the behaviour of one instructions *)
 let write_instr_file fn fnsig dir =
   let m = name_of_FIdent fn in
+  (* print_endline m; *)
   let path = dir ^ "/" ^ m ^ ".ml" in
   let oc = open_out path in
   let st = init_st oc in
