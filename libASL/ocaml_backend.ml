@@ -204,21 +204,22 @@ let write_let v e st =
   write_line s st
 
 let write_if_start c st =
-  let s = Printf.sprintf "if %s then begin\n" c in
+  let s = Printf.sprintf "if %s then\n" c in
   write_line s st
 
 let write_if_elsif c st =
   write_nl st;
-  let s = Printf.sprintf "end else if %s then begin\n" c in
+  let s = Printf.sprintf "else if %s then\n" c in
   write_line s st
 
 let write_if_else st =
   write_nl st;
-  write_line "end else begin\n" st
+  write_line "else\n" st
 
 let write_if_end st =
-  write_nl st;
-  write_line "end" st
+  (* write_nl st; *)
+  (* write_line "" st *)
+  ()
 
 let write_ignore st =
   write_line "ignore @@\n" st
@@ -226,6 +227,11 @@ let write_ignore st =
 (****************************************************************
  * Stmt Printing
  ****************************************************************)
+
+let has_runtime_statement = function
+  | Stmt_TCall _ -> true
+  | Stmt_If(Expr_TApply(id, [], [_]), _, _, _, _) when id = Offline_transform.rt_gen_branch -> true
+  | _ -> false
 
 let rec write_assign v e st =
   match v with
@@ -265,26 +271,13 @@ let rec write_assign v e st =
 
 let rec write_stmt s st =
   match s with
-  | Stmt_ConstDecl(_, _, Expr_TApply(id, [], [cond]), _) when id = Offline_transform.rt_gen_branch ->
-      let e = prints_expr cond st in
-      let s = Printf.sprintf "f_gen_if (%s) [\n" e in
-      write_line s st;
-      inc_depth st;
-      st.skip_seq <- true
-
-  (* *)
-  | Stmt_TCall(sw, [], [Expr_TApply(kind, [], [_])], _) when sw = Offline_transform.rt_switch_context ->
-      if kind = Offline_transform.rt_true_branch then (st.skip_seq <- true)
-      else if kind = Offline_transform.rt_false_branch then begin
-        dec_depth st;
-        write_line "] [\n" st;
-        inc_depth st;
-        st.skip_seq <- true
-      end else if kind = Offline_transform.rt_merge_branch then begin
-        dec_depth st;
-        write_line "]\n" st;
-        ()
-      end
+  | Stmt_If(Expr_TApply(id, [], [c]), t, els, f, loc) when id = Offline_transform.rt_gen_branch ->
+      assert (els = []);
+      let head = Printf.sprintf "f_gen_if (%s)\n" (prints_expr c st) in
+      write_line head st;
+      write_stmts t st;
+      write_nl st;
+      write_stmts f st
 
   | Stmt_VarDeclsNoInit(ty, vs, loc) ->
       let e = default_value ty st in
@@ -335,19 +328,35 @@ let rec write_stmt s st =
   | _ -> failwith @@ "write_stmt: " ^ (pp_stmt s);
 
 and write_stmts s st =
+  write_line "begin\n" st;
   inc_depth st;
-  match s with
-  | [] ->
-      write_proc_return st;
-      dec_depth st
-  | x::xs ->
+  let (rt,lt) = List.partition has_runtime_statement s in
+  assert (lt @ rt = s);
+
+  let write_stmts ~empty = function
+    | [] -> write_line empty st
+    | x::xs ->
       write_stmt x st;
       List.iter (fun s ->
         write_seq st;
         write_stmt s st
       ) xs;
-      dec_depth st
-      (*assert (not st.skip_seq)*)
+  in
+  if lt = [] && rt = [] then write_line "[]\n" st;
+  if lt <> [] then write_stmts ~empty:"()\n" lt;
+  if lt <> [] && rt <> [] then write_seq st;
+  if lt <> [] && rt = [] then write_nl st;
+  if rt <> [] then begin
+    write_line "[\n" st;
+    inc_depth st;
+    write_stmts ~empty:"\n" rt;
+    write_nl st;
+    dec_depth st;
+    write_line "]\n" st;
+  end;
+  dec_depth st;
+  write_line "end" st
+  (*assert (not st.skip_seq)*)
 
 let build_args targs args =
   if List.length targs = 0 && List.length args = 0 then "()"
@@ -358,8 +367,10 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
   let args = build_args targs args in
   let ret = prints_ret_type ret_tyo in
   Printf.fprintf st.oc "let %s %s : %s = \n" (name_of_ident name) args ret;
-  List.iter (fun x -> print_endline @@ pp_stmt x) body;
+  (* List.iter (fun x -> print_endline @@ pp_stmt x) body; *)
+  inc_depth st;
   write_stmts body st;
+  dec_depth st;
   Printf.fprintf st.oc "\n\n"
 
 (****************************************************************
