@@ -302,8 +302,10 @@ let rec discriminate_lifttime_runtime xs =
           let (f_rt, f_lt) = List.partition has_runtime_statement fs in
           let (t_defs, t_lt) = List.partition has_decl t_lt in
           let (f_defs, f_lt) = List.partition has_decl f_lt in
-          let lt = if t_lt <> [] || f_lt <> [] then [Stmt_If(c, t_lt, [], f_lt, loc)] else [] in
-          let rt = if t_rt <> [] || f_rt <> [] then [Stmt_If(c, t_rt, [], f_rt, loc)] else [] in
+          let has_lt = t_lt <> [] || f_lt <> [] in
+          let has_rt = t_rt <> [] || f_rt <> [] in
+          let lt = if has_lt then [Stmt_If(c, t_lt, [], f_lt, loc)] else [] in
+          let rt = if has_rt then [Stmt_If(c, t_rt, [], f_rt, loc)] else [] in
           t_defs @ f_defs @ lt @ rt
       | s -> [s])
     xs
@@ -411,7 +413,7 @@ and write_stmts s st =
   (* if not (lt @ rt = s) then List.iter (fun x -> print_endline @@ pp_stmt x) s; *)
   (* assert (lt @ rt = s); *)
 
-  let do_write ~rt = function
+  let do_write = function
     | [] -> ()
     | x::xs ->
       write_stmt x st;
@@ -423,10 +425,14 @@ and write_stmts s st =
   if not is_rt then begin
     if lt = [] then
       write_line "()" st
-    else begin
+    else if lt = [List.hd lt] then begin
+      inc_depth st;
+      do_write lt;
+      dec_depth st;
+    end else begin
       write_line "begin\n" st;
       inc_depth st;
-      do_write ~rt:false lt;
+      do_write lt;
       write_nl st;
       dec_depth st;
       write_line "end" st
@@ -437,22 +443,25 @@ and write_stmts s st =
     if lt <> [] then begin
       write_line "begin\n" st;
       inc_depth st;
-      do_write ~rt:false lt;
+      do_write lt;
       write_seq st;
+      dec_depth st;
     end;
     if rt = [] then begin
       write_line "[]" st;
     end else if rt = [List.hd rt] then begin
       inc_depth st;
-      do_write ~rt:true rt;
+      do_write rt;
       dec_depth st
     end else begin
+      inc_depth st;
       write_line "(List.flatten [\n" st;
       inc_depth st;
-      do_write ~rt:true rt;
+      do_write rt;
       write_nl st;
       dec_depth st;
       write_line "])" st;
+      dec_depth st
     end;
     if lt <> [] then begin
       write_nl st;
