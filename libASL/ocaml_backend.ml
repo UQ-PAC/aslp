@@ -188,7 +188,7 @@ let write_call f targs args st =
   let f = name_of_ident f in
   let args = targs @ args in
   let call = f ^ " (" ^ (String.concat ") (" args) ^ ")" in
-  write_line ("[" ^ call ^ "]") st
+  write_line call st
 
 let write_ref v e st =
   let name = name_of_ident v in
@@ -268,6 +268,11 @@ let rec has_runtime_statement = function
   (* | Stmt_Assign(LExpr_Var v, _, _) when IdentSet.mem v st.ref_vars ->  true *)
   | _ -> false
 
+let rec has_lifttime_statement = function
+  | Stmt_TCall _ -> false
+  | Stmt_If(_, ts, _, fs, _) -> List.exists has_lifttime_statement ts || List.exists has_lifttime_statement fs
+  | _ -> true
+
 let rec inject_runtime_sentinel ~needs_rt xs =
   let xs = List.map
     (function
@@ -279,6 +284,22 @@ let rec inject_runtime_sentinel ~needs_rt xs =
   if needs_rt && not (List.exists has_runtime_statement xs) then
     xs @ [Stmt_TCall(Offline_transform.rt_gen_noop, [], [], Unknown)]
   else
+    xs
+
+(* TODO: problems with local variable scoping after we hoist all the LT statements. the read
+  of the let variables occurs outside the scope of the declaration. *)
+let rec discriminate_lifttime_runtime xs =
+  List.concat_map
+    (function
+      | Stmt_If(c, ts, els, fs, loc) ->
+          let ts = discriminate_lifttime_runtime ts in
+          let fs = discriminate_lifttime_runtime fs in
+          let (t_rt, t_lt) = List.partition has_runtime_statement ts in
+          let (f_rt, f_lt) = List.partition has_runtime_statement fs in
+          let lt = if t_lt <> [] || f_lt <> [] then [Stmt_If(c, t_lt, [], f_lt, loc)] else [] in
+          let rt = if t_rt <> [] || f_rt <> [] then [Stmt_If(c, t_rt, [], f_rt, loc)] else [] in
+          lt @ rt
+      | s -> [s])
     xs
 
 let rec write_assign v e st =
@@ -384,8 +405,8 @@ and write_stmts s st =
   (* if not (lt @ rt = s) then List.iter (fun x -> print_endline @@ pp_stmt x) s; *)
   (* assert (lt @ rt = s); *)
 
-  let do_write ?empty = function
-    | [] -> Option.iter (fun x -> write_line x st) empty
+  let do_write ~rt = function
+    | [] -> ()
     | x::xs ->
       write_stmt x st;
       List.iter (fun s ->
@@ -396,7 +417,7 @@ and write_stmts s st =
   if not is_rt then begin
     write_line "begin\n" st;
     inc_depth st;
-    do_write lt;
+    do_write ~rt:false lt;
     write_nl st;
     dec_depth st;
     write_line "end" st
@@ -406,7 +427,7 @@ and write_stmts s st =
     if lt <> [] then begin
       write_line "begin\n" st;
       inc_depth st;
-      do_write lt;
+      do_write ~rt:false lt;
       write_seq st;
     end;
     if rt = [] then
@@ -414,7 +435,7 @@ and write_stmts s st =
     else begin
       write_line "(List.flatten [\n" st;
       inc_depth st;
-      do_write rt;
+      do_write ~rt:true rt;
       write_nl st;
       dec_depth st;
       write_line "])" st;
@@ -438,6 +459,7 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
   Printf.fprintf st.oc "let %s %s : %s = \n" (name_of_ident name) args ret;
   let body = reconstruct_rt_branches body in
   let body = inject_runtime_sentinel ~needs_rt:true body in
+  (* let body = discriminate_lifttime_runtime body in *)
   inc_depth st;
   write_stmts body st;
   dec_depth st;
