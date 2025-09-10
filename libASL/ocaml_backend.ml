@@ -432,7 +432,7 @@ and write_stmts s st =
       write_line "end" st
     end
   end else if lt = [] && rt = [] then
-    write_line empty st
+    (inc_depth st; write_line empty st; dec_depth st)
   else begin
     if lt <> [] then begin
       write_line "begin\n" st;
@@ -440,9 +440,13 @@ and write_stmts s st =
       do_write ~rt:false lt;
       write_seq st;
     end;
-    if rt = [] then
-      write_line "[]" st
-    else begin
+    if rt = [] then begin
+      write_line "[]" st;
+    end else if rt = [List.hd rt] then begin
+      inc_depth st;
+      do_write ~rt:true rt;
+      dec_depth st
+    end else begin
       write_line "(List.flatten [\n" st;
       inc_depth st;
       do_write ~rt:true rt;
