@@ -317,7 +317,7 @@ as we would expect if the partial evaluation is correct.
 UNDEFINED means that particular bytecode is an undefined case in the architecture.
 If an exception occurs somewhere else in the process, that will be reported as well.
 
-## Publication
+## Publications
 
 - Lam, K., & Coughlin, N. (2023).
 Lift-off: Trustworthy ARMv8 semantics from formal specifications.
@@ -326,6 +326,8 @@ _Proceedings of the 23rd Conference on Formal Methods in Computer-Aided Design �
 (pp. 274–283).
 TU Wien Academic Press.
 [10.34727/2023/isbn.978-3-85448-060-0_36](https://doi.org/10.34727/2023/isbn.978-3-85448-060-0_36)
+
+- Coughlin, N., Michael, A., & Lam, K. (2025). Lift-Offline: Instruction Lifter Generators. In R. Giacobazzi & A. Gorla (Eds.), Static Analysis (Vol. 14995, pp. 86–119). Springer Nature Switzerland. [10.1007/978-3-031-74776-2_4](https://doi.org/10.1007/978-3-031-74776-2_4)
 
 ## License and contribution
 
