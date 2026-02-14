@@ -1,5 +1,4 @@
-open LibASL
-open Asl_ast
+open LibASL_stage0
 open Asl_utils
 
 let run (opcode: string) (pc: int option) =
