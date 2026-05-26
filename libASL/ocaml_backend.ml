@@ -466,6 +466,7 @@ let write_dune_file use_pc files runner_files dir  : unit =
 
   Printf.fprintf oc "
 (library
+  (name runner)
   (public_name aslp_offline.runner)
   (modules %s)
   (libraries libASL_stage0))" (String.concat " " runner_files);

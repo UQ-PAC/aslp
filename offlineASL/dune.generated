@@ -27,6 +27,7 @@
     Instruction_building_interface
   ))
 (library
+  (name runner)
   (public_name aslp_offline.runner)
   (modules run Offline_utils)
   (libraries libASL_stage0))
