@@ -32,18 +32,58 @@ let add_ref_var v st =
  * String Utils
  ****************************************************************)
 
+let ibi_names = [|
+  "f_Elem_set"; "f_eq_bits"; "f_ne_bits"; "f_add_bits"; "f_sub_bits";
+  "f_mul_bits"; "f_and_bits"; "f_or_bits"; "f_eor_bits"; "f_not_bits";
+  "f_slt_bits"; "f_sle_bits"; "f_zeros_bits"; "f_ones_bits";
+  "f_replicate_bits"; "f_append_bits"; "f_ZeroExtend"; "f_SignExtend";
+  "f_lsl_bits"; "f_lsr_bits"; "f_asr_bits"; "f_cvt_bits_uint"; "f_sdiv_int";
+  "f_shl_int"; "f_switch_context"; "f_gen_branch"; "f_true_branch";
+  "f_false_branch"; "f_merge_branch"; "f_gen_assert"; "f_gen_bit_lit";
+  "f_gen_bool_lit"; "f_gen_int_lit"; "f_decl_bv"; "f_decl_bool"; "f_gen_load";
+  "f_gen_store"; "f_gen_array_load"; "f_gen_array_store"; "f_gen_Elem_read";
+  "f_gen_Elem_set"; "f_gen_Mem_set"; "f_gen_Mem_read"; "f_AtomicStart";
+  "f_AtomicEnd"; "f_gen_AArch64_MemTag_set"; "f_gen_AArch64_MemTag_read";
+  "f_gen_and_bool"; "f_gen_or_bool"; "f_gen_not_bool"; "f_gen_cvt_bits_uint";
+  "f_gen_eq_bits"; "f_gen_ne_bits"; "f_gen_not_bits"; "f_gen_cvt_bool_bv";
+  "f_gen_or_bits"; "f_gen_eor_bits"; "f_gen_and_bits"; "f_gen_add_bits";
+  "f_gen_sub_bits"; "f_gen_sdiv_bits"; "f_gen_sle_bits"; "f_gen_slt_bits";
+  "f_gen_mul_bits"; "f_gen_append_bits"; "f_gen_lsr_bits"; "f_gen_lsl_bits";
+  "f_gen_asr_bits"; "f_gen_replicate_bits"; "f_gen_ZeroExtend";
+  "f_gen_SignExtend"; "f_gen_slice"; "f_gen_FPCompare"; "f_gen_FPCompareEQ";
+  "f_gen_FPCompareGE"; "f_gen_FPCompareGT"; "f_gen_FPAdd"; "f_gen_FPSub";
+  "f_gen_FPMulAdd"; "f_gen_FPMulAddH"; "f_gen_FPMulX"; "f_gen_FPMul";
+  "f_gen_FPDiv"; "f_gen_FPMin"; "f_gen_FPMinNum"; "f_gen_FPMax";
+  "f_gen_FPMaxNum"; "f_gen_FPRecpX"; "f_gen_FPSqrt"; "f_gen_FPRecipEstimate";
+  "f_gen_UnsignedRSqrtEstimate"; "f_gen_FPRSqrtEstimate"; "f_gen_BFAdd";
+  "f_gen_BFMul"; "f_gen_FPConvertBF"; "f_gen_FPRecipStepFused";
+  "f_gen_FPRSqrtStepFused"; "f_gen_FPToFixed"; "f_gen_FixedToFP";
+  "f_gen_FPConvert"; "f_gen_FPRoundInt"; "f_gen_FPRoundIntN";
+  "f_gen_FPToFixedJS_impl";
+
+  "v_PSTATE_C"; "v_PSTATE_Z"; "v_PSTATE_V"; "v_PSTATE_N"; "v__PC"; "v__R";
+  "v__Z"; "v_SP_EL0"; "v_FPSR"; "v_FPCR"; "v_PSTATE_A"; "v_PSTATE_D";
+  "v_PSTATE_DIT"; "v_PSTATE_F"; "v_PSTATE_I"; "v_PSTATE_PAN"; "v_PSTATE_SP";
+  "v_PSTATE_SSBS"; "v_PSTATE_TCO"; "v_PSTATE_UAO"; "v_PSTATE_BTYPE";
+  "v_BTypeCompatible"; "v___BranchTaken"; "v_BTypeNext"; "v___ExclusiveLocal";
+|]
+
 let replace s =
   String.fold_left (fun acc c ->
     if c = '.' then acc ^ "_"
     else if c = '#' then acc ^ "HASH"
     else acc ^ (String.make 1 c)) "" s
 
-let name_of_ident v =
+let name_of_ident ?(call = false) v =
   let s = (match v with
   | Ident n -> "v_" ^ n
   | FIdent (n,0) -> "f_" ^ n
   | FIdent (n,i) -> "f_" ^ n ^ "_" ^ (string_of_int i)) in
-  replace s
+  let s = replace s in
+  match v with
+  | _ when Array.mem s ibi_names -> "I." ^ s
+  | FIdent _ when call -> s ^ " (module I)"
+  | _ -> s
 
 let rec name_of_lexpr l =
   match l with
@@ -67,14 +107,18 @@ let write_preamble opens st =
   Printf.fprintf st.oc "\n"
 
 let write_epilogue use_pc fid st =
-  let conv_pc = "let pc = (mkBits (Z.of_int 64) (Z.of_int pc)) in" in
+  let conv_pc = "let pc = (mkBits (I.bigint_of_int 64) (I.bigint_of_int pc)) in" in
   let dis_call = (match use_pc with
     | true ->  Printf.sprintf "%s\n  %s enc pc" conv_pc
     | false ->  Printf.sprintf "%s enc"
-  ) (name_of_ident fid)
+  ) (name_of_ident ~call:true fid)
   in
   let pc_arg = if use_pc then " ~(pc:int)" else "" in
-  Printf.fprintf st.oc "let run%s enc =\n  reset_ir ();\n  %s;\n  get_ir ()\n" pc_arg dis_call
+  Printf.fprintf st.oc {|let run %s enc =
+  reset_ir ();
+  let module I = (Offline_utils : Instruction_building_interface.IBI with type bitvector = LibASL_stage0.Primops.bitvector) in
+  %s;
+  get_ir ()|} pc_arg dis_call
 
 let write_line s st =
   let padding = String.concat "" (List.init st.depth (fun _ -> " ")) in
@@ -116,25 +160,25 @@ let rec prints_expr e st =
       Printf.sprintf "List.nth (%s) (%s)" (prints_expr a st) (prints_expr i st)
 
   (* Int Expressions using Z *)
-  | Expr_LitInt i -> "Z.of_string \"" ^ i ^ "\""
+  | Expr_LitInt i -> "I.bigint_of_string \"" ^ i ^ "\""
   | Expr_TApply(FIdent("add_int", 0), [], [a;b]) ->
-      Printf.sprintf "Z.add (%s) (%s)" (prints_expr a st) (prints_expr b st)
+      Printf.sprintf "I.bigint_add (%s) (%s)" (prints_expr a st) (prints_expr b st)
   | Expr_TApply(FIdent("sub_int", 0), [], [a;b]) ->
-      Printf.sprintf "Z.sub (%s) (%s)" (prints_expr a st) (prints_expr b st)
+      Printf.sprintf "I.bigint_sub (%s) (%s)" (prints_expr a st) (prints_expr b st)
   | Expr_TApply(FIdent("mul_int", 0), [], [a;b]) ->
-      Printf.sprintf "Z.mul (%s) (%s)" (prints_expr a st) (prints_expr b st)
+      Printf.sprintf "I.bigint_mul (%s) (%s)" (prints_expr a st) (prints_expr b st)
   | Expr_TApply(FIdent("frem_int", 0), [], [a;b]) ->
-      Printf.sprintf "frem_int (%s) (%s)" (prints_expr a st) (prints_expr b st)
+      Printf.sprintf "I.frem_int (%s) (%s)" (prints_expr a st) (prints_expr b st)
 
   (* Other operations *)
-  | Expr_LitBits b -> "from_bitsLit \"" ^ b ^ "\""
+  | Expr_LitBits b -> "I.from_bitsLit \"" ^ b ^ "\""
   | Expr_Slices(e,[Slice_LoWd(i,w)]) ->
       let e = prints_expr e st in
       let i = prints_expr i st in
       let w = prints_expr w st in
-      Printf.sprintf "extract_bits (%s) (%s) (%s)" e i w
+      Printf.sprintf "I.extract_bits (%s) (%s) (%s)" e i w
   | Expr_TApply(f, targs, args) ->
-      let f = name_of_ident f in
+      let f = name_of_ident ~call:true f in
       let args = List.map (fun e -> prints_expr e st) (targs @ args) in
       f ^ " (" ^ (String.concat ") (" args) ^ ")"
 
@@ -148,16 +192,16 @@ let rec prints_expr e st =
 and default_value t st =
   match t with
   | Type_Bits w ->
-      Printf.sprintf "mkBits (%s) Z.zero" (prints_expr w st)
+      Printf.sprintf "mkBits (%s) I.bigint_zero" (prints_expr w st)
   | Type_Constructor (Ident "boolean") -> "true"
-  | Type_Constructor (Ident "integer") -> "Z.zero"
+  | Type_Constructor (Ident "integer") -> "I.bigint_zero"
   | Type_Constructor (Ident "rt_label") -> "0"
-  | Type_Constructor (Ident "rt_expr") -> "undefined ()"
+  | Type_Constructor (Ident "rt_expr") -> "I.undefined ()"
   | Type_Array(Index_Range(lo, hi),ty) ->
       let lo = prints_expr lo st in
       let hi = prints_expr hi st in
       let d = default_value ty st in
-      Printf.sprintf "List.init ((Z.to_int (%s)) - (Z.to_int (%s)) + 1) (fun _ -> %s)" hi lo d
+      Printf.sprintf "List.init ((I.bigint_to_int (%s)) - (I.bigint_to_int (%s)) + 1) (fun _ -> %s)" hi lo d
   | _ -> failwith @@ "Unknown type for default value: " ^ (pp_type t)
 
 let prints_ret_type t =
@@ -185,7 +229,7 @@ let write_unsupported st =
   write_line "failwith \"unsupported\"" st
 
 let write_call f targs args st =
-  let f = name_of_ident f in
+  let f = name_of_ident ~call:true f in
   let args = targs @ args in
   let call = f ^ " (" ^ (String.concat ") (" args) ^ ")" in
   write_line call st
@@ -326,14 +370,15 @@ and write_stmts s st =
       (*assert (not st.skip_seq)*)
 
 let build_args targs args =
+  let name_of_arg id = Printf.sprintf "(%s : bitvector)" (name_of_ident id) in
   if List.length targs = 0 && List.length args = 0 then "()"
-  else String.concat " " (List.map name_of_ident (targs@args))
+  else String.concat " " (List.map name_of_arg (targs@args))
 
 let write_fn name (ret_tyo,_,targs,args,_,body) st =
   clear_ref_vars st;
   let args = build_args targs args in
   let ret = prints_ret_type ret_tyo in
-  Printf.fprintf st.oc "let %s %s : %s = \n" (name_of_ident name) args ret;
+  Printf.fprintf st.oc "let %s (type bitvector) (module I : IBI with type bitvector = bitvector) %s : %s = \n" (name_of_ident name) args ret;
   write_stmts body st;
   Printf.fprintf st.oc "\n\n"
 
@@ -342,8 +387,9 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
  ****************************************************************)
 
 let init_st oc = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty }
-let global_deps = ["Offline_utils"]
-let offline_utils_file = [%blob "../offlineASL/template_offline_utils.ml"]
+let global_deps = ["Offline_utils"; "Instruction_building_interface"]
+let offline_utils_contents = [%blob "../offlineASL/template_offline_utils.ml"]
+let ibi_contents = [%blob "../offlineASL/template_instruction_building_interface.ml"]
 
 (* Write an instruction file, containing just the behaviour of one instructions *)
 let write_instr_file fn fnsig dir =
@@ -379,7 +425,7 @@ let write_decoder_file use_pc fn fnsig deps dir =
   close_out oc;
   m
 
-let write_new_dune_file use_pc files dir  : unit =
+let write_dune_file use_pc files dir  : unit =
   let target_gen_files = String.concat "" @@ List.map (fun k ->
     Printf.sprintf "    %s.ml\n" k
   ) files in
@@ -407,32 +453,16 @@ let write_new_dune_file use_pc files dir  : unit =
       Printf.fprintf oc "    %s\n" k
     ) (files);
     Printf.fprintf oc "  )
-    (libraries asli.libASL-stage0))" ;
-    Printf.fprintf oc  "\n(alias (name default) (deps (package aslp_offline) ../aslp_offline.install))"
-
-
-(* Write the dune build file *)
-(* XXX: this function is not used anymore? *)
-let write_dune_file use_pc files dir =
-  let oc = open_out (dir ^ "/dune.inc") in
-  Printf.fprintf oc "; AUTO-GENERATED BY OCAML BACKEND
-(library
-  (name offlineASL)
-  (public_name aslp_offline.%s)
-  (flags
-    (:standard -w -27 -w -33 -cclib -lstdc++))
-  (modules \n"
-  (if use_pc then "pc_aarch64" else "aarch64") ;
-  List.iter (fun k ->
-    Printf.fprintf oc "    %s\n" k
-  ) files;
-  Printf.fprintf oc "  )
-  (libraries asli.libASL-stage0))";
-  close_out oc
+    (libraries asli.libASL-stage0))"
+    (* Printf.fprintf oc  "\n(alias (name default) (deps (package aslp_offline) ../aslp_offline.install))" *)
 
 let write_ibi dir =
   let oc = open_out (dir ^ "/Offline_utils.ml") in
-  output_string oc offline_utils_file ;
+  output_string oc offline_utils_contents ;
+  close_out oc ;
+
+  let oc = open_out (dir ^ "/Instruction_building_interface.ml") in
+  output_string oc ibi_contents ;
   close_out oc
 
 (* Write all of the above, expecting offline_utils.ml to already be present in dir *)
@@ -443,7 +473,7 @@ let run config dfn dfnsig tests fns =
   let decoder = write_decoder_file config.use_pc dfn dfnsig files dir in
   write_ibi dir ;
   try
-  write_new_dune_file config.use_pc (decoder::files@global_deps) dir
+  write_dune_file config.use_pc (decoder::files@global_deps) dir
   with
     | Sys_error _ as e -> Printf.eprintf "failed to write dune file\n%s" (Printexc.to_string e); Printexc.print_backtrace stderr
 

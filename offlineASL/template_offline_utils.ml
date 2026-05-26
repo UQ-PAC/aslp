@@ -2,6 +2,20 @@ open LibASL_stage0
 open Asl_ast
 open Primops
 
+
+type bigint = Primops.bigint
+type bitvector = Primops.bitvector
+type nonrec expr = expr
+type nonrec lexpr = lexpr
+type nonrec stmt = stmt
+type branch = int
+
+let bigint_of_string = Z.of_string
+let bigint_zero = Z.zero
+let bigint_add = Z.add
+let bigint_sub = Z.sub
+let bigint_mul = Z.mul
+
 let mkBits x y = Primops.mkBits (Z.to_int x) y
 let from_bitsLit x =
   let x' = Value.drop_chars x ' ' in

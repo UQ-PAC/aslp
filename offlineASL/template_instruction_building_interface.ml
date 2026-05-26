@@ -6,6 +6,13 @@ module type IBI = sig
   type stmt
   type branch
 
+  val bigint_of_string : string -> bigint
+  val bigint_zero : bigint
+  val bigint_add : bigint -> bigint -> bigint
+  val bigint_sub : bigint -> bigint -> bigint
+  val bigint_mul : bigint -> bigint -> bigint
+
+  val undefined : unit -> expr
   val mkBits : bigint -> bigint -> bitvector
   val from_bitsLit : string -> bitvector
   val frem_int : bigint -> bigint -> bigint

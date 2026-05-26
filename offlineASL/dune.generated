@@ -6,6 +6,7 @@
     decode_tests.ml
     aarch64_integer_arithmetic_add_sub_shiftedreg.ml
     Offline_utils.ml
+    Instruction_building_interface.ml
 
   )
   (deps gen-command)
@@ -23,6 +24,6 @@
     decode_tests
     aarch64_integer_arithmetic_add_sub_shiftedreg
     Offline_utils
+    Instruction_building_interface
   )
     (libraries asli.libASL-stage0))
-(alias (name default) (deps (package aslp_offline) ../aslp_offline.install))

@@ -3,6 +3,7 @@
 (include dune.bootstrap)
 
 (library
- (name instruction_building_interface)
- (modules instruction_building_interface)
- (libraries libASL_stage0))
+ (name dummy_offline_utils)
+ (modules template_instruction_building_interface template_offline_utils)
+ (flags (:standard -w -27))
+ (libraries zarith libASL_stage0))
