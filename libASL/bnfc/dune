@@ -1,9 +1,19 @@
 (rule
  (deps Semantics.cf)
- (action (run bnfc --ocaml-menhir Semantics.cf))
- (targets AbsSemantics.ml LexSemantics.mll ParSemantics.mly SkelSemantics.ml PrintSemantics.ml ShowSemantics.ml TestSemantics.ml BNFC_Util.ml)
+ (action
+  (run bnfc --ocaml-menhir Semantics.cf))
+ (targets
+  AbsSemantics.ml
+  LexSemantics.mll
+  ParSemantics.mly
+  SkelSemantics.ml
+  PrintSemantics.ml
+  ShowSemantics.ml
+  TestSemantics.ml
+  BNFC_Util.ml)
  (mode promote)
  (enabled_if %{env:ASLP_BNFC_PROMOTE=false}))
+
 ; NOTE: bnfc is not run unless ASLP_BNFC_PROMOTE is manually set to `true`.
 
 (ocamllex LexSemantics)
@@ -15,8 +25,16 @@
 (library
  (name libASL_bnfc)
  (public_name asli.libASL-bnfc)
- (flags (:standard -w -27-33-39))
- (modules LexSemantics ParSemantics AbsSemantics BNFC_Util PrintSemantics ShowSemantics SkelSemantics))
+ (flags
+  (:standard -w -27-33-39))
+ (modules
+  LexSemantics
+  ParSemantics
+  AbsSemantics
+  BNFC_Util
+  PrintSemantics
+  ShowSemantics
+  SkelSemantics))
 
 (executable
  (name TestSemantics)
@@ -24,6 +42,6 @@
  (package asli)
  (modes exe byte)
  (modules TestSemantics)
- (flags (:standard -open LibASL_bnfc))
+ (flags
+  (:standard -open LibASL_bnfc))
  (libraries asli.libASL asli.libASL-bnfc))
-

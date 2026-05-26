@@ -1,1 +1,1 @@
-:gen A64 aarch64.+ ocaml false .
+:gen A64 aarch64_integer_arithmetic_add_sub_shiftedreg ocaml false .

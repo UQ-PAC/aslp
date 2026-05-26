@@ -2,3 +2,7 @@
 
 (include dune.bootstrap)
 
+(library
+ (name instruction_building_interface)
+ (modules instruction_building_interface)
+ (libraries libASL_stage0))
