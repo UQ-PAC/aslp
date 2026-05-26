@@ -2,10 +2,11 @@
 (rule
   (targets
     dune.generated.new
+    run.ml
+    Offline_utils.ml
     offline.ml
     decode_tests.ml
     aarch64_integer_arithmetic_add_sub_shiftedreg.ml
-    Offline_utils.ml
     Instruction_building_interface.ml
 
   )
@@ -18,12 +19,14 @@
     (name offlineASL)
     (public_name aslp_offline.aarch64)
     (flags
-      (:standard -w -27 -w -33 -cclib -lstdc++))
+      (:standard -w -27 -w -33))
     (modules 
     offline
     decode_tests
     aarch64_integer_arithmetic_add_sub_shiftedreg
-    Offline_utils
     Instruction_building_interface
-  )
-    (libraries asli.libASL-stage0))
+  ))
+(library
+  (public_name aslp_offline.runner)
+  (modules run Offline_utils)
+  (libraries libASL_stage0))
