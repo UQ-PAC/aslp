@@ -463,13 +463,15 @@ let write_dune_file use_pc files runner_files dir  : unit =
     ) (files);
   Printf.fprintf oc "  ))";
 
+  let runner_name = if use_pc then "runner_pc" else "runner" in
   Printf.fprintf oc "
 (library
-  (name runner)
-  (public_name aslp_offline.runner)
+  (name %s)
+  (public_name aslp_offline.%s)
   (flags (:standard -w -27 -w -33))
   (modules %s)
-  (libraries libASL_stage0 %s))" (String.concat " " runner_files) name;
+  (libraries libASL_stage0 %s))"
+    runner_name runner_name (String.concat " " runner_files) name;
 
   close_out oc
     (* Printf.fprintf oc  "\n(alias (name default) (deps (package aslp_offline) ../aslp_offline.install))" *)

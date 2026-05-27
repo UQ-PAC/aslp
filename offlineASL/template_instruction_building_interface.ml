@@ -7,6 +7,7 @@ module type IBI = sig
   type branch
 
   val bigint_of_string : string -> bigint
+  val bigint_of_int : int -> bigint
   val bigint_zero : bigint
   val bigint_add : bigint -> bigint -> bigint
   val bigint_sub : bigint -> bigint -> bigint

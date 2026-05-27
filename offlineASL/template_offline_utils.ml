@@ -11,6 +11,7 @@ type nonrec stmt = stmt
 type branch = int
 
 let bigint_of_string = Z.of_string
+let bigint_of_int = Z.of_int
 let bigint_zero = Z.zero
 let bigint_add = Z.add
 let bigint_sub = Z.sub

@@ -2,6 +2,8 @@
 (rule
   (targets
     dune.generated.new
+    run.ml
+    Asl_ibi.ml
     offline.ml
     decode_tests.ml
     aarch64_vector_transfer_vector_table.ml
@@ -371,7 +373,7 @@
     aarch64_branch_conditional_test.ml
     aarch64_branch_conditional_cond.ml
     aarch64_branch_conditional_compare.ml
-    Offline_utils.ml
+    Instruction_building_interface.ml
 
   )
   (deps gen-command)
@@ -382,8 +384,7 @@
   (library
     (name offlineASL_pc)
     (public_name aslp_offline.pc_aarch64)
-    (flags
-      (:standard -w -27 -w -33 -cclib -lstdc++))
+    (flags (:standard -w -27 -w -33))
     (modules 
     offline
     decode_tests
@@ -754,7 +755,11 @@
     aarch64_branch_conditional_test
     aarch64_branch_conditional_cond
     aarch64_branch_conditional_compare
-    Offline_utils
-  )
-    (libraries asli.libASL-stage0))
-(alias (name default) (deps (package aslp_offline) ../aslp_offline.install))
+    Instruction_building_interface
+  ))
+(library
+  (name runner_pc)
+  (public_name aslp_offline.runner_pc)
+  (flags (:standard -w -27 -w -33))
+  (modules run Asl_ibi)
+  (libraries libASL_stage0 offlineASL_pc))
