@@ -1,20 +1,20 @@
+
 (executable
  (name asli)
  (public_name asli)
  (package asli)
  (modes exe byte)
  (modules asli)
- (flags
-  (-cclib -lstdc++))
- (libraries asli.libASL linenoise pprint))
+ (flags (-cclib -lstdc++))
+ (libraries asli.libASL linenoise pprint)
+ )
 
 (executable
  (name testlexer)
  (modes exe)
  ; (public_name test_asl_lexer)
  (modules testlexer)
- (flags
-  (-cclib -lstdc++))
+ (flags (-cclib -lstdc++))
  (libraries asli.libASL))
 
 (executable
@@ -22,8 +22,7 @@
  (modes exe)
  ; (public_name test_asl_lexer)
  (modules processops)
- (flags
-  (-cclib -lstdc++))
+ (flags (-cclib -lstdc++))
  (libraries asli.libASL unix))
 
 (executable
@@ -32,8 +31,7 @@
  (package aslp_offline)
  (modes exe)
  (modules offline_coverage)
- (flags
-  (-cclib -lstdc++))
+ (flags (-cclib -lstdc++))
  (libraries asli.libASL aslp_offline.aarch64))
 
 (executable
@@ -42,6 +40,5 @@
  (package aslp_offline)
  (modes exe)
  (modules offline_sem)
- (flags
-  (-cclib -lstdc++))
+ (flags (-cclib -lstdc++))
  (libraries asli.libASL aslp_offline.aarch64 aslp_offline.pc_aarch64))

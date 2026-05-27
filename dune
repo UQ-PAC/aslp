@@ -1,39 +1,34 @@
 (alias
- (name asl_files)
- (deps
-  prelude.asl
-  mra_tools/arch/arch.asl
-  mra_tools/arch/arch_decode.asl
-  mra_tools/arch/arch_instrs.asl
-  mra_tools/arch/regs.asl
-  mra_tools/arch/regs_access.asl
-  mra_tools/support/aes.asl
-  mra_tools/support/barriers.asl
-  mra_tools/support/debug.asl
-  mra_tools/support/feature.asl
-  mra_tools/support/fetchdecode.asl
-  mra_tools/support/hints.asl
-  mra_tools/support/interrupts.asl
-  mra_tools/support/memory.asl
-  mra_tools/support/stubs.asl
-  mra_tools/types.asl
-  tests/override.asl
-  tests/override.prj))
+  (name asl_files)
+  (deps
+    prelude.asl
+    mra_tools/arch/arch.asl
+    mra_tools/arch/arch_decode.asl
+    mra_tools/arch/arch_instrs.asl
+    mra_tools/arch/regs.asl
+    mra_tools/arch/regs_access.asl
+    mra_tools/support/aes.asl
+    mra_tools/support/barriers.asl
+    mra_tools/support/debug.asl
+    mra_tools/support/feature.asl
+    mra_tools/support/fetchdecode.asl
+    mra_tools/support/hints.asl
+    mra_tools/support/interrupts.asl
+    mra_tools/support/memory.asl
+    mra_tools/support/stubs.asl
+    mra_tools/types.asl
+    tests/override.asl
+    tests/override.prj))
 
 (alias
  (name default)
- (deps
-  (package asli)
-  asli.install))
+ (deps (package asli) asli.install))
+
 
 (alias
  (name aslp_offline_jsoo)
- (deps
-  (package aslp_offline_jsoo)
-  bin/offline_js.bc.js))
+ (deps (package aslp_offline_jsoo ) bin/offline_js.bc.js))
 
 (alias
  (name offline)
- (deps
-  (package aslp_offline)
-  aslp_offline.install))
+ (deps (package aslp_offline) aslp_offline.install))

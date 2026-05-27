@@ -1,25 +1,22 @@
-(rule
- (copy ../../libASL/Semantics.g4 ./Semantics.g4))
+(rule (copy ../../libASL/Semantics.g4 ./Semantics.g4))
 
-(rule
- (alias find_java)
- (action
-  (bash "type -P java > /dev/null")))
+(rule (alias find_java)
+ (action (bash "type -P java > /dev/null")))
 
-(rule
- (target ./antlr.jar)
- (deps
-  (alias find_java))
+(rule (target ./antlr.jar)
+ (deps (alias find_java))
  (action
-  (bash
-   "antlr=\"${ANTLR4_JAR_LOCATION:-}\"\n        if [[ -n \"$antlr\" ]]; then\n         ln -s \"$antlr\" antlr.jar\n        else\n         curl -s -o antlr.jar https://www.antlr.org/download/antlr-4.13.1-complete.jar\n        fi")))
+  (bash "antlr=\"${ANTLR4_JAR_LOCATION:-}\"
+        if [[ -n \"$antlr\" ]]; then
+         ln -s \"$antlr\" antlr.jar
+        else
+         curl -s -o antlr.jar https://www.antlr.org/download/antlr-4.13.1-complete.jar
+        fi")))
 
 (cram
  (applies_to *)
  (package asli)
- (deps
-  (package asli)
-  (glob_files *.txt)))
+ (deps (package asli) (glob_files *.txt)))
 
 (cram
  (applies_to * \ test_dis)

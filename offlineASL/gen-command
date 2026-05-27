@@ -1,1 +1,1 @@
-:gen A64 aarch64_.+ ocaml false .
+:gen A64 aarch64.+ ocaml false .

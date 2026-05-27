@@ -6,166 +6,42 @@
 
 (rule
  (target ./encodings)
- (action
-  (run tar xf %{dep:../../encodings.tar.gz})))
+ (action (run tar xf %{dep:../../encodings.tar.gz})))
 
 (rule
- (deps
-  (package asli)
-  ./encodings)
- (action
-  (copy ./run.sh ./run)))
+ (deps (package asli) ./encodings)
+ (action (copy ./run.sh ./run)))
 
 (rule
- (deps
-  (package aslp_offline)
-  ./encodings)
- (action
-  (copy ./off_run.sh ./off_run)))
+ (deps (package aslp_offline) ./encodings)
+ (action (copy ./off_run.sh ./off_run)))
 
-(rule
- (deps ../../bin/asli.exe)
- (action
-  (with-stdout-to
-   cov_integer
-   (run ./run "aarch64_integer.+"))))
-
-(rule
- (deps ../../bin/asli.exe)
- (action
-  (with-stdout-to
-   cov_branch
-   (run ./run "aarch64_branch.+"))))
-
-(rule
- (deps ../../bin/asli.exe)
- (action
-  (with-stdout-to
-   cov_float
-   (run ./run "aarch64_float_.+"))))
-
-(rule
- (deps ../../bin/asli.exe)
- (action
-  (with-stdout-to
-   cov_vector1
-   (run ./run "aarch64_vector_arithmetic_binary.+"))))
-
-(rule
- (deps ../../bin/asli.exe)
- (action
-  (with-stdout-to
-   cov_vector2
-   (run ./run "aarch64_vector_\\(arithmetic_unary\\|[^a]\\).+"))))
-
-(rule
- (deps ../../bin/asli.exe)
- (action
-  (with-stdout-to
-   cov_memory
-   (run ./run "aarch64_memory_.+"))))
-
+(rule (deps ../../bin/asli.exe) (action (with-stdout-to cov_integer (run ./run "aarch64_integer.+"))))
+(rule (deps ../../bin/asli.exe) (action (with-stdout-to cov_branch  (run ./run "aarch64_branch.+"))))
+(rule (deps ../../bin/asli.exe) (action (with-stdout-to cov_float   (run ./run "aarch64_float_.+"))))
+(rule (deps ../../bin/asli.exe) (action (with-stdout-to cov_vector1 (run ./run "aarch64_vector_arithmetic_binary.+"))))
+(rule (deps ../../bin/asli.exe) (action (with-stdout-to cov_vector2 (run ./run "aarch64_vector_\\(arithmetic_unary\\|[^a]\\).+"))))
+(rule (deps ../../bin/asli.exe) (action (with-stdout-to cov_memory  (run ./run "aarch64_memory_.+"))))
 ; note: cov_vector2 is intended to be every vector instruction that's not arithmetic_binary.
 ; note ocaml Str regex syntax: https://ocaml.org/manual/5.2/api/Str.html
 
-(rule
- (alias coverage)
- (action
-  (diff ./aarch64_integer cov_integer)))
+(rule (alias coverage) (action (diff ./aarch64_integer cov_integer)))
+(rule (alias coverage) (action (diff ./aarch64_branch cov_branch)))
+(rule (alias coverage) (action (diff ./aarch64_float cov_float)))
+(rule (alias coverage) (action (diff ./aarch64_vector1 cov_vector1)))
+(rule (alias coverage) (action (diff ./aarch64_vector2 cov_vector2)))
+(rule (alias coverage) (action (diff ./aarch64_memory cov_memory)))
 
-(rule
- (alias coverage)
- (action
-  (diff ./aarch64_branch cov_branch)))
+(rule (deps ../../bin/offline_coverage.exe) (action (with-stdout-to off_cov_integer (run ./off_run "aarch64_integer.+"))))
+(rule (deps ../../bin/offline_coverage.exe) (action (with-stdout-to off_cov_branch  (run ./off_run "aarch64_branch.+"))))
+(rule (deps ../../bin/offline_coverage.exe) (action (with-stdout-to off_cov_float   (run ./off_run "aarch64_float_.+"))))
+(rule (deps ../../bin/offline_coverage.exe) (action (with-stdout-to off_cov_vector1 (run ./off_run "aarch64_vector_arithmetic_binary.+"))))
+(rule (deps ../../bin/offline_coverage.exe) (action (with-stdout-to off_cov_vector2 (run ./off_run "aarch64_vector_\\(arithmetic_unary\\|[^a]\\).+"))))
+(rule (deps ../../bin/offline_coverage.exe) (action (with-stdout-to off_cov_memory  (run ./off_run "aarch64_memory_.+"))))
 
-(rule
- (alias coverage)
- (action
-  (diff ./aarch64_float cov_float)))
-
-(rule
- (alias coverage)
- (action
-  (diff ./aarch64_vector1 cov_vector1)))
-
-(rule
- (alias coverage)
- (action
-  (diff ./aarch64_vector2 cov_vector2)))
-
-(rule
- (alias coverage)
- (action
-  (diff ./aarch64_memory cov_memory)))
-
-(rule
- (deps ../../bin/offline_coverage.exe)
- (action
-  (with-stdout-to
-   off_cov_integer
-   (run ./off_run "aarch64_integer.+"))))
-
-(rule
- (deps ../../bin/offline_coverage.exe)
- (action
-  (with-stdout-to
-   off_cov_branch
-   (run ./off_run "aarch64_branch.+"))))
-
-(rule
- (deps ../../bin/offline_coverage.exe)
- (action
-  (with-stdout-to
-   off_cov_float
-   (run ./off_run "aarch64_float_.+"))))
-
-(rule
- (deps ../../bin/offline_coverage.exe)
- (action
-  (with-stdout-to
-   off_cov_vector1
-   (run ./off_run "aarch64_vector_arithmetic_binary.+"))))
-
-(rule
- (deps ../../bin/offline_coverage.exe)
- (action
-  (with-stdout-to
-   off_cov_vector2
-   (run ./off_run "aarch64_vector_\\(arithmetic_unary\\|[^a]\\).+"))))
-
-(rule
- (deps ../../bin/offline_coverage.exe)
- (action
-  (with-stdout-to
-   off_cov_memory
-   (run ./off_run "aarch64_memory_.+"))))
-
-(rule
- (alias offline-coverage)
- (action
-  (diff ./aarch64_integer off_cov_integer)))
-
-(rule
- (alias offline-coverage)
- (action
-  (diff ./aarch64_branch off_cov_branch)))
-
-(rule
- (alias offline-coverage)
- (action
-  (diff ./aarch64_float off_cov_float)))
-
-(rule
- (alias offline-coverage)
- (action
-  (diff ./aarch64_vector1 off_cov_vector1)))
-
-(rule
- (alias offline-coverage)
- (action
-  (diff ./aarch64_vector2 off_cov_vector2)))
-
-(rule
- (alias offline-coverage)
- (action
-  (diff ./aarch64_memory off_cov_memory)))
+(rule (alias offline-coverage) (action (diff ./aarch64_integer off_cov_integer)))
+(rule (alias offline-coverage) (action (diff ./aarch64_branch  off_cov_branch)))
+(rule (alias offline-coverage) (action (diff ./aarch64_float   off_cov_float)))
+(rule (alias offline-coverage) (action (diff ./aarch64_vector1 off_cov_vector1)))
+(rule (alias offline-coverage) (action (diff ./aarch64_vector2 off_cov_vector2)))
+(rule (alias offline-coverage) (action (diff ./aarch64_memory  off_cov_memory)))
