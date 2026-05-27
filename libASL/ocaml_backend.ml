@@ -107,7 +107,7 @@ let write_preamble opens st =
   Printf.fprintf st.oc "\n"
 
 let write_epilogue use_pc fid st =
-  let conv_pc = "let pc = (mkBits (I.bigint_of_int 64) (I.bigint_of_int pc)) in" in
+  let conv_pc = "let pc = (I.mkBits (I.bigint_of_int 64) (I.bigint_of_int pc)) in" in
   let dis_call = (match use_pc with
     | true ->  Printf.sprintf "%s\n  %s enc pc" conv_pc
     | false ->  Printf.sprintf "%s enc"
