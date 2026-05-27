@@ -116,7 +116,7 @@ let write_epilogue use_pc fid st =
   let pc_arg = if use_pc then " ~(pc:int)" else "" in
   Printf.fprintf st.oc {|let run %s enc =
   reset_ir ();
-  let module I = (Offline_utils : Instruction_building_interface.IBI with type bitvector = LibASL_stage0.Primops.bitvector) in
+  let module I = (Asl_ibi : Instruction_building_interface.IBI with type bitvector = LibASL_stage0.Primops.bitvector) in
   %s;
   get_ir ()|} pc_arg dis_call
 
@@ -192,7 +192,7 @@ let rec prints_expr e st =
 and default_value t st =
   match t with
   | Type_Bits w ->
-      Printf.sprintf "mkBits (%s) I.bigint_zero" (prints_expr w st)
+      Printf.sprintf "I.mkBits (%s) I.bigint_zero" (prints_expr w st)
   | Type_Constructor (Ident "boolean") -> "true"
   | Type_Constructor (Ident "integer") -> "I.bigint_zero"
   | Type_Constructor (Ident "rt_label") -> "0"
@@ -421,7 +421,6 @@ let write_decoder_file use_pc fn fnsig deps dir =
   let st = init_st oc in
   write_preamble (global_deps @ deps) st;
   write_fn fn fnsig st;
-  write_epilogue use_pc fn st;
   close_out oc;
   m
 
@@ -430,7 +429,8 @@ let write_runner_file use_pc fn fnsig deps dir =
   let path = dir ^ "/" ^ m ^ ".ml" in
   let oc = open_out path in
   let st = init_st oc in
-  write_preamble ("Offline" :: "Offline_utils" :: global_deps @ deps) st;
+  let module_name = if use_pc then "OfflineASL_pc" else "OfflineASL" in
+  write_preamble (module_name :: "Offline" :: "Asl_ibi" :: global_deps @ deps) st;
   write_epilogue use_pc fn st;
   close_out oc;
   m
@@ -454,8 +454,7 @@ let write_dune_file use_pc files runner_files dir  : unit =
   (library
     (name %s)
     (public_name aslp_offline.%s)
-    (flags
-      (:standard -w -27 -w -33))
+    (flags (:standard -w -27 -w -33))
     (modules \n"
     name
     (if use_pc then "pc_aarch64" else "aarch64") ;
@@ -468,14 +467,15 @@ let write_dune_file use_pc files runner_files dir  : unit =
 (library
   (name runner)
   (public_name aslp_offline.runner)
+  (flags (:standard -w -27 -w -33))
   (modules %s)
-  (libraries libASL_stage0))" (String.concat " " runner_files);
+  (libraries libASL_stage0 %s))" (String.concat " " runner_files) name;
 
   close_out oc
     (* Printf.fprintf oc  "\n(alias (name default) (deps (package aslp_offline) ../aslp_offline.install))" *)
 
 let write_ibi dir =
-  let oc = open_out (dir ^ "/Offline_utils.ml") in
+  let oc = open_out (dir ^ "/Asl_ibi.ml") in
   output_string oc offline_utils_contents ;
   close_out oc ;
 
@@ -492,7 +492,7 @@ let run config dfn dfnsig tests fns =
   let runner = write_runner_file config.use_pc dfn dfnsig files dir in
   write_ibi dir ;
   try
-    write_dune_file config.use_pc (decoder::files@global_deps) [runner; "Offline_utils"] dir
+    write_dune_file config.use_pc (decoder::files@global_deps) [runner; "Asl_ibi"] dir
   with
     | Sys_error _ as e -> Printf.eprintf "failed to write dune file\n%s" (Printexc.to_string e); Printexc.print_backtrace stderr
 

@@ -3,7 +3,7 @@
   (targets
     dune.generated.new
     run.ml
-    Offline_utils.ml
+    Asl_ibi.ml
     offline.ml
     decode_tests.ml
     aarch64_vector_transfer_vector_table.ml
@@ -384,8 +384,7 @@
   (library
     (name offlineASL)
     (public_name aslp_offline.aarch64)
-    (flags
-      (:standard -w -27 -w -33))
+    (flags (:standard -w -27 -w -33))
     (modules 
     offline
     decode_tests
@@ -761,5 +760,6 @@
 (library
   (name runner)
   (public_name aslp_offline.runner)
-  (modules run Offline_utils)
-  (libraries libASL_stage0))
+  (flags (:standard -w -27 -w -33))
+  (modules run Asl_ibi)
+  (libraries libASL_stage0 offlineASL))
