@@ -5,6 +5,10 @@ module type IBI = sig
   type lexpr
   type stmt
   type branch
+  type ast
+
+  val reset_ir : unit -> unit
+  val get_ir : unit -> ast
 
   val bigint_of_string : string -> bigint
   val bigint_of_int : int -> bigint

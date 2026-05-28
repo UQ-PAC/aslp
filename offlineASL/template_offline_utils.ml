@@ -9,6 +9,7 @@ type nonrec expr = expr
 type nonrec lexpr = lexpr
 type nonrec stmt = stmt
 type branch = int
+type ast = stmt list
 
 let bigint_of_string = Z.of_string
 let bigint_of_int = Z.of_int

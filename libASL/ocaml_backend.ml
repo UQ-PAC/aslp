@@ -32,41 +32,16 @@ let add_ref_var v st =
  * String Utils
  ****************************************************************)
 
-let ibi_names = [|
-  "f_Elem_set"; "f_eq_bits"; "f_ne_bits"; "f_add_bits"; "f_sub_bits";
-  "f_mul_bits"; "f_and_bits"; "f_or_bits"; "f_eor_bits"; "f_not_bits";
-  "f_slt_bits"; "f_sle_bits"; "f_zeros_bits"; "f_ones_bits";
-  "f_replicate_bits"; "f_append_bits"; "f_ZeroExtend"; "f_SignExtend";
-  "f_lsl_bits"; "f_lsr_bits"; "f_asr_bits"; "f_cvt_bits_uint"; "f_sdiv_int";
-  "f_shl_int"; "f_switch_context"; "f_gen_branch"; "f_true_branch";
-  "f_false_branch"; "f_merge_branch"; "f_gen_assert"; "f_gen_bit_lit";
-  "f_gen_bool_lit"; "f_gen_int_lit"; "f_decl_bv"; "f_decl_bool"; "f_gen_load";
-  "f_gen_store"; "f_gen_array_load"; "f_gen_array_store"; "f_gen_Elem_read";
-  "f_gen_Elem_set"; "f_gen_Mem_set"; "f_gen_Mem_read"; "f_AtomicStart";
-  "f_AtomicEnd"; "f_gen_AArch64_MemTag_set"; "f_gen_AArch64_MemTag_read";
-  "f_gen_and_bool"; "f_gen_or_bool"; "f_gen_not_bool"; "f_gen_cvt_bits_uint";
-  "f_gen_eq_bits"; "f_gen_ne_bits"; "f_gen_not_bits"; "f_gen_cvt_bool_bv";
-  "f_gen_or_bits"; "f_gen_eor_bits"; "f_gen_and_bits"; "f_gen_add_bits";
-  "f_gen_sub_bits"; "f_gen_sdiv_bits"; "f_gen_sle_bits"; "f_gen_slt_bits";
-  "f_gen_mul_bits"; "f_gen_append_bits"; "f_gen_lsr_bits"; "f_gen_lsl_bits";
-  "f_gen_asr_bits"; "f_gen_replicate_bits"; "f_gen_ZeroExtend";
-  "f_gen_SignExtend"; "f_gen_slice"; "f_gen_FPCompare"; "f_gen_FPCompareEQ";
-  "f_gen_FPCompareGE"; "f_gen_FPCompareGT"; "f_gen_FPAdd"; "f_gen_FPSub";
-  "f_gen_FPMulAdd"; "f_gen_FPMulAddH"; "f_gen_FPMulX"; "f_gen_FPMul";
-  "f_gen_FPDiv"; "f_gen_FPMin"; "f_gen_FPMinNum"; "f_gen_FPMax";
-  "f_gen_FPMaxNum"; "f_gen_FPRecpX"; "f_gen_FPSqrt"; "f_gen_FPRecipEstimate";
-  "f_gen_UnsignedRSqrtEstimate"; "f_gen_FPRSqrtEstimate"; "f_gen_BFAdd";
-  "f_gen_BFMul"; "f_gen_FPConvertBF"; "f_gen_FPRecipStepFused";
-  "f_gen_FPRSqrtStepFused"; "f_gen_FPToFixed"; "f_gen_FixedToFP";
-  "f_gen_FPConvert"; "f_gen_FPRoundInt"; "f_gen_FPRoundIntN";
-  "f_gen_FPToFixedJS_impl";
+let ibi_contents = [%blob "../offlineASL/template_instruction_building_interface.ml"]
 
-  "v_PSTATE_C"; "v_PSTATE_Z"; "v_PSTATE_V"; "v_PSTATE_N"; "v__PC"; "v__R";
-  "v__Z"; "v_SP_EL0"; "v_FPSR"; "v_FPCR"; "v_PSTATE_A"; "v_PSTATE_D";
-  "v_PSTATE_DIT"; "v_PSTATE_F"; "v_PSTATE_I"; "v_PSTATE_PAN"; "v_PSTATE_SP";
-  "v_PSTATE_SSBS"; "v_PSTATE_TCO"; "v_PSTATE_UAO"; "v_PSTATE_BTYPE";
-  "v_BTypeCompatible"; "v___BranchTaken"; "v_BTypeNext"; "v___ExclusiveLocal";
-|]
+(** Extract the declared IBI function names by searching for [val xxx] within the IBI ML file. *)
+let ibi_names =
+  let ibi_decl_regex = Str.regexp {|\bval \([fv][a-zA-Z0-9_]+\)\b|} in
+  let decl_names = Str.full_split ibi_decl_regex ibi_contents
+    |> List.filter_map (function Str.Delim s -> Some s | _ -> None)
+    |> List.map (fun s -> Str.string_after s 4) in
+  assert (List.mem "f_eq_bits" decl_names);
+  Array.of_list decl_names
 
 let replace s =
   String.fold_left (fun acc c ->
@@ -106,7 +81,7 @@ let write_preamble opens st =
     Printf.fprintf st.oc "open %s\n" s) opens;
   Printf.fprintf st.oc "\n"
 
-let write_epilogue use_pc fid st =
+let write_asl_runner_epilogue use_pc fid st =
   let conv_pc = "let pc = (I.mkBits (I.bigint_of_int 64) (I.bigint_of_int pc)) in" in
   let dis_call = (match use_pc with
     | true ->  Printf.sprintf "%s\n  %s enc pc" conv_pc
@@ -115,10 +90,13 @@ let write_epilogue use_pc fid st =
   in
   let pc_arg = if use_pc then " ~(pc:int)" else "" in
   Printf.fprintf st.oc {|let run %s enc =
-  reset_ir ();
-  let module I = (Asl_ibi : Instruction_building_interface.IBI with type bitvector = LibASL_stage0.Primops.bitvector) in
+  let module I =
+    (Asl_ibi : Instruction_building_interface.IBI
+      with type bitvector = LibASL_stage0.Primops.bitvector
+      and type ast = LibASL_stage0.Asl_ast.stmt list) in
+  I.reset_ir ();
   %s;
-  get_ir ()|} pc_arg dis_call
+  I.get_ir ()|} pc_arg dis_call
 
 let write_line s st =
   let padding = String.concat "" (List.init st.depth (fun _ -> " ")) in
@@ -389,7 +367,6 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
 let init_st oc = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty }
 let global_deps = ["Instruction_building_interface"]
 let offline_utils_contents = [%blob "../offlineASL/template_offline_utils.ml"]
-let ibi_contents = [%blob "../offlineASL/template_instruction_building_interface.ml"]
 
 (* Write an instruction file, containing just the behaviour of one instructions *)
 let write_instr_file fn fnsig dir =
@@ -424,14 +401,14 @@ let write_decoder_file use_pc fn fnsig deps dir =
   close_out oc;
   m
 
-let write_runner_file use_pc fn fnsig deps dir =
-  let m = "run" in
+let write_asl_runner_file use_pc fn fnsig deps dir =
+  let m = if use_pc then "offlineASL_pc_runner" else "offlineASL_runner" in
   let path = dir ^ "/" ^ m ^ ".ml" in
   let oc = open_out path in
   let st = init_st oc in
   let module_name = if use_pc then "OfflineASL_pc" else "OfflineASL" in
   write_preamble (module_name :: "Offline" :: "Asl_ibi" :: global_deps @ deps) st;
-  write_epilogue use_pc fn st;
+  write_asl_runner_epilogue use_pc fn st;
   close_out oc;
   m
 
@@ -463,14 +440,15 @@ let write_dune_file use_pc files runner_files dir  : unit =
     ) (files);
   Printf.fprintf oc "  ))";
 
-  let runner_name = if use_pc then "runner_pc" else "runner" in
+  let runner_name = if use_pc then "offlineASL_pc_runner" else "offlineASL_runner" in
   Printf.fprintf oc "
 (library
   (name %s)
   (public_name aslp_offline.%s)
   (flags (:standard -w -27 -w -33))
   (modules %s)
-  (libraries libASL_stage0 %s))"
+  (optional)
+  (libraries asli.libASL-stage0 %s))"
     runner_name runner_name (String.concat " " runner_files) name;
 
   close_out oc
@@ -491,7 +469,7 @@ let run config dfn dfnsig tests fns =
   let files = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig dir)::acc) fns [] in
   let files = (write_test_file tests dir)::files in
   let decoder = write_decoder_file config.use_pc dfn dfnsig files dir in
-  let runner = write_runner_file config.use_pc dfn dfnsig files dir in
+  let runner = write_asl_runner_file config.use_pc dfn dfnsig files dir in
   write_ibi dir ;
   try
     write_dune_file config.use_pc (decoder::files@global_deps) [runner; "Asl_ibi"] dir

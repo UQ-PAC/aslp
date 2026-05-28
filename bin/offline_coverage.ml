@@ -12,7 +12,7 @@ let () = Printexc.register_printer
 let op_dis (op: int): stmt list opresult =
   let bv = Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int op) in
   try
-    let stmts = OfflineASL.Offline.run  bv in
+    let stmts = OfflineASL_runner.run bv in
 
     RASL_check.AllowedLanguageConstructs.check_stmts_exc (stmts);
 
@@ -88,7 +88,7 @@ let rec process_command tcenv env cmd =
   | [""] -> ()
   | _ -> Printf.printf "Ignoring: %s\n" cmd
 
-let main () = 
+let main () =
   let opt_verbose = ref false in
   let env = match Arm_env.aarch64_evaluation_environment ~verbose:!opt_verbose () with
   | Some e -> e

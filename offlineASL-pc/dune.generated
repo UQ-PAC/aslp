@@ -2,7 +2,7 @@
 (rule
   (targets
     dune.generated.new
-    run.ml
+    offlineASL_pc_runner.ml
     Asl_ibi.ml
     offline.ml
     decode_tests.ml
@@ -758,8 +758,9 @@
     Instruction_building_interface
   ))
 (library
-  (name runner_pc)
-  (public_name aslp_offline.runner_pc)
+  (name offlineASL_pc_runner)
+  (public_name aslp_offline.offlineASL_pc_runner)
   (flags (:standard -w -27 -w -33))
-  (modules run Asl_ibi)
-  (libraries libASL_stage0 offlineASL_pc))
+  (modules offlineASL_pc_runner Asl_ibi)
+  (optional)
+  (libraries asli.libASL-stage0 offlineASL_pc))

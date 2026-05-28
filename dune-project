@@ -34,7 +34,7 @@
   (description "" )
   (depends
     ("ocaml"     (>= "4.14"))
-    "asli"
+    ; optionally depends on "asli" if you want aslp_offline.offlineASL_runner
   )
 )
 
