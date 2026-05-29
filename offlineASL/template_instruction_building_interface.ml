@@ -69,46 +69,46 @@ module type IBI = sig
 
   val f_sdiv_int : bigint -> bigint -> bigint
   val f_shl_int : bigint -> bigint -> bigint
-  val v_PSTATE_C : expr
-  val v_PSTATE_Z : expr
-  val v_PSTATE_V : expr
-  val v_PSTATE_N : expr
-  val v__PC : expr
-  val v__R : expr
-  val v__Z : expr
-  val v_SP_EL0 : expr
-  val v_FPSR : expr
-  val v_FPCR : expr
-  val v_PSTATE_A : expr
-  val v_PSTATE_D : expr
-  val v_PSTATE_DIT : expr
-  val v_PSTATE_F : expr
-  val v_PSTATE_I : expr
-  val v_PSTATE_PAN : expr
-  val v_PSTATE_SP : expr
-  val v_PSTATE_SSBS : expr
-  val v_PSTATE_TCO : expr
-  val v_PSTATE_UAO : expr
-  val v_PSTATE_BTYPE : expr
-  val v_BTypeCompatible : expr
-  val v___BranchTaken : expr
-  val v_BTypeNext : expr
-  val v___ExclusiveLocal : expr
+  val v_PSTATE_C : lexpr
+  val v_PSTATE_Z : lexpr
+  val v_PSTATE_V : lexpr
+  val v_PSTATE_N : lexpr
+  val v__PC : lexpr
+  val v__R : lexpr
+  val v__Z : lexpr
+  val v_SP_EL0 : lexpr
+  val v_FPSR : lexpr
+  val v_FPCR : lexpr
+  val v_PSTATE_A : lexpr
+  val v_PSTATE_D : lexpr
+  val v_PSTATE_DIT : lexpr
+  val v_PSTATE_F : lexpr
+  val v_PSTATE_I : lexpr
+  val v_PSTATE_PAN : lexpr
+  val v_PSTATE_SP : lexpr
+  val v_PSTATE_SSBS : lexpr
+  val v_PSTATE_TCO : lexpr
+  val v_PSTATE_UAO : lexpr
+  val v_PSTATE_BTYPE : lexpr
+  val v_BTypeCompatible : lexpr
+  val v___BranchTaken : lexpr
+  val v_BTypeNext : lexpr
+  val v___ExclusiveLocal : lexpr
   val f_switch_context : branch -> unit
   val f_gen_branch : expr -> branch * branch * branch
   val f_true_branch : branch * branch * branch -> branch
   val f_false_branch : branch * branch * branch -> branch
   val f_merge_branch : branch * branch * branch -> branch
   val f_gen_assert : expr -> unit
-  val f_gen_bit_lit : 'a -> bitvector -> expr
+  val f_gen_bit_lit : bigint -> bitvector -> expr
   val f_gen_bool_lit : bool -> expr
   val f_gen_int_lit : bigint -> expr
-  val f_decl_bv : string -> bigint -> expr
-  val f_decl_bool : string -> expr
-  val f_gen_load : 'a -> 'a
-  val f_gen_store : expr -> expr -> unit
-  val f_gen_array_load : expr -> bigint -> expr
-  val f_gen_array_store : expr -> bigint -> expr -> unit
+  val f_decl_bv : string -> bigint -> lexpr
+  val f_decl_bool : string -> lexpr
+  val f_gen_load : lexpr -> expr
+  val f_gen_store : lexpr -> expr -> unit
+  val f_gen_array_load : lexpr -> bigint -> expr
+  val f_gen_array_store : lexpr -> bigint -> expr -> unit
   val f_gen_Elem_read : bigint -> bigint -> expr -> expr -> expr -> expr
   val f_gen_Elem_set : bigint -> bigint -> expr -> expr -> expr -> expr -> expr
   val f_gen_Mem_set : bigint -> expr -> 'a -> expr -> expr -> unit
