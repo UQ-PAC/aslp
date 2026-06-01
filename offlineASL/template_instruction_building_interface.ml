@@ -112,10 +112,12 @@ module type IBI = sig
   val f_gen_Elem_read : bigint -> bigint -> expr -> expr -> expr -> expr
   val f_gen_Elem_set : bigint -> bigint -> expr -> expr -> expr -> expr -> expr
 
-  val f_gen_Mem_set : bigint -> expr -> bigint -> expr -> expr -> unit
+  val f_gen_Mem_set : bigint -> expr -> expr -> expr -> expr -> unit
   (** [f_gen_Mem_set size address size acctype value] *)
 
-  val f_gen_Mem_read : bigint -> expr -> bigint -> expr -> expr
+  val f_gen_Mem_read : bigint -> expr -> expr -> expr -> expr
+  (** [f_gen_Mem_read size address size acctype value] *)
+
   val f_AtomicStart : unit -> unit
   val f_AtomicEnd : unit -> unit
   val f_gen_AArch64_MemTag_set : expr -> expr -> expr -> unit
@@ -145,13 +147,13 @@ module type IBI = sig
   val f_gen_lsr_bits : bigint -> bigint -> expr -> expr -> expr
   val f_gen_lsl_bits : bigint -> bigint -> expr -> expr -> expr
   val f_gen_asr_bits : bigint -> bigint -> expr -> expr -> expr
-  val f_gen_replicate_bits : bigint -> bigint -> expr -> bigint -> expr
+  val f_gen_replicate_bits : bigint -> bigint -> expr -> expr -> expr
   (** [f_gen_replicate_bits operand_width num_replications operand num_replications] *)
 
-  val f_gen_ZeroExtend : bigint -> bigint -> expr -> bigint -> expr
+  val f_gen_ZeroExtend : bigint -> bigint -> expr -> expr -> expr
   (** [f_gen_ZeroExtend operand_width result_width operand result_width] *)
 
-  val f_gen_SignExtend : bigint -> bigint -> expr -> bigint -> expr
+  val f_gen_SignExtend : bigint -> bigint -> expr -> expr -> expr
   (** [f_gen_SignExtend operand_width result_width operand result_width] *)
 
   val f_gen_slice : expr -> bigint -> bigint -> expr
