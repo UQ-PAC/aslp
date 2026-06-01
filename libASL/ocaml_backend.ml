@@ -90,13 +90,11 @@ let write_asl_runner_epilogue use_pc fid st =
   in
   let pc_arg = if use_pc then " ~(pc:int)" else "" in
   Printf.fprintf st.oc {|let run %s enc =
-  let module I =
-    (Asl_ibi : Instruction_building_interface.IBI
-      with type bitvector = LibASL_stage0.Primops.bitvector
-      and type ast = LibASL_stage0.Asl_ast.stmt list) in
-  I.reset_ir ();
+  let module I = Asl_ibi in
+  Asl_ibi.reset_ir ();
   %s;
-  I.get_ir ()|} pc_arg dis_call
+  Asl_ibi.get_ir ()
+|} pc_arg dis_call
 
 let write_line s st =
   let padding = String.concat "" (List.init st.depth (fun _ -> " ")) in
