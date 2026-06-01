@@ -6,7 +6,7 @@ open Primops
 type bigint = Primops.bigint
 type bitvector = Primops.bitvector
 type nonrec expr = expr
-type nonrec lexpr = lexpr
+type nonrec lexpr = expr
 type nonrec stmt = stmt
 type branch = int
 type ast = stmt list
