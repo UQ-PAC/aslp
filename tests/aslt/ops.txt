@@ -27,3 +27,11 @@
 
 // sqrdmulh v0.8h, v0.8h, v1.h[3] https://github.com/UQ-PAC/aslp/pull/96
 0x4f71d000
+
+// extr w4, w5, w6, #amt5 (32-bit, symbolic lsb). The lsb makes the extracted
+// slice width symbolic (lsb+w-1 - lsb + 1); without folding it to the constant
+// w, the reduced-ASL slice check rejects it. Regression test for that folding.
+0x270c:17|amt5:5|0xa4:10
+
+// extr x4, x5, x6, #amt6 (64-bit, symbolic lsb)
+0x93c6:16|amt6:6|0xa4:10

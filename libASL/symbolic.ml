@@ -293,6 +293,7 @@ let rec is_pure_exp (e: expr) =
       is_pure_exp e && List.for_all is_pure_slice ss
   | Expr_Var _ -> true
   | Expr_LitInt _ -> true
+  | Expr_LitBits _ -> true
   | _ -> false
 
 and is_pure_slice (s: slice) =

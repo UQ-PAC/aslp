@@ -885,3 +885,17 @@ run asli with these commands
   Stmt_Assign(LExpr_Var("FPSR"),Expr_TApply("append_bits.0",[4;28],[Expr_Slices(Expr_Var("FPSR"),[Slice_LoWd(28,4)]);Expr_TApply("append_bits.0",[1;27],['1';Expr_Slices(Expr_Var("FPSR"),[Slice_LoWd(0,27)])])]))
   ],[],[])
   Stmt_Assign(LExpr_Array(LExpr_Var("_Z"),0),Expr_TApply("append_bits.0",[16;112],[Expr_Var("SignedSatQ109__5");Expr_TApply("append_bits.0",[16;96],[Expr_Var("SignedSatQ96__5");Expr_TApply("append_bits.0",[16;80],[Expr_Var("SignedSatQ83__5");Expr_TApply("append_bits.0",[16;64],[Expr_Var("SignedSatQ70__5");Expr_TApply("append_bits.0",[16;48],[Expr_Var("SignedSatQ57__5");Expr_TApply("append_bits.0",[16;32],[Expr_Var("SignedSatQ44__5");Expr_TApply("append_bits.0",[16;16],[Expr_Var("SignedSatQ31__5");Expr_Var("SignedSatQ17__5")])])])])])])]))
+  "
+  0x270c:17|amt5:5|0xa4:10
+  "
+  Decoding instruction A64 0x270c:17|amt5:5|0xa4:10
+  __array _R [ 4 ] = ZeroExtend.0 {{ 32,64 }} ( lsr_bits.0 {{ 64,12 }} ( append_bits.0 {{ 32,32 }} ( __array _R [ 5 ] [ 0 +: 32 ],__array _R [ 6 ] [ 0 +: 32 ] ),ZeroExtend.0 {{ 6,12 }} ( ZeroExtend.0 {{ 5,6 }} ( amt5 [ 0 +: 5 ],6 ),12 ) ) [ 0 +: 32 ],64 ) ;
+  ""
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),4),Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_TApply("lsr_bits.0",[64;12],[Expr_TApply("append_bits.0",[32;32],[Expr_Slices(Expr_Array(Expr_Var("_R"),5),[Slice_LoWd(0,32)]);Expr_Slices(Expr_Array(Expr_Var("_R"),6),[Slice_LoWd(0,32)])]);Expr_TApply("ZeroExtend.0",[6;12],[Expr_TApply("ZeroExtend.0",[5;6],[Expr_Slices(Expr_Var("amt5"),[Slice_LoWd(0,5)]);6]);12])]),[Slice_LoWd(0,32)]);64]))
+  "
+  0x93c6:16|amt6:6|0xa4:10
+  "
+  Decoding instruction A64 0x93c6:16|amt6:6|0xa4:10
+  __array _R [ 4 ] = lsr_bits.0 {{ 128,12 }} ( append_bits.0 {{ 64,64 }} ( __array _R [ 5 ],__array _R [ 6 ] ),ZeroExtend.0 {{ 6,12 }} ( amt6 [ 0 +: 6 ],12 ) ) [ 0 +: 64 ] ;
+  ""
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),4),Expr_Slices(Expr_TApply("lsr_bits.0",[128;12],[Expr_TApply("append_bits.0",[64;64],[Expr_Array(Expr_Var("_R"),5);Expr_Array(Expr_Var("_R"),6)]);Expr_TApply("ZeroExtend.0",[6;12],[Expr_Slices(Expr_Var("amt6"),[Slice_LoWd(0,6)]);12])]),[Slice_LoWd(0,64)]))
