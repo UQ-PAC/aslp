@@ -1051,6 +1051,13 @@ let prims_impure () =
     FIdent("SpeculativeStoreBypassBarrierToPA",0);
     FIdent("SpeculationBarrier",0);
     FIdent("SpeculativeStoreBypassBarrierToVA",0);
+    FIdent("AArch64.ExclusiveMonitorsPass",0);
+    FIdent("AArch64.SetExclusiveMonitors",0);
+    FIdent("ExclusiveMonitorsStatus",0);
+    FIdent("AArch64.Abort",0);
+    FIdent("AArch64.CheckForSVCTrap",0);
+    FIdent("AArch64.CallSupervisor",0);
+    FIdent("AArch64.SystemAccessTrap",0);
   ]
 
 (** Test if an expression is only over constants, variables and pure operations. Does not
