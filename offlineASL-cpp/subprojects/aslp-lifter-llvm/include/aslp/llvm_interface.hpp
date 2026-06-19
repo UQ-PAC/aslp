@@ -394,6 +394,9 @@ public:
   rt_expr f_gen_sdiv_bits(rt_expr x, rt_expr y) override {
     return builder->CreateSDiv(x, y);
   }
+  rt_expr f_gen_udiv_bits(rt_expr x, rt_expr y) override {
+    return builder->CreateUDiv(x, y);
+  }
   rt_expr f_gen_sle_bits(rt_expr x, rt_expr y) override {
     return builder->CreateICmpSLE(x, y);
   }

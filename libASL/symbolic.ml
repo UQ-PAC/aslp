@@ -979,6 +979,7 @@ let prims_pure () =
     FIdent("slt_bits",0);
     FIdent("sle_bits",0);
     FIdent("sdiv_bits",0);
+    FIdent("udiv_bits",0);
     FIdent("ite",0);
   ] @ (if !use_vectoriser then [
     FIdent("Elem.set",0);
@@ -987,6 +988,7 @@ let prims_pure () =
     FIdent("sub_vec",0);
     FIdent("mul_vec",0);
     FIdent("sdiv_vec",0);
+    FIdent("udiv_vec",0);
     FIdent("lsr_vec",0);
     FIdent("asr_vec",0);
     FIdent("lsl_vec",0);

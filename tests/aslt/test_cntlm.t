@@ -17373,7 +17373,7 @@ strip opcode information before passing to antlr.
   Stmt_If(Expr_TApply("eq_bits.0",[32],[Expr_Slices(Expr_Array(Expr_Var("_R"),3),[Slice_LoWd(0,32)]);'00000000000000000000000000000000']),[
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),'0000000000000000000000000000000000000000000000000000000000000000')
   ],[],[
-  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_TApply("sdiv_bits.0",[64],[Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),1),[Slice_LoWd(0,32)]);64]);Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),3),[Slice_LoWd(0,32)]);64])]),[Slice_LoWd(0,32)]);64]))
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),Expr_TApply("ZeroExtend.0",[32;64],[Expr_TApply("udiv_bits.0",[32],[Expr_Slices(Expr_Array(Expr_Var("_R"),1),[Slice_LoWd(0,32)]);Expr_Slices(Expr_Array(Expr_Var("_R"),3),[Slice_LoWd(0,32)])]);64]))
   ])
   "0x1ac322e3"
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),3),Expr_TApply("ZeroExtend.0",[32;64],[Expr_TApply("lsl_bits.0",[32;10],[Expr_Slices(Expr_Array(Expr_Var("_R"),23),[Slice_LoWd(0,32)]);Expr_TApply("ZeroExtend.0",[5;10],[Expr_Slices(Expr_Array(Expr_Var("_R"),3),[Slice_LoWd(0,5)]);10])]);64]))
@@ -17439,7 +17439,7 @@ strip opcode information before passing to antlr.
   Stmt_If(Expr_TApply("eq_bits.0",[32],[Expr_Slices(Expr_Array(Expr_Var("_R"),8),[Slice_LoWd(0,32)]);'00000000000000000000000000000000']),[
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),'0000000000000000000000000000000000000000000000000000000000000000')
   ],[],[
-  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_TApply("sdiv_bits.0",[64],[Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),15),[Slice_LoWd(0,32)]);64]);Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),8),[Slice_LoWd(0,32)]);64])]),[Slice_LoWd(0,32)]);64]))
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),Expr_TApply("ZeroExtend.0",[32;64],[Expr_TApply("udiv_bits.0",[32],[Expr_Slices(Expr_Array(Expr_Var("_R"),15),[Slice_LoWd(0,32)]);Expr_Slices(Expr_Array(Expr_Var("_R"),8),[Slice_LoWd(0,32)])]);64]))
   ])
   "0x1ac82401"
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),Expr_TApply("ZeroExtend.0",[32;64],[Expr_TApply("lsr_bits.0",[32;10],[Expr_Slices(Expr_Array(Expr_Var("_R"),0),[Slice_LoWd(0,32)]);Expr_TApply("ZeroExtend.0",[5;10],[Expr_Slices(Expr_Array(Expr_Var("_R"),8),[Slice_LoWd(0,5)]);10])]);64]))
@@ -17453,13 +17453,13 @@ strip opcode information before passing to antlr.
   Stmt_If(Expr_TApply("eq_bits.0",[32],[Expr_Slices(Expr_Array(Expr_Var("_R"),19),[Slice_LoWd(0,32)]);'00000000000000000000000000000000']),[
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),2),'0000000000000000000000000000000000000000000000000000000000000000')
   ],[],[
-  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),2),Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_TApply("sdiv_bits.0",[64],[Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),2),[Slice_LoWd(0,32)]);64]);Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),19),[Slice_LoWd(0,32)]);64])]),[Slice_LoWd(0,32)]);64]))
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),2),Expr_TApply("ZeroExtend.0",[32;64],[Expr_TApply("udiv_bits.0",[32],[Expr_Slices(Expr_Array(Expr_Var("_R"),2),[Slice_LoWd(0,32)]);Expr_Slices(Expr_Array(Expr_Var("_R"),19),[Slice_LoWd(0,32)])]);64]))
   ])
   "0x1ad30884"
   Stmt_If(Expr_TApply("eq_bits.0",[32],[Expr_Slices(Expr_Array(Expr_Var("_R"),19),[Slice_LoWd(0,32)]);'00000000000000000000000000000000']),[
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),4),'0000000000000000000000000000000000000000000000000000000000000000')
   ],[],[
-  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),4),Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_TApply("sdiv_bits.0",[64],[Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),4),[Slice_LoWd(0,32)]);64]);Expr_TApply("ZeroExtend.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),19),[Slice_LoWd(0,32)]);64])]),[Slice_LoWd(0,32)]);64]))
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),4),Expr_TApply("ZeroExtend.0",[32;64],[Expr_TApply("udiv_bits.0",[32],[Expr_Slices(Expr_Array(Expr_Var("_R"),4),[Slice_LoWd(0,32)]);Expr_Slices(Expr_Array(Expr_Var("_R"),19),[Slice_LoWd(0,32)])]);64]))
   ])
   "0x1ad32000"
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),0),Expr_TApply("ZeroExtend.0",[32;64],[Expr_TApply("lsl_bits.0",[32;10],[Expr_Slices(Expr_Array(Expr_Var("_R"),0),[Slice_LoWd(0,32)]);Expr_TApply("ZeroExtend.0",[5;10],[Expr_Slices(Expr_Array(Expr_Var("_R"),19),[Slice_LoWd(0,5)]);10])]);64]))
@@ -127469,7 +127469,7 @@ strip opcode information before passing to antlr.
   Stmt_If(Expr_TApply("eq_bits.0",[64],[Expr_Array(Expr_Var("_R"),3);'0000000000000000000000000000000000000000000000000000000000000000']),[
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),2),'0000000000000000000000000000000000000000000000000000000000000000')
   ],[],[
-  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),2),Expr_Slices(Expr_TApply("sdiv_bits.0",[128],[Expr_TApply("ZeroExtend.0",[64;128],[Expr_Array(Expr_Var("_R"),2);128]);Expr_TApply("ZeroExtend.0",[64;128],[Expr_Array(Expr_Var("_R"),3);128])]),[Slice_LoWd(0,64)]))
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),2),Expr_TApply("udiv_bits.0",[64],[Expr_Array(Expr_Var("_R"),2);Expr_Array(Expr_Var("_R"),3)]))
   ])
   "0x9ac62042"
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),2),Expr_TApply("lsl_bits.0",[64;12],[Expr_Array(Expr_Var("_R"),2);Expr_TApply("ZeroExtend.0",[6;12],[Expr_Slices(Expr_Array(Expr_Var("_R"),6),[Slice_LoWd(0,6)]);12])]))
